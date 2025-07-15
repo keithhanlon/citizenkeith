@@ -1,0 +1,272 @@
+desc:SynthiAKS Analog Modular Synthesizer
+author:citizenkeith - Claudie AI
+version:1.0
+about: Emulation of EMS Synthi AKS Synthesizer
+      This JSFX released under GPLv3 license
+
+options:no_meter
+
+// Sliders for basic controls - these will show as REAPER sliders above the custom GUI
+slider1:0.7<0,1,0.01>External Input Level
+slider2:0.3<0,1,0.01>Oscillator Level
+slider3:440<20,2000,1>Oscillator Frequency
+slider4:0<0,3,1{Sawtooth,Triangle,Square,Sine}>Oscillator Waveform
+slider5:0.4<0,1,0.01>Filter Cutoff
+slider6:0.2<0,8,0.01>Filter Resonance
+slider7:0.02<0,0.1,0.001>Oscillator Drift
+
+// PIN MATRIX - Key connections
+slider10:0<-1,1,0.01>Pin: Osc → Filter Cutoff
+slider11:0<-1,1,0.01>Pin: Envelope → Filter Cutoff
+slider12:0<-1,1,0.01>Pin: Envelope → VCA (Amplitude)
+slider13:0<0,1,0.01>Pin: External → Ring Modulator
+slider14:0<0,1,0.01>Pin: Osc → Ring Modulator
+slider15:40<5,200,1>Ring Mod Frequency (Hz)
+slider16:0.5<0,1,0.01>Ring Mod Mix (Wet/Dry)
+
+// SAMPLE & HOLD
+slider30:0.3<0,1,0.01>Noise Level
+slider31:2<0.1,10,0.1>S&H Clock Rate (Hz)
+slider32:0<-1,1,0.01>Pin: S&H → Filter Cutoff
+slider33:0<-1,1,0.01>Pin: S&H → Osc Frequency
+slider34:0<-1,1,0.01>Pin: S&H → Ring Freq
+
+// Envelope controls
+slider20:0.01<0.001,2,0.001>Envelope Attack
+slider21:0.1<0.001,2,0.001>Envelope Decay
+slider22:0.6<0,1,0.01>Envelope Sustain
+slider23:0.3<0.001,5,0.001>Envelope Release
+slider24:0<0,1,0.01>Envelope Trigger (Manual)
+
+@init
+// Prevent parameter resets when pressing play
+ext_noinit = 1.0;
+
+// Always initialize these critical audio processing variables
+srate = samplerate;
+last_srate = srate;
+phase = 0;
+drift_phase = 0;
+pi2 = 2 * $pi;
+
+// Simple test oscillator phase
+osc_phase = 0;
+
+// Filter state variables for Synthi-style filter
+lp1 = lp2 = lp3 = lp4 = 0;
+bp1 = bp2 = 0;
+
+// Envelope generator state
+env_stage = 0;  // 0=off, 1=attack, 2=decay, 3=sustain, 4=release
+env_level = 0;
+env_trigger_prev = 0;
+
+// Ring modulator state (improved)
+ring_mod_phase = 0;
+ring_feedback_l = 0;
+ring_feedback_r = 0;
+ring_resistance = 0.85;
+
+// Sample & Hold state
+sh_clock_phase = 0;
+sh_sample_value = 0;
+sh_clock_prev = 0;
+sh_noise_seed = 12345;  // Random seed for noise
+
+// Noise generator state
+noise_val = 0;
+
+@serialize
+// Persist critical parameters to prevent reset on transport changes
+file_var(0, env_stage);
+file_var(0, env_level);
+file_var(0, phase);
+file_var(0, drift_phase);
+file_var(0, sh_clock_phase);
+file_var(0, sh_sample_value);
+file_var(0, sh_noise_seed);
+
+// Persist filter state for smooth operation
+file_var(0, lp1);
+file_var(0, lp2);
+file_var(0, lp3);
+file_var(0, lp4);
+
+@block
+// Handle sample rate changes when using ext_noinit
+srate != last_srate ? (
+  last_srate = srate;
+);
+
+@sample
+// Process input audio
+input = (spl0 + spl1) * 0.5;  // Average L+R for true mono input
+
+// Generate noise inline (avoiding function call issues)
+sh_noise_seed = (sh_noise_seed * 1103515245 + 12345) & 0x7fffffff;
+noise_val = (sh_noise_seed / 0x7fffffff) * 2 - 1;
+
+// Generate Sample & Hold inline
+sh_clock_phase += slider31 * pi2 / srate;
+sh_clock_phase >= pi2 ? sh_clock_phase -= pi2;
+sh_clock_signal = sin(sh_clock_phase);
+
+// Detect positive-going zero crossing (trigger)
+sh_clock_trigger = (sh_clock_signal > 0 && sh_clock_prev <= 0);
+sh_clock_prev = sh_clock_signal;
+
+// Sample input on trigger
+sh_clock_trigger ? sh_sample_value = noise_val;
+sh_output = sh_sample_value;
+
+// Inline oscillator code with Sample & Hold modulation
+// Add subtle frequency drift for analog character
+drift_phase += 0.1 / srate;  // Very slow drift frequency
+drift_phase >= 1 ? drift_phase -= 1;
+drift_offset = sin(drift_phase * 2 * $pi) * slider7 * slider3;
+
+// Add Sample & Hold modulation to oscillator frequency
+osc_freq_with_sh = slider3 + (sh_output * slider33 * 200);  // S&H → Osc Freq
+osc_freq_with_sh = max(20, min(2000, osc_freq_with_sh));
+
+// Calculate actual frequency with drift and S&H modulation
+true_freq = osc_freq_with_sh + drift_offset;
+
+// Update phase
+phase += true_freq * 2 * $pi / srate;
+phase >= 2 * $pi ? phase -= 2 * $pi;
+
+// Generate waveform based on selector
+slider4 == 0 ? (
+  // Sawtooth: ramp from -1 to 1
+  osc = (phase / $pi) - 1;
+) : slider4 == 1 ? (
+  // Triangle:
+  phase < $pi ?
+    osc = (phase / $pi * 2) - 1 :
+    osc = 3 - (phase / $pi * 2);
+) : slider4 == 2 ? (
+  // Square:
+  osc = phase < $pi ? -0.8 : 0.8;
+) : (
+  // Sine:
+  osc = sin(phase);
+);
+
+// Apply oscillator level
+osc *= slider2 * 0.9;
+
+// Apply noise level
+noise_output = noise_val * slider30;
+
+// Process envelope generator (inline)
+// Trigger detection (rising edge)
+slider24 > 0.5 && env_trigger_prev <= 0.5 ? (
+  env_stage = 1;  // Start attack
+);
+env_trigger_prev = slider24;
+
+// Process envelope stages
+env_stage == 1 ? (
+  // Attack stage
+  env_rate = 1.0 / (slider20 * srate);
+  env_level += env_rate;
+  env_level >= 1.0 ? (
+    env_level = 1.0;
+    env_stage = 2;  // Move to decay
+  );
+) : env_stage == 2 ? (
+  // Decay stage
+  env_rate = (1.0 - slider22) / (slider21 * srate);
+  env_level -= env_rate;
+  env_level <= slider22 ? (
+    env_level = slider22;
+    env_stage = 3;  // Move to sustain
+  );
+) : env_stage == 3 ? (
+  // Sustain stage
+  env_level = slider22;
+  slider24 <= 0.5 ? env_stage = 4;  // Release when trigger goes low
+) : env_stage == 4 ? (
+  // Release stage
+  env_rate = env_level / (slider23 * srate);
+  env_level -= env_rate;
+  env_level <= 0 ? (
+    env_level = 0;
+    env_stage = 0;  // Back to off
+  );
+);
+
+envelope = max(0, min(1, env_level));  // Clamp to 0-1 range
+
+// Apply VCA (amplitude modulation from envelope)
+vca_mod = 1.0;  // Default full amplitude
+vca_mod *= (1.0 + (envelope - 0.5) * slider12 * 2);  // Envelope → VCA
+vca_mod = max(0, min(1, vca_mod));  // Clamp to valid range
+
+// Mix input, oscillator, and noise
+mixed_signal = (input * slider1) + osc + noise_output;
+
+// Apply VCA to mixed signal
+mixed_signal *= vca_mod;
+
+// Calculate filter cutoff with envelope and Sample & Hold modulation
+final_cutoff = slider5 + (envelope * slider11 * 0.3) + (sh_output * slider32 * 0.3);  // Env + S&H → Filter Cutoff
+final_cutoff = max(0, min(1, final_cutoff));  // Clamp to valid range
+
+// Apply Synthi-style filter with modulated cutoff
+filter_freq = final_cutoff * final_cutoff * 0.4;
+filter_freq = max(filter_freq, 0.001);
+filter_freq = min(filter_freq, 0.45);
+
+filter_q = slider6 * 1.5;
+filter_g = tan(filter_freq * $pi);
+
+// Filter reset protection
+abs(lp1) > 2 || abs(lp2) > 2 || abs(lp3) > 2 || abs(lp4) > 2 ? (
+  lp1 = lp2 = lp3 = lp4 = 0;
+);
+
+filter_feedback = lp4 * filter_q;
+filter_stage1 = mixed_signal - filter_feedback;
+lp1 += filter_g * (filter_stage1 - lp1);
+
+filter_stage2 = lp1;
+lp2 += filter_g * (filter_stage2 - lp2);
+
+filter_stage3 = lp2;
+lp3 += filter_g * (filter_stage3 - lp3);
+
+filter_stage4 = lp3;
+lp4 += filter_g * (filter_stage4 - lp4);
+
+lp4 > 0.8 ? lp4 = 0.8 : lp4 < -0.8 ? lp4 = -0.8;
+
+// Output
+spl0 = lp4;
+spl1 = lp4;
+
+@gfx 700 80
+
+// SynthiAKS Header GUI - just the title section above REAPER sliders
+gfx_r = 0.9; gfx_g = 0.9; gfx_b = 0.9;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+// Title panel background
+gfx_r = 0.75; gfx_g = 0.75; gfx_b = 0.75;
+gfx_rect(20, 15, gfx_w - 40, 50);
+
+// Main title
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", 24, 'b');
+gfx_x = 40; gfx_y = 25;
+gfx_drawstr("SynthiAKS");
+
+// Subtitle
+gfx_setfont(1, "Arial", 12);
+gfx_x = 40; gfx_y = 50;
+gfx_drawstr("Analog Modular Synthesizer");
+
+// Red accent stripe
+gfx_r = 0.7; gfx_g = 0.1; gfx_b = 0.1;
+gfx_rect(gfx_w - 100, 30, 60, 4);
