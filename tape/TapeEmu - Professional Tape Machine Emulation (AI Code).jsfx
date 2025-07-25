@@ -612,11 +612,24 @@ gfx_drawstr(status_text);
 
 // Show active effects
 gfx_x = 50 * scale; gfx_y = 340 * scale;
-effects_text = "";
-slider5 > 0 ? effects_text = effects_text + "AGE " + slider5 + "% ";
-slider8 > 0 ? effects_text = effects_text + "W&F " + slider8 + "% ";
-slider6 != 100 ? effects_text = effects_text + "WIDTH " + slider6 + "%";
-gfx_drawstr(effects_text);
+// Show active effects - FIXED VERSION
+gfx_x = 50 * scale; gfx_y = 340 * scale;
+
+// Use a single printf with conditional formatting
+effects_active = 0;
+slider5 > 0 ? effects_active = 1;
+slider8 > 0 ? effects_active = 1;
+slider6 != 100 ? effects_active = 1;
+
+effects_active ? (
+    // Simple approach - just show individual status
+    effect_str = "";
+    slider5 > 0 ? gfx_printf("AGE %.0f%% ", slider5);
+    slider8 > 0 ? gfx_printf("W&F %.0f%% ", slider8);
+    slider6 != 100 ? gfx_printf("WIDTH %.0f%%", slider6);
+) : (
+    gfx_drawstr("No Effects Active");
+);
 
 // Mouse interaction system
 mouse_cap == 1 && last_mouse_cap == 0 ? (
