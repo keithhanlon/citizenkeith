@@ -1,8 +1,7 @@
 desc: TapeEmu - Professional Tape Machine Emulation
 author: citizenkeith - Claude AI
-version: 1.0
-about: Tape emulation that includes options for different tape machines
-This JSFX released under GPLv3 license
+version: 1.5
+about: tape emulation that includes tape machine choices
 
 // Hidden sliders using proper JSFX technique (- prefix hides from default UI)
 slider1:68<0,178,1>-Input/Saturation (%)
@@ -139,66 +138,6 @@ update_audio_vars();
 // Call the update function when sliders change via host/automation
 update_audio_vars();
 
-// PERFORMANCE OPTIMIZATION: Cache expensive calculations
-// Pre-calculate machine-specific saturation coefficients
-effective_saturation = slider1 * preset_sat_character;
-effective_saturation > 0 ? (
-  sat_amount = (effective_saturation/200*$pi);
-  sat_norm = sin(effective_saturation/200*$pi);
-) : (
-  sat_amount = 0;
-  sat_norm = 1;
-);
-
-// Cache machine-specific saturation coefficients to avoid conditionals in @sample
-slider7 == 0 ? ( // Studer A800 - even harmonics
-  sat_coeff1 = 0.1; sat_coeff2 = 0; sat_coeff3 = 0;
-  noise_mult = 0.8; noise_add = 0.2; noise_freq = 3.14159;
-  mid_mult = 1.02; side_mult = 0.98; mid_add = 0;
-) : slider7 == 1 ? ( // Ampex ATR102 - odd harmonics + asymmetry
-  sat_coeff1 = 0; sat_coeff2 = 0; sat_coeff3 = 0.15;
-  noise_mult = 1; noise_add = 0.3; noise_freq = 0;
-  mid_mult = 1; side_mult = 1.05; mid_add = 0.01;
-) : slider7 == 2 ? ( // Sony APR5000 - clean, minimal distortion
-  sat_coeff1 = 0.05; sat_coeff2 = 0; sat_coeff3 = 0;
-  noise_mult = 1; noise_add = 0; noise_freq = 0;
-  mid_mult = 1; side_mult = 1; mid_add = 0;
-) : slider7 == 3 ? ( // Otari MTR90 - balanced harmonics
-  sat_coeff1 = 0.08; sat_coeff2 = 0; sat_coeff3 = 0.05;
-  noise_mult = 0.9; noise_add = 0.1; noise_freq = 1.57;
-  mid_mult = 1.01; side_mult = 1; mid_add = 0;
-) : ( // Basic Tape - use original formula flag
-  sat_coeff1 = -1; // Flag to use original formula
-  noise_mult = 1; noise_add = 0; noise_freq = 0;
-  mid_mult = 1; side_mult = 1; mid_add = 0;
-);
-
-// Cache head bump coefficient
-head_bump_adj = exp(effective_head_bump * log(10) / 40);
-
-// Cache compression coefficients for each machine
-slider7 == 0 ? ( // Studer A800
-  comp_ratio = 1/2.5;
-  comp_attack = exp( 0 / (8*srate/1000) / c);
-  comp_release = exp( 0 / (150*srate/1000) / c );
-) : slider7 == 1 ? ( // Ampex ATR102
-  comp_ratio = 1/1.5;
-  comp_attack = exp( 0 / (3*srate/1000) / c);
-  comp_release = exp( 0 / (80*srate/1000) / c );
-) : slider7 == 2 ? ( // Sony APR5000
-  comp_ratio = 1/4.0;
-  comp_attack = exp( 0 / (10*srate/1000) / c);
-  comp_release = exp( 0 / (200*srate/1000) / c );
-) : slider7 == 3 ? ( // Otari MTR90
-  comp_ratio = 1/2.0;
-  comp_attack = exp( 0 / (6*srate/1000) / c);
-  comp_release = exp( 0 / (120*srate/1000) / c );
-) : ( // Basic Tape
-  comp_ratio = 1/1.8;
-  comp_attack = exp( 0 / (5*srate/1000) / c);
-  comp_release = exp( 0 / (100*srate/1000) / c );
-);
-
 @block
 // No VU processing needed for new GUI
 
@@ -238,18 +177,24 @@ effective_saturation > 0 ? (
   );
 );
 
-//White noise with machine-specific characteristics - OPTIMIZED
+//White noise with machine-specific characteristics
 noise=rand(2)-1;
 
-// Use cached noise coefficients instead of conditionals
-noise_add > 0 ? (
-  noise_freq > 0 ? (
-    noise = noise * noise_mult + sin(noise * noise_freq) * noise_add;
-  ) : (
-    noise = noise + noise*noise*noise*noise_add;
-  );
-) : noise_mult != 1 ? (
-  noise = noise * noise_mult;
+// Add machine-specific noise coloring
+slider7 == 0 ? ( // Studer A800 - warm noise
+  noise = noise * 0.8 + sin(noise * 3.14159) * 0.2
+);
+
+slider7 == 1 ? ( // Ampex ATR102 - grittier noise
+  noise = noise + noise*noise*noise*0.3
+);
+
+slider7 == 2 ? ( // Sony APR5000 - clean white noise
+  noise = noise // Keep original noise unchanged
+);
+
+slider7 == 3 ? ( // Otari MTR90 - slightly colored
+  noise = noise * 0.9 + sin(noise * 1.57) * 0.1
 );
 
 // Tape age effects - made more noticeable
@@ -356,43 +301,80 @@ bufpos >= halfsize ? (
   bufpos=0;
 );
 
-// Use cached head bump coefficient - OPTIMIZED
-spl0 = (dry0 + wet0 * head_bump_adj) * gain;
-spl1 = (dry1 + wet0 * head_bump_adj) * gain;
+// Use machine-specific head bump
+effective_head_bump = (slider7 == 4 ? slider4 : preset_head_bump);
+adj = exp(effective_head_bump * log(10) / 40);
+
+spl0 = (dry0 + wet0 * adj) * gain;
+spl1 = (dry1 + wet0 * adj) * gain;
 
 // Stereo width processing (Mid/Side)
 mid = (spl0 + spl1) * 0.5;
 side = (spl0 - spl1) * 0.5;
 side *= width_factor;
 
-// Apply cached machine-specific frequency coloring - OPTIMIZED
-mid_add > 0 ? (
-  mid = mid + mid*mid*mid_add;
+// Apply subtle machine-specific frequency coloring to stereo image
+slider7 == 0 ? ( // Studer A800 - slightly warm mids
+  mid = mid * 1.02;
+  side = side * 0.98
 );
-mid_mult != 1 ? (
-  mid = mid * mid_mult;
+
+slider7 == 1 ? ( // Ampex ATR102 - enhanced presence
+  mid = mid + mid*mid*0.01;
+  side = side * 1.05
 );
-side_mult != 1 ? (
-  side = side * side_mult;
+
+slider7 == 2 ? ( // Sony APR5000 - clean and accurate
+  mid = mid // No coloring, keep clean
+);
+
+slider7 == 3 ? ( // Otari MTR90 - slight warmth
+  mid = mid * 1.01
 );
 
 spl0 = mid + side;
 spl1 = mid - side;
   
-//add machine-specific compression when driven - OPTIMIZED (uses cached coefficients)
+//add machine-specific compression when driven
 threshDB = 0; //set to zero. lower to -6 or so for actual comp
 thresh = exp(threshDB/c);
 
-// Use cached compression coefficients instead of conditionals
-ratio = comp_ratio;
-attack = comp_attack;
-release = comp_release;
+// Machine-specific compression characteristics
+slider7 == 0 ? ( // Studer A800 - gentle, musical compression
+  ratio = 1/2.5;
+  attack = exp( threshDB / (8*srate/1000) / c);
+  release = exp( threshDB / (150*srate/1000) / c )
+);
 
-@gfx 650 450
+slider7 == 1 ? ( // Ampex ATR102 - more aggressive
+  ratio = 1/1.5;
+  attack = exp( threshDB / (3*srate/1000) / c);
+  release = exp( threshDB / (80*srate/1000) / c )
+);
+
+slider7 == 2 ? ( // Sony APR5000 - minimal compression
+  ratio = 1/4.0;
+  attack = exp( threshDB / (10*srate/1000) / c);
+  release = exp( threshDB / (200*srate/1000) / c )
+);
+
+slider7 == 3 ? ( // Otari MTR90 - balanced
+  ratio = 1/2.0;
+  attack = exp( threshDB / (6*srate/1000) / c);
+  release = exp( threshDB / (120*srate/1000) / c )
+);
+
+slider7 == 4 ? ( // Basic Tape - original settings
+  ratio = 1/1.8;
+  attack = exp( threshDB / (5*srate/1000) / c);
+  release = exp( threshDB / (100*srate/1000) / c )
+);
+
+@gfx 650 400
 
 // Calculate scale factor based on window size
 base_width = 500;
-base_height = 370;
+base_height = 320;
 scale_x = gfx_w / base_width;
 scale_y = gfx_h / base_height;
 scale = min(scale_x, scale_y);
@@ -408,7 +390,7 @@ gfx_r = 0.72; gfx_g = 0.72; gfx_b = 0.72;
 gfx_rect(20 * scale, 20 * scale, (gfx_w - 40 * scale), 50 * scale);
 
 // Control panel
-gfx_rect(20 * scale, 90 * scale, (gfx_w - 40 * scale), 320 * scale);
+gfx_rect(20 * scale, 90 * scale, (gfx_w - 40 * scale), 280 * scale);
 
 // Title text
 gfx_r = 0; gfx_g = 0; gfx_b = 0;
@@ -425,7 +407,7 @@ gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
 gfx_rect(gfx_w - 80 * scale, 30 * scale, 40 * scale, 4 * scale);
 
 // Draw knobs - Top row
-knob_y = 160 * scale;
+knob_y = 140 * scale;
 knob_size = 30 * scale;
 
 // Input/Saturation knob
@@ -513,7 +495,7 @@ gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
 gfx_printf("%+.1fdB", slider4);
 
 // Bottom row knobs
-knob_y2 = 260 * scale;
+knob_y2 = 220 * scale;
 
 // Tape Age knob
 knob_x = 80 * scale;
@@ -600,26 +582,40 @@ slider7 == 2 ? machine_text = "SONY";
 slider7 == 3 ? machine_text = "OTARI";
 slider7 == 4 ? machine_text = "BASIC";
 gfx_measurestr(machine_text, machine_w, machine_h);
-gfx_x = fader_x - machine_w/2; gfx_y = fader_y + fader_height + 15 * scale;
+gfx_x = fader_x - machine_w/2; gfx_y = fader_y + fader_height + 8 * scale;
 gfx_drawstr(machine_text);
 
 // Label
 gfx_setfont(1, "Arial", max(6, 8 * scale));
 gfx_measurestr("TAPE MACHINE", machine_label_w, machine_label_h);
-gfx_x = fader_x - machine_label_w/2; gfx_y = fader_y + fader_height + 32 * scale;
+gfx_x = fader_x - machine_label_w/2; gfx_y = fader_y + fader_height + 25 * scale;
 gfx_drawstr("TAPE MACHINE");
 
-// Simple machine status display (no complex string concatenation)
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(6, 9 * scale));
-gfx_x = 50 * scale; gfx_y = 320 * scale;
+// Status display area
+gfx_r = 0.6; gfx_g = 0.6; gfx_b = 0.6;
+gfx_rect(40 * scale, 310 * scale, (gfx_w - 80 * scale), 50 * scale);
 
-// Show current machine character without string concatenation
-slider7 == 0 ? gfx_drawstr("Studer A800 - Warm & Musical");
-slider7 == 1 ? gfx_drawstr("Ampex ATR102 - Punchy & Colored");
-slider7 == 2 ? gfx_drawstr("Sony APR5000 - Clean & Modern");
-slider7 == 3 ? gfx_drawstr("Otari MTR90 - Balanced & Professional");
-slider7 == 4 ? gfx_drawstr("Basic Tape - Generic Emulation");
+// Status text
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(6, 8 * scale));
+gfx_x = 50 * scale; gfx_y = 325 * scale;
+
+// Show current machine character
+slider7 == 0 ? status_text = "Studer A800 - Warm & Musical" :
+slider7 == 1 ? status_text = "Ampex ATR102 - Punchy & Colored" :
+slider7 == 2 ? status_text = "Sony APR5000 - Clean & Modern" :
+slider7 == 3 ? status_text = "Otari MTR90 - Balanced & Professional" :
+status_text = "Basic Tape - Generic Emulation";
+
+gfx_drawstr(status_text);
+
+// Show active effects
+gfx_x = 50 * scale; gfx_y = 340 * scale;
+effects_text = "";
+slider5 > 0 ? effects_text = effects_text + "AGE " + slider5 + "% ";
+slider8 > 0 ? effects_text = effects_text + "W&F " + slider8 + "% ";
+slider6 != 100 ? effects_text = effects_text + "WIDTH " + slider6 + "%";
+gfx_drawstr(effects_text);
 
 // Mouse interaction system
 mouse_cap == 1 && last_mouse_cap == 0 ? (
@@ -648,9 +644,9 @@ mouse_cap == 1 && last_mouse_cap == 0 ? (
     ) :
     
     // Check tape machine fader - wider hit area
-    abs(mouse_x - 400 * scale) <= 20 * scale && mouse_y >= 150 * scale && mouse_y <= 250 * scale ? (
+    abs(mouse_x - 400 * scale) <= 20 * scale && mouse_y >= 130 * scale && mouse_y <= 230 * scale ? (
         // Calculate new position
-        fader_pos = (mouse_y - 150 * scale) / (100 * scale);
+        fader_pos = (mouse_y - 130 * scale) / (100 * scale);
         fader_pos = max(0, min(1, fader_pos));
         slider7 = floor(fader_pos * 4);
         update_audio_vars(); // Update audio processing variables
@@ -666,47 +662,47 @@ mouse_cap == 1 && last_mouse_cap == 0 ? (
     );
 );
 
-// Handle knob dragging - FIXED using ReaFripp approach
-mouse_cap & 1 && slider_to_edit > 0 ? (
-    mouse_dy = mouse_y - drag_start_y;
-    drag_start_y = mouse_y; // Update for next frame
+// Handle dragging
+mouse_cap == 1 && slider_to_edit > 0 && slider_to_edit != 7 ? (
+    mouse_delta = last_mouse_y - mouse_y; // Inverted for natural feel
+    sensitivity = 1.0; // Base sensitivity
     
+    // Apply changes with proper scaling
     slider_to_edit == 1 ? ( // Input/Saturation (0-178)
-        new_val = slider1 - mouse_dy * 178 / 200; // Inverted for natural feel
+        new_val = slider1 + mouse_delta * sensitivity;
         slider1 = max(0, min(178, new_val));
-        update_audio_vars();
-    );
-    slider_to_edit == 2 ? ( // Output (-50 to 0)
-        new_val = slider2 - mouse_dy * 50 / 200;
+        update_audio_vars(); // Update audio processing variables
+    ) : slider_to_edit == 2 ? ( // Output (-50 to 0)
+        new_val = slider2 + mouse_delta * 0.25;
         slider2 = max(-50, min(0, new_val));
-        update_audio_vars();
-    );
-    slider_to_edit == 3 ? ( // Noise (-105 to -60)
-        new_val = slider3 - mouse_dy * 45 / 200;
+        update_audio_vars(); // Update audio processing variables
+    ) : slider_to_edit == 3 ? ( // Noise (-105 to -60)
+        new_val = slider3 + mouse_delta * 0.25;
         slider3 = max(-105, min(-60, new_val));
-        update_audio_vars();
-    );
-    slider_to_edit == 4 ? ( // Head Bump (-18 to +12)
-        new_val = slider4 - mouse_dy * 30 / 200;
+        update_audio_vars(); // Update audio processing variables
+    ) : slider_to_edit == 4 ? ( // Head Bump (-18 to +12)
+        new_val = slider4 + mouse_delta * 0.15;
         slider4 = max(-18, min(12, new_val));
-        update_audio_vars();
-    );
-    slider_to_edit == 5 ? ( // Tape Age (0-100)
-        new_val = slider5 - mouse_dy * 100 / 200;
+        update_audio_vars(); // Update audio processing variables
+    ) : slider_to_edit == 5 ? ( // Tape Age (0-100)
+        new_val = slider5 + mouse_delta * 0.5;
         slider5 = max(0, min(100, new_val));
-        update_audio_vars();
-    );
-    slider_to_edit == 6 ? ( // Stereo Width (0-200)
-        new_val = slider6 - mouse_dy * 200 / 200;
+        update_audio_vars(); // Update audio processing variables
+    ) : slider_to_edit == 6 ? ( // Stereo Width (0-200)
+        new_val = slider6 + mouse_delta;
         slider6 = max(0, min(200, new_val));
-        update_audio_vars();
-    );
-    slider_to_edit == 8 ? ( // Wow/Flutter (0-100)
-        new_val = slider8 - mouse_dy * 100 / 200;
+        update_audio_vars(); // Update audio processing variables
+    ) : slider_to_edit == 8 ? ( // Wow/Flutter (0-100)
+        new_val = slider8 + mouse_delta * 0.5;
         slider8 = max(0, min(100, new_val));
-        update_audio_vars();
+        update_audio_vars(); // Update audio processing variables
     );
-) : (
+    
+    last_mouse_y = mouse_y;
+);
+
+// Reset when mouse released
+mouse_cap == 0 ? (
     slider_to_edit = 0;
 );
 
