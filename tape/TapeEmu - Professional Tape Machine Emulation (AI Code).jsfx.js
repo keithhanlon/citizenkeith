@@ -1,7 +1,8 @@
 desc: TapeEmu - Professional Tape Machine Emulation
-author: citizenkeith - Claude AI
 version: 1.5
+author: citizenkeith - Claude AI
 about: tape emulation that includes tape machine choices
+      This JSFX released under GPLv3 license
 
 // Hidden sliders using proper JSFX technique (- prefix hides from default UI)
 slider1:68<0,178,1>-Input/Saturation (%)
