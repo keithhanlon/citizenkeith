@@ -1,10 +1,10 @@
 desc:Tycho Delay TMA-1
 version: 1.5
-author: Instigated by citizenkeith - based on work done by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault
-    https://forum.cockos.com/showthread.php?t=170874
-    Memory Layout Optimized by Claude AI
+author: Instigated by citizenkeith
 about: Good quality tape-style delay with optimized memory layout
-      This JSFX released under GPLv3 license
+    # Based on work done by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault https://forum.cockos.com/showthread.php?t=170874
+    # Memory Layout Optimized by Claude AI
+    $ This JSFX released under GPLv3 license
 
 slider10:400<1,80000,1>-Delay (ms)
 slider11:0<0,28,1{Off,1/32,1/16T,1/32D,1/16,1/8T,1/16D,1/8,1/4T,1/8D,1/4,1/2T,1/4D,1/2,1T,1/2D,1,2T,1D,2,4T,2D,4,8T,4D,8,16T,8D,16}>-Delay (sync)
