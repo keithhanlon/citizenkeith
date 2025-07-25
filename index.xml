@@ -49,4 +49,20 @@
       </version>
     </reapack>
   </category>
+  <category name="tape">
+    <reapack name="TapeEmu - Professional Tape Machine Emulation (AI Code).jsfx" type="effect" desc="TapeEmu - Professional Tape Machine Emulation">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Tape emulation that includes tape machine choices This JSFX released under GPLv3 license\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.5" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
+        <source>https://github.com/keithhanlon/JSFX/raw/7294f5754205f5e3f1de4dd140f5531f5396de1b/synth/TapeEmu%20-%20Professional%20Tape%20SMachine%20Emulation%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
 </index>
