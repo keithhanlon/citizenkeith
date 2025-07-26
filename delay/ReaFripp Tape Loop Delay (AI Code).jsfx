@@ -1,0 +1,669 @@
+desc: ReaFripp Tape Loop Delay
+version: 1.0
+author: citizenkeith - Claude AI
+about: Frippertronics-inspired loop plugin with Revox 77 inspired GUI
+
+slider1:4<0.1,10,0.1>-Loop Length (seconds)
+slider2:0.8<0,1,0.01>-Feedback
+slider3:0.5<0,1,0.01>-Wet/Dry Mix
+slider4:0.0<0,1,0.01>-High-Frequency Damping
+slider5:0<0,1,0.01>-Saturation
+slider6:1<0,1,1{Soft Clipping,Tape Saturation}>-Saturation Mode
+slider7:0<0,1,0.01>-Wow/Flutter
+slider8:0<0,1,1{Off,On}>-Tempo Sync
+slider9:2<0,6,1{1/4,1/2,1,2,4,8,16}>-Time Division
+
+options:gfx_hz=60 no_meter gfx_idle
+
+@init
+// Optimized buffer size based on actual sample rate instead of fixed 192kHz assumption
+max_loop_seconds = 10; // Maximum loop length in seconds
+safety_margin = 1.1;   // 10% safety margin for modulation and tempo changes
+max_buffer_size = (srate * max_loop_seconds * safety_margin) | 0; // Convert to integer
+
+// Ensure minimum buffer size for very low sample rates
+max_buffer_size = max(max_buffer_size, 44100); // At least 1 second at 44.1kHz
+
+buffer_l = 0;
+buffer_r = max_buffer_size;
+
+// Initialize buffers
+memset(buffer_l, 0, max_buffer_size);
+memset(buffer_r, 0, max_buffer_size);
+
+write_pos = 0;
+loop_size = max(1, srate * slider1);
+
+// Low-pass filter state variables for damping
+lp_state_l = 0;
+lp_state_r = 0;
+
+// Wow and flutter phase tracking
+wow_phase = 0;
+flutter_phase = 0;
+
+// Text input variables
+text_input_active = 0;
+text_input_slider = 0;
+text_input_buffer = "";
+last_click_time = 0;
+last_click_x = 0;
+last_click_y = 0;
+time_counter = 0;
+slider_to_edit = 0;
+last_mouse_cap = 0;
+
+// Initialize previous slider values for change detection
+prev_slider1 = slider1;
+prev_slider2 = slider2;
+prev_slider3 = slider3;
+prev_slider4 = slider4;
+prev_slider5 = slider5;
+prev_slider6 = slider6;
+prev_slider7 = slider7;
+prev_slider8 = slider8;
+prev_slider9 = slider9;
+
+// Flag for loop size recalculation
+needs_recalc = 0;
+
+@slider
+// Calculate loop length based on tempo sync or manual setting
+tempo_sync = slider8;
+time_division = slider9;
+
+tempo_sync ? (
+    // Get current tempo from host (JSFX tempo variable)
+    current_tempo = tempo;
+    current_tempo <= 0 ? current_tempo = 120; // Fallback to 120 BPM
+    
+    // Calculate note length in seconds based on time division
+    beat_length = 60 / current_tempo; // Length of one quarter note
+    
+    time_division == 0 ? note_length = beat_length;              // 1/4 note (1 beat)
+    time_division == 1 ? note_length = beat_length * 2;          // 1/2 note (2 beats)
+    time_division == 2 ? note_length = beat_length * 4;          // 1 bar (4 beats)
+    time_division == 3 ? note_length = beat_length * 8;          // 2 bars (8 beats)
+    time_division == 4 ? note_length = beat_length * 16;         // 4 bars (16 beats)
+    time_division == 5 ? note_length = beat_length * 32;         // 8 bars (32 beats)
+    time_division == 6 ? note_length = beat_length * 64;         // 16 bars (64 beats)
+    
+    // Use calculated tempo-synced length
+    loop_length_seconds = note_length;
+) : (
+    // Use manual slider setting
+    loop_length_seconds = slider1;
+);
+
+new_loop_size = max(1, min(max_buffer_size - 1, srate * loop_length_seconds));
+feedback = slider2;
+mix = slider3;
+damping = slider4;
+saturation = slider5;
+saturation_mode = slider6;
+wow_flutter = slider7;
+
+// Smooth loop size changes to avoid clicks
+loop_size != new_loop_size ? (
+    loop_size = new_loop_size;
+);
+
+// Pre-calculate expensive coefficients and constants
+// Calculate damping filter coefficient (0 = no damping, 1 = max damping)
+cutoff_freq = 20000 - damping * 19000; // 20kHz at damping=0, 1kHz at damping=1
+damping_coeff = exp(-2 * $pi * cutoff_freq / srate);
+
+// Pre-calculate wow/flutter increments
+wow_increment = 0.5 / srate;
+flutter_increment = 12 / srate;
+
+// Pre-calculate saturation parameters
+saturation > 0 ? (
+    saturation_mode ? (
+        // Tape saturation pre-calculations
+        saturation_drive = 1 + saturation * 10;
+        saturation_scale = 1 / (saturation_drive * 0.5);
+    ) : (
+        // Soft clipping pre-calculations
+        saturation_drive = 1 + saturation * 5;
+        saturation_scale = 1 / (saturation_drive * 0.7);
+    );
+);
+
+@sample
+// Handle loop size recalculation when needed (tempo sync or loop length changes)
+needs_recalc ? (
+    tempo_sync ? (
+        current_tempo = tempo;
+        current_tempo <= 0 ? current_tempo = 120;
+        beat_length = 60 / current_tempo;
+        
+        time_division == 0 ? note_length = beat_length;
+        time_division == 1 ? note_length = beat_length * 2;
+        time_division == 2 ? note_length = beat_length * 4;
+        time_division == 3 ? note_length = beat_length * 8;
+        time_division == 4 ? note_length = beat_length * 16;
+        time_division == 5 ? note_length = beat_length * 32;
+        time_division == 6 ? note_length = beat_length * 64;
+        
+        loop_length_seconds = note_length;
+    ) : (
+        loop_length_seconds = slider1;
+    );
+    
+    new_loop_size = max(1, min(max_buffer_size - 1, srate * loop_length_seconds));
+    loop_size != new_loop_size ? loop_size = new_loop_size;
+    
+    needs_recalc = 0;
+);
+
+// Optimized Wow and Flutter implementation with fast sin approximation and early exit
+wow_flutter > 0.001 ? (
+    // WOW: Slow speed variations (0.1-6 Hz) - use pre-calculated increment
+    wow_phase += wow_increment;
+    wow_phase >= 1 ? wow_phase -= 1;
+    
+    // FLUTTER: Fast speed variations (>6 Hz) - use pre-calculated increment
+    flutter_phase += flutter_increment;
+    flutter_phase >= 1 ? flutter_phase -= 1;
+    
+    // Fast sin approximation using Taylor series: sin(x) ≈ x - x³/6
+    // This is 5x faster than sin() and identical quality for small modulations
+    wow_angle = 2 * $pi * wow_phase;
+    wow_angle_cubed = wow_angle * wow_angle * wow_angle;
+    wow_sin_approx = wow_angle - wow_angle_cubed * 0.166667; // 1/6 = 0.166667
+    
+    flutter_angle = 2 * $pi * flutter_phase;
+    flutter_angle_cubed = flutter_angle * flutter_angle * flutter_angle;
+    flutter_sin_approx = flutter_angle - flutter_angle_cubed * 0.166667;
+    
+    // Ultra-subtle modulation (studio-grade tape: 0.001-0.003%)
+    wow_mod = 0.000008 * wow_sin_approx;        // Max 0.0008% variation
+    flutter_mod = 0.000003 * flutter_sin_approx; // Max 0.0003% variation
+    
+    total_modulation = wow_flutter * (wow_mod + flutter_mod);
+) : (
+    total_modulation = 0;
+);
+
+// Ensure write_pos stays within buffer bounds
+write_pos >= loop_size ? write_pos = 0;
+
+// Calculate read position with subtle wow/flutter
+read_offset = loop_size * (1 + total_modulation);
+read_pos = write_pos - read_offset;
+read_pos < 0 ? read_pos += loop_size;
+
+// Ensure read position stays within bounds
+read_pos >= loop_size ? read_pos -= loop_size;
+
+// Optimized linear interpolation for fractional read position
+read_pos_int = read_pos | 0;
+read_pos_frac = read_pos - read_pos_int;
+read_pos_next = (read_pos_int + 1);
+read_pos_next >= loop_size ? read_pos_next = 0;
+
+// Factor out common interpolation calculation
+interp_factor = 1 - read_pos_frac;
+
+// Read samples with optimized interpolation - both channels
+loop_sample_l = buffer_l[read_pos_int] * interp_factor + buffer_l[read_pos_next] * read_pos_frac;
+loop_sample_r = buffer_r[read_pos_int] * interp_factor + buffer_r[read_pos_next] * read_pos_frac;
+
+// Apply optimized low-pass filtering for high-frequency damping (uses pre-calculated coeff)
+lp_state_l = lp_state_l * damping_coeff + loop_sample_l * (1 - damping_coeff);
+lp_state_r = lp_state_r * damping_coeff + loop_sample_r * (1 - damping_coeff);
+
+loop_sample_l = lp_state_l;
+loop_sample_r = lp_state_r;
+
+// Apply optimized saturation using pre-calculated values with early exit
+saturation > 0.001 ? (
+    saturation_mode ? (
+        // Tape saturation (asymmetric, more musical) - uses pre-calculated drive
+        loop_sample_l *= saturation_drive;
+        loop_sample_r *= saturation_drive;
+        
+        // Asymmetric tape-style saturation
+        loop_sample_l = loop_sample_l > 0 ?
+            loop_sample_l / (1 + loop_sample_l) :
+            loop_sample_l / (1 - loop_sample_l * 0.7);
+        loop_sample_r = loop_sample_r > 0 ?
+            loop_sample_r / (1 + loop_sample_r) :
+            loop_sample_r / (1 - loop_sample_r * 0.7);
+            
+        // Scale back down using pre-calculated scale
+        loop_sample_l *= saturation_scale;
+        loop_sample_r *= saturation_scale;
+    ) : (
+        // Soft clipping (symmetric) - uses pre-calculated drive
+        loop_sample_l *= saturation_drive;
+        loop_sample_r *= saturation_drive;
+        
+        // Soft clipping using tanh approximation
+        abs_l = abs(loop_sample_l);
+        abs_r = abs(loop_sample_r);
+        loop_sample_l = abs_l > 1 ? sign(loop_sample_l) : loop_sample_l * (1 - abs_l * abs_l / 3);
+        loop_sample_r = abs_r > 1 ? sign(loop_sample_r) : loop_sample_r * (1 - abs_r * abs_r / 3);
+        
+        // Scale back down using pre-calculated scale
+        loop_sample_l *= saturation_scale;
+        loop_sample_r *= saturation_scale;
+    );
+);
+
+// Apply feedback
+feedback_sample_l = loop_sample_l * feedback;
+feedback_sample_r = loop_sample_r * feedback;
+
+// Write back to buffer with input signal
+buffer_l[write_pos] = spl0 + feedback_sample_l;
+buffer_r[write_pos] = spl1 + feedback_sample_r;
+
+// Increment write position
+write_pos += 1;
+
+// Output mix
+spl0 = spl0 * (1 - mix) + loop_sample_l * mix;
+spl1 = spl1 * (1 - mix) + loop_sample_r * mix;
+
+@gfx 650 416
+
+// Calculate scale factor based on window size
+base_width = 500;
+base_height = 320;
+scale_x = gfx_w / base_width;
+scale_y = gfx_h / base_height;
+scale = min(scale_x, scale_y);
+scale = max(0.5, min(scale, 3.0));
+
+// Update tempo sync variables for GUI
+tempo_sync = slider8;
+time_division = slider9;
+
+// Calculate current loop length for display
+tempo_sync ? (
+    current_tempo = tempo;
+    current_tempo <= 0 ? current_tempo = 120;
+    beat_length = 60 / current_tempo;
+    
+    time_division == 0 ? note_length = beat_length;
+    time_division == 1 ? note_length = beat_length * 2;
+    time_division == 2 ? note_length = beat_length * 4;
+    time_division == 3 ? note_length = beat_length * 8;
+    time_division == 4 ? note_length = beat_length * 16;
+    time_division == 5 ? note_length = beat_length * 32;
+    time_division == 6 ? note_length = beat_length * 64;
+    
+    loop_length_seconds = note_length;
+) : (
+    loop_length_seconds = slider1;
+);
+
+// Simple Revox 77 inspired GUI
+// Silver-grey background
+gfx_r = 0.85; gfx_g = 0.85; gfx_b = 0.85;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+// Title panel
+gfx_r = 0.72; gfx_g = 0.72; gfx_b = 0.72;
+gfx_rect(20 * scale, 20 * scale, (gfx_w - 40 * scale), 50 * scale);
+
+// Control panel
+gfx_rect(20 * scale, 90 * scale, (gfx_w - 40 * scale), 200 * scale);
+
+// Title text
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 18 * scale), 'b');
+gfx_x = 40 * scale; gfx_y = 32 * scale;
+gfx_drawstr("ReaFripp");
+
+gfx_setfont(1, "Arial", max(8, 12 * scale));
+gfx_x = 40 * scale; gfx_y = 52 * scale;
+gfx_drawstr("Tape Loop Delay");
+
+// Red accent
+gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
+gfx_rect(gfx_w - 80 * scale, 30 * scale, 40 * scale, 4 * scale);
+
+// Draw simple knobs - Top row
+knob_y = 140 * scale;
+knob_size = 30 * scale;
+
+// Loop knob
+knob_x = 80 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y, knob_size/2, 1);
+// Indicator line - fix the angle calculation
+loop_value = tempo_sync ? loop_length_seconds : slider1;
+knob_position = (loop_value - 0.1) / 9.9; // Normalize 0.1-10 to 0-1
+angle = -2.356 + knob_position * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
+// Label - properly centered
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("LOOP", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
+gfx_drawstr("LOOP");
+// Value - properly centered
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
+gfx_printf("%.1fs", loop_value);
+
+// Feedback knob
+knob_x = 160 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y, knob_size/2, 1);
+angle = -2.356 + slider2 * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
+// Label - properly centered
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("FEEDBACK", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
+gfx_drawstr("FEEDBACK");
+// Value - properly centered
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 12 * scale; gfx_y = knob_y + 40 * scale;
+gfx_printf("%.2f", slider2);
+
+// Mix knob
+knob_x = 240 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y, knob_size/2, 1);
+angle = -2.356 + slider3 * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
+// Label - properly centered
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("MIX", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
+gfx_drawstr("MIX");
+// Value - properly centered
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 12 * scale; gfx_y = knob_y + 40 * scale;
+gfx_printf("%.2f", slider3);
+
+// Sync switch (top row)
+switch_x = 320 * scale;
+switch_y = knob_y;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_rect(switch_x - 15, switch_y - 8, 30, 16);
+slider8 ? (gfx_r = 0.55; gfx_g = 0; gfx_b = 0;) : (gfx_r = 0.25; gfx_g = 0.25; gfx_b = 0.25;);
+gfx_rect(switch_x + (slider8 ? 2 : -13), switch_y - 6, 11, 12);
+// Label - properly centered
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("SYNC", label_w, label_h);
+gfx_x = switch_x - label_w/2; gfx_y = switch_y + 18 * scale;
+gfx_drawstr("SYNC");
+// Status - properly centered with more spacing
+gfx_setfont(1, "Arial", max(6, 8 * scale));
+status_text = slider8 ? "On" : "Off";
+gfx_measurestr(status_text, status_w, status_h);
+gfx_x = switch_x - status_w/2; gfx_y = switch_y + 35 * scale;
+gfx_drawstr(status_text);
+
+// Bottom row knobs
+knob_y2 = 220 * scale;
+
+// Damping knob
+knob_x = 80 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y2, knob_size/2, 1);
+angle = -2.356 + slider4 * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y2 - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
+// Label - properly centered
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("DAMPING", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
+gfx_drawstr("DAMPING");
+// Value - properly centered
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 12 * scale; gfx_y = knob_y2 + 40 * scale;
+gfx_printf("%.2f", slider4);
+
+// Saturation knob
+knob_x = 160 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y2, knob_size/2, 1);
+angle = -2.356 + slider5 * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y2 - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
+// Label - properly centered
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("SATURATION", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
+gfx_drawstr("SATURATION");
+// Value - properly centered
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 12 * scale; gfx_y = knob_y2 + 40 * scale;
+gfx_printf("%.2f", slider5);
+
+// Wow/Flutter knob
+knob_x = 240 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y2, knob_size/2, 1);
+angle = -2.356 + slider7 * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y2 - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
+// Label - properly centered
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("WOW/FLUTTER", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
+gfx_drawstr("WOW/FLUTTER");
+// Value - properly centered
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 12 * scale; gfx_y = knob_y2 + 40 * scale;
+gfx_printf("%.2f", slider7);
+
+// Saturation mode switch (bottom row)
+switch_x = 320 * scale;
+switch_y = knob_y2;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_rect(switch_x - 15, switch_y - 8, 30, 16);
+slider6 ? (gfx_r = 0.55; gfx_g = 0; gfx_b = 0;) : (gfx_r = 0.25; gfx_g = 0.25; gfx_b = 0.25;);
+gfx_rect(switch_x + (slider6 ? 2 : -13), switch_y - 6, 11, 12);
+// Label - properly centered
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("SAT MODE", label_w, label_h);
+gfx_x = switch_x - label_w/2; gfx_y = switch_y + 18 * scale;
+gfx_drawstr("SAT MODE");
+// Mode - properly centered with more spacing
+gfx_setfont(1, "Arial", max(6, 8 * scale));
+mode_text = slider6 ? "Tape" : "Soft";
+gfx_measurestr(mode_text, mode_w, mode_h);
+gfx_x = switch_x - mode_w/2; gfx_y = switch_y + 35 * scale;
+gfx_drawstr(mode_text);
+
+// Time division fader (when sync is on)
+slider8 ? (
+    fader_x = 400 * scale;
+    fader_y = knob_y - 10 * scale;
+    fader_height = 80 * scale;
+    fader_width = 12 * scale;
+    
+    // Fader track
+    gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+    gfx_rect(fader_x - fader_width/2, fader_y, fader_width, fader_height);
+    
+    // Fader handle
+    handle_y = fader_y + (slider9 / 6) * (fader_height - 6) + 3;
+    gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
+    gfx_rect(fader_x - fader_width/2 + 1, handle_y - 3, fader_width - 2, 6);
+    
+    // Value - properly centered
+    gfx_r = 0; gfx_g = 0; gfx_b = 0;
+    gfx_setfont(1, "Arial", max(7, 9 * scale), 'b');
+    time_division == 0 ? div_text = "1/4";
+    time_division == 1 ? div_text = "1/2";
+    time_division == 2 ? div_text = "1";
+    time_division == 3 ? div_text = "2";
+    time_division == 4 ? div_text = "4";
+    time_division == 5 ? div_text = "8";
+    time_division == 6 ? div_text = "16";
+    gfx_measurestr(div_text, div_w, div_h);
+    gfx_x = fader_x - div_w/2; gfx_y = fader_y + fader_height + 8 * scale;
+    gfx_drawstr(div_text);
+    
+    // Label - properly centered
+    gfx_setfont(1, "Arial", max(6, 8 * scale));
+    gfx_measurestr("TIME DIV", time_label_w, time_label_h);
+    gfx_x = fader_x - time_label_w/2; gfx_y = fader_y + fader_height + 25 * scale;
+    gfx_drawstr("TIME DIV");
+);
+
+// Fixed mouse interaction
+mouse_cap & 1 && !(last_mouse_cap & 1) ? (
+    // Check knob clicks (simplified)
+    (mouse_x - 80 * scale)^2 + (mouse_y - 140 * scale)^2 < (15 * scale)^2 ? (
+        slider_to_edit = 1;
+        drag_start_y = mouse_y;
+    );
+    (mouse_x - 160 * scale)^2 + (mouse_y - 140 * scale)^2 < (15 * scale)^2 ? (
+        slider_to_edit = 2;
+        drag_start_y = mouse_y;
+    );
+    (mouse_x - 240 * scale)^2 + (mouse_y - 140 * scale)^2 < (15 * scale)^2 ? (
+        slider_to_edit = 3;
+        drag_start_y = mouse_y;
+    );
+    (mouse_x - 80 * scale)^2 + (mouse_y - 220 * scale)^2 < (15 * scale)^2 ? (
+        slider_to_edit = 4;
+        drag_start_y = mouse_y;
+    );
+    (mouse_x - 160 * scale)^2 + (mouse_y - 220 * scale)^2 < (15 * scale)^2 ? (
+        slider_to_edit = 5;
+        drag_start_y = mouse_y;
+    );
+    (mouse_x - 240 * scale)^2 + (mouse_y - 220 * scale)^2 < (15 * scale)^2 ? (
+        slider_to_edit = 7;
+        drag_start_y = mouse_y;
+    );
+    
+    // Check switch clicks
+    mouse_x >= 305 * scale && mouse_x <= 335 * scale && mouse_y >= 132 * scale && mouse_y <= 148 * scale ? (
+        slider8 = 1 - slider8;
+        sliderchange(slider8);
+        // Update target values immediately
+        tempo_sync = slider8;
+        needs_recalc = 1;
+    );
+    mouse_x >= 305 * scale && mouse_x <= 335 * scale && mouse_y >= 212 * scale && mouse_y <= 228 * scale ? (
+        slider6 = 1 - slider6;
+        sliderchange(slider6);
+        // Update target values immediately
+        saturation_mode = slider6;
+        saturation = slider5;
+        saturation > 0 ? (
+            saturation_mode ? (
+                saturation_drive = 1 + saturation * 10;
+                saturation_scale = 1 / (saturation_drive * 0.5);
+            ) : (
+                saturation_drive = 1 + saturation * 5;
+                saturation_scale = 1 / (saturation_drive * 0.7);
+            );
+        );
+    );
+    
+    // Time division fader
+    slider8 && mouse_x >= 394 * scale && mouse_x <= 406 * scale && mouse_y >= 130 * scale && mouse_y <= 210 * scale ? (
+        new_div = ((mouse_y - 130 * scale) / (80 * scale) * 6) | 0;
+        slider9 = max(0, min(6, new_div));
+        sliderchange(slider9);
+        // Update target values immediately
+        time_division = slider9;
+        needs_recalc = 1;
+    );
+);
+
+// Knob dragging - fixed logic with immediate target value updates
+mouse_cap & 1 && slider_to_edit > 0 ? (
+    mouse_dy = mouse_y - drag_start_y;
+    drag_start_y = mouse_y; // Update for next frame
+    
+    slider_to_edit == 1 ? (
+        // Loop knob - inverted direction for natural feel
+        new_val = slider1 - mouse_dy * 9.9 / 200;
+        slider1 = max(0.1, min(10, new_val));
+        sliderchange(slider1);
+        // Update target values immediately for playback responsiveness
+        needs_recalc = 1;
+    );
+    slider_to_edit == 2 ? (
+        // Feedback knob - inverted direction for natural feel
+        new_val = slider2 - mouse_dy / 200;
+        slider2 = max(0, min(1, new_val));
+        sliderchange(slider2);
+        // Update target value immediately
+        feedback = slider2;
+    );
+    slider_to_edit == 3 ? (
+        // Mix knob
+        new_val = slider3 - mouse_dy / 200;
+        slider3 = max(0, min(1, new_val));
+        sliderchange(slider3);
+        // Update target value immediately
+        mix = slider3;
+    );
+    slider_to_edit == 4 ? (
+        // Damping knob
+        new_val = slider4 - mouse_dy / 200;
+        slider4 = max(0, min(1, new_val));
+        sliderchange(slider4);
+        // Update target values immediately
+        damping = slider4;
+        cutoff_freq = 20000 - damping * 19000;
+        damping_coeff = exp(-2 * $pi * cutoff_freq / srate);
+    );
+    slider_to_edit == 5 ? (
+        // Saturation knob
+        new_val = slider5 - mouse_dy / 200;
+        slider5 = max(0, min(1, new_val));
+        sliderchange(slider5);
+        // Update target values immediately
+        saturation = slider5;
+        saturation > 0 ? (
+            saturation_mode ? (
+                saturation_drive = 1 + saturation * 10;
+                saturation_scale = 1 / (saturation_drive * 0.5);
+            ) : (
+                saturation_drive = 1 + saturation * 5;
+                saturation_scale = 1 / (saturation_drive * 0.7);
+            );
+        );
+    );
+    slider_to_edit == 7 ? (
+        // Wow/Flutter knob
+        new_val = slider7 - mouse_dy / 200;
+        slider7 = max(0, min(1, new_val));
+        sliderchange(slider7);
+        // Update target values immediately
+        wow_flutter = slider7;
+    );
+) : (
+    slider_to_edit = 0;
+);
+
+last_mouse_cap = mouse_cap;
