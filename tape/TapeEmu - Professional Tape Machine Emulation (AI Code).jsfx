@@ -226,7 +226,7 @@ slider5 > 0 ? (
   noise += age_mod;
 );
 
-// Simple Wow and Flutter implementation (ReaFripp style)
+// Simple Wow and Flutter implementation
 wow_flutter_amount > 0 ? (
   // Write current samples to buffer
   wf_buffer_l[wf_write_pos] = spl0;
