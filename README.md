@@ -10,6 +10,8 @@ https://raw.githubusercontent.com/keithhanlon/citizenkeith/master/index.xml
 ### Learn How To Install JS plugins:
 https://reaper.blog/2015/06/quick-tip-how-to-install-js-plugins/
 
+# Plugin Features
+
 Quick links:
 - [ReaFripp Tape Loop Delay](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#reafripp-tape-loop-delay)
 - [Tycho Delay TMA-1](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tycho-delay-tma-1)
