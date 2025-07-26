@@ -82,7 +82,7 @@ This creates an authentic vintage tape delay experience with all the characteris
   - 5: 8 bars (32 beats)
   - 6: 16 bars (64 beats)
 
-## Tycho Delay TMA1
+## Tycho Delay TMA-1
 ![Tycho Delay TMA-1 Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TykoDelay.png?raw=true)
 
 Tycho Delay is a tape delay emulation that goes beyond basic delay functionality to provide authentic vintage tape characteristics with modern optimization and flexibility.
@@ -284,7 +284,7 @@ SynthiAKS (pronounced sinth ee aks) is a faithful emulation of the classic EMS S
 2. Acts like pressing a key on the synthesizer
 
 # Tape Emulation
-## TapeEmu Professional Tape Machine Emulation
+## TapeEmu - Professional Tape Machine Emulation
 ![TapeEmu Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TapeEmu.png?raw=true)
 
 TapeEmu is a professional tape machine emulation plugin designed to add the warmth, character, and sonic artifacts of classic analog tape recording to digital audio. Features include harmonic saturation, tape hiss, low-frequency head bump, stereo width control, and tape aging effects like dropouts and wow & flutter.
