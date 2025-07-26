@@ -2,6 +2,7 @@ desc: ReaFripp Tape Loop Delay
 version: 1.0
 author: citizenkeith - Claude AI
 about: Frippertronics-inspired loop plugin with Revox 77 inspired GUI
+      This JSFX released under GPLv3 license
 
 slider1:4<0.1,10,0.1>-Loop Length (seconds)
 slider2:0.8<0,1,0.01>-Feedback
