@@ -10,6 +10,12 @@ https://raw.githubusercontent.com/keithhanlon/citizenkeith/master/index.xml
 ### Learn How To Install JS plugins:
 https://reaper.blog/2015/06/quick-tip-how-to-install-js-plugins/
 
+Quick links:
+- [ReaFripp Tape Loop Delay](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#reafripp-tape-loop-delay)
+- [Tycho Delay TMA-1](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tycho-delay-tma-1)
+- [SynthiAKS Analog Modular Synthesizer](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#synthiaks-analog-modular-synthesizer)
+- [TapeEmu - Professional Tape Machine Emulation](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tapeemu---professional-tape-machine-emulation)
+
 # Delays
 ## ReaFripp Tape Loop Delay
 ![ReaFripp Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/ReaFripp.png?raw=true)
