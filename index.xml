@@ -32,7 +32,22 @@
         <source>https://github.com/keithhanlon/citizenkeith/raw/a346f787d71efe3c7d4f6113c97b289707fe7055/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
-  </category>
+  </category>  <category name="delay">
+      <reapack name="ReaFripp Tape Loop Delay (AI Code).jsfx" type="effect" desc="ReaFripp Tape Loop Delay">
+        <metadata>
+          <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+  {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+  \widowctrl\hyphauto
+
+  {\pard \ql \f0 \sa180 \li0 \fi0 Frippertronics-inspired loop plugin with Revox 77 inspired GUI. This JSFX released under GPLv3 license\par}
+  }
+  ]]></description>
+        </metadata>
+        <version name="1.0" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
+          <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/delay/ReaFripp%20Tape%20Loop%20Delay%20(AI%20Code).jsfx</source>
+        </version>
+      </reapack>
+    </category>
   <category name="synth">
     <reapack name="SynthiAKS - Modular Analog Synthesizer (AI Code).jsfx" type="effect" desc="SynthiAKS Analog Modular Synthesizer">
       <metadata>
