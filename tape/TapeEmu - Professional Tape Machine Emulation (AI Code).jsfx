@@ -1,5 +1,5 @@
 desc: TapeEmu - Professional Tape Machine Emulation
-version: 1.6
+version: 1.7
 author: citizenkeith - Claude AI
 about: Tape emulation that includes tape machine choices
       This JSFX released under GPLv3 license
@@ -371,7 +371,7 @@ slider7 == 4 ? ( // Basic Tape - original settings
   release = exp( threshDB / (100*srate/1000) / c )
 );
 
-@gfx 650 400
+@gfx 650 500
 
 // Calculate scale factor based on window size
 base_width = 500;
