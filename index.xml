@@ -66,4 +66,21 @@
       </version>
     </reapack>
   </category>
+  <category name="midi">
+    <reapack name="Probabilistic MIDI Note Generator 0.10 beta (AI Code).jsfx" type="effect" desc="Probabilistic MIDI Note Generator 0.10 beta">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 For creating generative music
+license\par}
+}
+]]></description>
+      </metadata>
+      <version name="0.10 beta" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/midi/Probabilistic%20MIDI%20Note%20Generator%200.10%20beta%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
 </index>
