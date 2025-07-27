@@ -14,7 +14,7 @@ slider9:4<1,16,1>Steps per Beat
 slider10:1<1,8,1>Pattern Length (beats)
 slider11:2<1,4,1>Octave Range
 slider12:1<0,1,1{Internal Tempo,Sync to Project}>Tempo Sync
-slider13:120<60,200,1>Internal Tempo (BPM)
+slider13:120<1,300,1>Internal Tempo (BPM)
 
 options:gfx_hz=60 no_meter gfx_idle
 
