@@ -1,0 +1,242 @@
+desc:Probabilistic MIDI Note Generator
+author: citizenkeith - Claude AI
+version 0.10 beta
+
+slider1:60<0,127,1>Root Note (C4 = 60)
+slider2:0<0,11,1{Major,Natural Minor,Harmonic Minor,Melodic Minor,Dorian,Phrygian,Lydian,Mixolydian,Locrian,Pentatonic Major,Pentatonic Minor,Blues}>Scale Type
+slider3:50<0,100,1>Pattern Repeat Probability (%)
+slider4:70<0,100,1>Note Trigger Probability (%)
+slider5:64<1,127,1>Base Velocity
+slider6:30<0,100,1>Velocity Randomness (%)
+slider7:480<120,1920,120>Base Note Duration (samples)
+slider8:50<0,100,1>Duration Randomness (%)
+slider9:4<1,16,1>Steps per Beat
+slider10:1<1,8,1>Pattern Length (beats)
+slider11:2<1,4,1>Octave Range
+slider12:1<0,1,1{Internal Tempo,Sync to Project}>Tempo Sync
+slider13:120<60,200,1>Internal Tempo (BPM)
+
+options:gfx_hz=60 no_meter gfx_idle
+
+in_pin:none
+out_pin:none
+
+@init
+// Initialize random seed using sample position
+rand(1);
+
+// Scale definitions (intervals from root)
+scale_major = 0; scale_major[0] = 0; scale_major[1] = 2; scale_major[2] = 4; scale_major[3] = 5; scale_major[4] = 7; scale_major[5] = 9; scale_major[6] = 11; scale_major[7] = 7;
+scale_minor = 8; scale_minor[0] = 0; scale_minor[1] = 2; scale_minor[2] = 3; scale_minor[3] = 5; scale_minor[4] = 7; scale_minor[5] = 8; scale_minor[6] = 10; scale_minor[7] = 7;
+scale_harm_minor = 16; scale_harm_minor[0] = 0; scale_harm_minor[1] = 2; scale_harm_minor[2] = 3; scale_harm_minor[3] = 5; scale_harm_minor[4] = 7; scale_harm_minor[5] = 8; scale_harm_minor[6] = 11; scale_harm_minor[7] = 7;
+scale_mel_minor = 24; scale_mel_minor[0] = 0; scale_mel_minor[1] = 2; scale_mel_minor[2] = 3; scale_mel_minor[3] = 5; scale_mel_minor[4] = 7; scale_mel_minor[5] = 9; scale_mel_minor[6] = 11; scale_mel_minor[7] = 7;
+scale_dorian = 32; scale_dorian[0] = 0; scale_dorian[1] = 2; scale_dorian[2] = 3; scale_dorian[3] = 5; scale_dorian[4] = 7; scale_dorian[5] = 9; scale_dorian[6] = 10; scale_dorian[7] = 7;
+scale_phrygian = 40; scale_phrygian[0] = 0; scale_phrygian[1] = 1; scale_phrygian[2] = 3; scale_phrygian[3] = 5; scale_phrygian[4] = 7; scale_phrygian[5] = 8; scale_phrygian[6] = 10; scale_phrygian[7] = 7;
+scale_lydian = 48; scale_lydian[0] = 0; scale_lydian[1] = 2; scale_lydian[2] = 4; scale_lydian[3] = 6; scale_lydian[4] = 7; scale_lydian[5] = 9; scale_lydian[6] = 11; scale_lydian[7] = 7;
+scale_mixolydian = 56; scale_mixolydian[0] = 0; scale_mixolydian[1] = 2; scale_mixolydian[2] = 4; scale_mixolydian[3] = 5; scale_mixolydian[4] = 7; scale_mixolydian[5] = 9; scale_mixolydian[6] = 10; scale_mixolydian[7] = 7;
+scale_locrian = 64; scale_locrian[0] = 0; scale_locrian[1] = 1; scale_locrian[2] = 3; scale_locrian[3] = 5; scale_locrian[4] = 6; scale_locrian[5] = 8; scale_locrian[6] = 10; scale_locrian[7] = 7;
+scale_pent_maj = 72; scale_pent_maj[0] = 0; scale_pent_maj[1] = 2; scale_pent_maj[2] = 4; scale_pent_maj[3] = 7; scale_pent_maj[4] = 9; scale_pent_maj[5] = 5;
+scale_pent_min = 78; scale_pent_min[0] = 0; scale_pent_min[1] = 3; scale_pent_min[2] = 5; scale_pent_min[3] = 7; scale_pent_min[4] = 10; scale_pent_min[5] = 5;
+scale_blues = 84; scale_blues[0] = 0; scale_blues[1] = 3; scale_blues[2] = 5; scale_blues[3] = 6; scale_blues[4] = 7; scale_blues[5] = 10; scale_blues[6] = 6;
+
+// Initialize variables
+pattern_buffer = 1000;
+pattern_step = 0;
+pattern_playing = 0;
+last_pattern = -1;
+
+// Timing variables
+samples_per_beat = 0;
+step_length = 0;
+next_step_time = 0;
+current_time = 0;
+
+// Active notes tracking
+active_notes = 2000;
+note_count = 0;
+
+// GUI variables
+text_input_active = 0;
+text_input_slider = 0;
+text_input_buffer = "";
+last_click_time = 0;
+last_click_x = 0;
+last_click_y = 0;
+time_counter = 0;
+slider_to_edit = 0;
+last_mouse_cap = 0;
+drag_start_y = 0;
+
+function get_scale(scale_type)
+(
+  scale_type == 0 ? scale_major :
+  scale_type == 1 ? scale_minor :
+  scale_type == 2 ? scale_harm_minor :
+  scale_type == 3 ? scale_mel_minor :
+  scale_type == 4 ? scale_dorian :
+  scale_type == 5 ? scale_phrygian :
+  scale_type == 6 ? scale_lydian :
+  scale_type == 7 ? scale_mixolydian :
+  scale_type == 8 ? scale_locrian :
+  scale_type == 9 ? scale_pent_maj :
+  scale_type == 10 ? scale_pent_min :
+  scale_blues;
+);
+
+function get_scale_length(scale_type)
+(
+  scale_type >= 9 && scale_type <= 10 ? 5 :
+  scale_type == 11 ? 6 :
+  7;
+);
+
+function generate_pattern() 
+local(i, scale_ptr, scale_len, note_idx, octave, velocity_var, duration_var, should_trigger)
+(
+  scale_ptr = get_scale(slider2);
+  scale_len = get_scale_length(slider2);
+  steps_total = slider9 * slider10;
+  
+  i = 0;
+  loop(steps_total,
+    // Decide if this step should trigger a note
+    should_trigger = (rand() * 100) < slider4;
+    
+    pattern_buffer[i * 4] = should_trigger; // trigger
+    
+    should_trigger ? (
+      // Choose note from scale
+      note_idx = floor(rand() * scale_len);
+      octave = floor(rand() * slider11);
+      
+      // Calculate MIDI note
+      pattern_buffer[i * 4 + 1] = slider1 + scale_ptr[note_idx] + (octave * 12);
+      
+      // Calculate velocity with randomness
+      velocity_var = (rand() - 0.5) * 2 * (slider6 / 100);
+      pattern_buffer[i * 4 + 2] = max(1, min(127, slider5 + slider5 * velocity_var));
+      
+      // Calculate duration with randomness
+      duration_var = (rand() - 0.5) * 2 * (slider8 / 100);
+      pattern_buffer[i * 4 + 3] = max(60, slider7 + slider7 * duration_var);
+    ) : (
+      pattern_buffer[i * 4 + 1] = 0;
+      pattern_buffer[i * 4 + 2] = 0;
+      pattern_buffer[i * 4 + 3] = 0;
+    );
+    
+    i += 1;
+  );
+);
+
+function send_note_off(note, velocity)
+(
+  midisend(0, $x80, note, velocity);
+);
+
+function send_note_on(note, velocity)
+(
+  midisend(0, $x90, note, velocity);
+);
+
+@slider
+// Recalculate timing when sliders change
+current_tempo = slider12 ? tempo : slider13;
+current_tempo < 60 ? current_tempo = 120; // Safety check
+samples_per_beat = srate * 60 / current_tempo;
+step_length = samples_per_beat / slider9;
+
+@block
+// Update timing
+current_time += samplesblock;
+
+// Get tempo based on sync setting
+current_tempo = slider12 ? tempo : slider13;
+current_tempo < 60 ? current_tempo = 120; // Safety check
+
+// Initialize on first run
+!samples_per_beat ? (
+  samples_per_beat = srate * 60 / current_tempo;
+  step_length = samples_per_beat / slider9;
+  next_step_time = current_time + step_length;
+  generate_pattern();
+);
+
+// Check if we need to generate a new pattern (only at pattern start)
+pattern_step == 0 && (rand() * 100) < (100 - slider3) ? (
+  generate_pattern();
+);
+
+// Process step timing - only check once per block
+current_time >= next_step_time ? (
+  steps_total = slider9 * slider10;
+  
+  // Get current step data
+  trigger = pattern_buffer[pattern_step * 4];
+  note = pattern_buffer[pattern_step * 4 + 1];
+  velocity = pattern_buffer[pattern_step * 4 + 2];
+  duration = pattern_buffer[pattern_step * 4 + 3];
+  
+  // Send note if triggered
+  trigger && note > 0 && note_count < 100 ? (
+    send_note_on(note, velocity);
+    
+    // Store note for later note-off
+    active_notes[note_count * 3] = note;
+    active_notes[note_count * 3 + 1] = velocity;
+    active_notes[note_count * 3 + 2] = current_time + duration;
+    note_count += 1;
+  );
+  
+  // Advance to next step
+  pattern_step += 1;
+  pattern_step >= steps_total ? pattern_step = 0;
+  next_step_time = current_time + step_length;
+);
+
+// Check for notes that need to be turned off
+i = 0;
+while(i < note_count) (
+  active_notes[i * 3 + 2] <= current_time ? (
+    // Send note off
+    send_note_off(active_notes[i * 3], active_notes[i * 3 + 1]);
+    
+    // Remove from active notes by shifting array
+    j = i;
+    while(j < note_count - 1) (
+      active_notes[j * 3] = active_notes[(j + 1) * 3];
+      active_notes[j * 3 + 1] = active_notes[(j + 1) * 3 + 1];
+      active_notes[j * 3 + 2] = active_notes[(j + 1) * 3 + 2];
+      j += 1;
+    );
+    note_count -= 1;
+  ) : (
+    i += 1;
+  );
+);
+
+@gfx 700 80
+
+// Probabilistic MIDI Generator Header GUI - just the title section above REAPER sliders
+gfx_r = 0.9; gfx_g = 0.9; gfx_b = 0.9;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+// Title panel background
+gfx_r = 0.75; gfx_g = 0.75; gfx_b = 0.75;
+gfx_rect(20, 15, gfx_w - 40, 50);
+
+// Main title
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", 24, 'b');
+gfx_x = 40; gfx_y = 25;
+gfx_drawstr("Probabilistic MIDI Generator");
+
+// Subtitle
+gfx_setfont(1, "Arial", 12);
+gfx_x = 40; gfx_y = 50;
+gfx_drawstr("Generative Music Machine");
+
+// Red accent stripe
+gfx_r = 0.7; gfx_g = 0.1; gfx_b = 0.1;
+gfx_rect(gfx_w - 100, 30, 60, 4);
+
