@@ -30,7 +30,7 @@
 ]]></description>
       </metadata>
       <version name="1.8" author="Instigated by citizenkeith" time="2025-07-25T17:59:24Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/a346f787d71efe3c7d4f6113c97b289707fe7055/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
     <reapack name="Tycho Delay TMA-2 - (AI Code).jsfx" type="effect" desc="Tycho Delay TMA-2">
