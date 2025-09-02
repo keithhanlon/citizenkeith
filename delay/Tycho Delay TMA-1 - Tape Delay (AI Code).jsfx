@@ -939,8 +939,8 @@ gfx_drawstr(cached_filter_text);
 // ===== BOTTOM ROW: Saturation and Ping Pong Controls =====
 knob_y3 = 300 * scale;
 
-// Delay Saturation knob (using cached calculations)
-knob_x = 120 * scale;
+// Delay Saturation knob (using cached calculations) - aligned under INPUT
+knob_x = 90 * scale;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y3, knob_size/2, 1);
 ind_x = knob_x + sin(cached_delay_sat_angle) * (knob_size/2 - 3);
@@ -958,8 +958,8 @@ gfx_setfont(1, "Arial", max(7, 9 * scale));
 gfx_x = knob_x - 12 * scale; gfx_y = knob_y3 + 40 * scale;
 gfx_drawstr(cached_delay_sat_text);
 
-// Output Saturation knob (using cached calculations)
-knob_x = 230 * scale;
+// Output Saturation knob (using cached calculations) - aligned under VOLUME
+knob_x = 200 * scale;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y3, knob_size/2, 1);
 ind_x = knob_x + sin(cached_output_sat_angle) * (knob_size/2 - 3);
@@ -977,8 +977,8 @@ gfx_setfont(1, "Arial", max(7, 9 * scale));
 gfx_x = knob_x - 12 * scale; gfx_y = knob_y3 + 40 * scale;
 gfx_drawstr(cached_output_sat_text);
 
-// Ping Pong Width knob (NEW - bottom row, right side)
-knob_x = 340 * scale;
+// Ping Pong Width knob - aligned under FILTER
+knob_x = 310 * scale;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y3, knob_size/2, 1);
 // Calculate ping pong knob angle
@@ -1038,7 +1038,7 @@ slider11 > 0 ? (
   gfx_drawstr("L/R CLICK");
 );
 
-// Mouse interaction (simplified for main knobs)
+// Mouse interaction - CORRECTED FOR PROPER COLUMN ALIGNMENT
 mouse_cap & 1 && !(last_mouse_cap & 1) ? (
   // Check knob clicks for main controls
   // Top row
@@ -1052,26 +1052,29 @@ mouse_cap & 1 && !(last_mouse_cap & 1) ? (
     slider_to_edit = 12; drag_start_y = mouse_y;
   );
   
-  // Middle row
-  (mouse_x - 90 * scale)^2 + (mouse_y - knob_y2)^2 < (15 * scale)^2 ? (
-    slider_to_edit = 20; drag_start_y = mouse_y;
-  );
-  (mouse_x - 200 * scale)^2 + (mouse_y - knob_y2)^2 < (15 * scale)^2 ? (
-    slider_to_edit = 50; drag_start_y = mouse_y;
-  );
-  (mouse_x - 310 * scale)^2 + (mouse_y - knob_y2)^2 < (15 * scale)^2 ? (
-    slider_to_edit = 30; drag_start_y = mouse_y;
-  );
-  
-  // Bottom row - aligned with columns above
-  (mouse_x - 90 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
-    slider_to_edit = 35; drag_start_y = mouse_y;
-  );
-  (mouse_x - 200 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
-    slider_to_edit = 36; drag_start_y = mouse_y;
-  );
-  (mouse_x - 310 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
-    slider_to_edit = 37; drag_start_y = mouse_y;
+  // Middle row - check middle row FIRST to avoid conflicts
+  abs(mouse_y - knob_y2) < abs(mouse_y - knob_y3) ? (
+    // Closer to middle row
+    (mouse_x - 90 * scale)^2 + (mouse_y - knob_y2)^2 < (15 * scale)^2 ? (
+      slider_to_edit = 20; drag_start_y = mouse_y;
+    );
+    (mouse_x - 200 * scale)^2 + (mouse_y - knob_y2)^2 < (15 * scale)^2 ? (
+      slider_to_edit = 50; drag_start_y = mouse_y;
+    );
+    (mouse_x - 310 * scale)^2 + (mouse_y - knob_y2)^2 < (15 * scale)^2 ? (
+      slider_to_edit = 30; drag_start_y = mouse_y;
+    );
+  ) : (
+    // Closer to bottom row
+    (mouse_x - 90 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
+      slider_to_edit = 35; drag_start_y = mouse_y;
+    );
+    (mouse_x - 200 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
+      slider_to_edit = 36; drag_start_y = mouse_y;
+    );
+    (mouse_x - 310 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
+      slider_to_edit = 37; drag_start_y = mouse_y;
+    );
   );
   
   // Sync switch
