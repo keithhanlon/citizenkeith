@@ -25,11 +25,12 @@
 {\pard \ql \f0 \sa180 \li0 \fi0 Good quality tape-style delay with optimized memory layout\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Based on work done by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault https://forum.cockos.com/showthread.php?t=170874\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Memory Layout Optimized by Claude AI\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Ping Pong functionality added (based on Stillwell's "Delay w/Tempo Ping-Pong")\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 This JSFX released under GPLv3 license\par}
 }
 ]]></description>
       </metadata>
-      <version name="1.5" author="Instigated by citizenkeith" time="2025-07-25T17:59:24Z">
+      <version name="1.7" author="Instigated by citizenkeith" time="2025-07-25T17:59:24Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/a346f787d71efe3c7d4f6113c97b289707fe7055/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
