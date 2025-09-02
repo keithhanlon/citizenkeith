@@ -4,7 +4,7 @@ author: citizenkeith - Claude AI
 about: Good quality tape-style delay with optimized memory layout and ping pong
     # Based on work done by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault https://forum.cockos.com/showthread.php?t=170874
     # Memory Layout Optimized by Claude AI
-    # Ping Pong functionality added (based on Stillwell's "Delay w/Tempo Ping-Pong")
+    # Ping Pong functionality added (based on Stillwell approach)
     # This JSFX released under GPLv3 license
 
 slider10:400<1,80000,1>-Delay (ms)
@@ -1063,14 +1063,14 @@ mouse_cap & 1 && !(last_mouse_cap & 1) ? (
     slider_to_edit = 30; drag_start_y = mouse_y;
   );
   
-  // Bottom row
-  (mouse_x - 120 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
+  // Bottom row - aligned with columns above
+  (mouse_x - 90 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
     slider_to_edit = 35; drag_start_y = mouse_y;
   );
-  (mouse_x - 230 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
+  (mouse_x - 200 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
     slider_to_edit = 36; drag_start_y = mouse_y;
   );
-  (mouse_x - 340 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
+  (mouse_x - 310 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
     slider_to_edit = 37; drag_start_y = mouse_y;
   );
   
