@@ -1,9 +1,10 @@
 desc: Tycho Delay TMA-1
-version: 1.5
+version: 1.7
 author: citizenkeith - Claude AI
-about: Good quality tape-style delay with optimized memory layout
+about: Good quality tape-style delay with optimized memory layout and ping pong
     # Based on work done by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault https://forum.cockos.com/showthread.php?t=170874
     # Memory Layout Optimized by Claude AI
+    # Ping Pong functionality added (based on Stillwell's "Delay w/Tempo Ping-Pong")
     # This JSFX released under GPLv3 license
 
 slider10:400<1,80000,1>-Delay (ms)
@@ -14,6 +15,7 @@ slider21:-4<-90,15,0.1>-Feedback (dB)
 slider30:10000<1000,15000,1>-Delay Loop Lowpass (Hz)
 slider35:1<1,100,1>-Delay Loop Saturation (%)
 slider36:1<1,100,1>-Output Saturation (%)
+slider37:0<0,100,1>-Ping Pong Width (%)
 slider50:0<-30,30,0.1>-Volume (dB)
 slider51:0<-90,15,0.1>-Dry Out (dB)
 slider52:0<-90,15,0.1>-Wet Out (dB)
@@ -38,6 +40,10 @@ delay_buffer = delay_buffer_base + (64 - (delay_buffer_base % 64));
 write_pos = 0;
 current_delay_samples = 0;
 target_delay_samples = 0;
+
+// Ping pong state variables (PROPER IMPLEMENTATION)
+ping_pong_state = 0;  // 0 = left emphasis, 1 = right emphasis
+delay_position = 0;   // Current position in delay (for ping pong switching)
 
 // Cubic interpolation coefficient lookup table for maximum performance
 coeff_table_size = 256; // 256 entries for excellent quality vs memory balance
@@ -78,6 +84,7 @@ smooth_mix = 0.5;         // 50% mix
 smooth_filter_freq = 10000;
 smooth_delay_sat = 1;
 smooth_output_sat = 1;
+smooth_pingpong_width = 0;
 
 // Target parameter values (set by sliders) - match smooth defaults
 target_input_gain = 1;
@@ -89,12 +96,13 @@ target_mix = 0.5;
 target_filter_freq = 10000;
 target_delay_sat = 1;
 target_output_sat = 1;
+target_pingpong_width = 0;
 
 // Initialize previous slider values for caching
 oslider10 = delaylen = 0;
 oslider11 = slider11;
 oslider12 = -999;
-oslider20 = oslider21 = oslider30 = oslider35 = oslider36 = oslider50 = oslider51 = oslider52 = -999;
+oslider20 = oslider21 = oslider30 = oslider35 = oslider36 = oslider37 = oslider50 = oslider51 = oslider52 = -999;
 
 // Filter initialization flag
 aa_freq_set = 0;
@@ -104,6 +112,7 @@ initialized_smooth_values = 0;
 last_filter_freq = 10000;
 last_delay_sat = 1;
 last_output_sat = 1;
+last_pingpong_width = 0;
 
 // GUI interaction variables
 text_input_active = 0;
@@ -140,6 +149,7 @@ last_gui_slider30 = -1;
 last_gui_slider35 = -1;
 last_gui_slider36 = -1;
 last_gui_slider11 = -1;
+last_gui_slider37 = -1;
 
 // Cached formatted text strings (expensive sprintf operations)
 cached_delay_text = "";
@@ -151,6 +161,7 @@ cached_mix_text = "";
 cached_delay_sat_text = "";
 cached_output_sat_text = "";
 cached_sync_div_text = "";
+cached_pingpong_text = "";
 
 // Optimized buffer operations with cubic interpolation support
 function clear_buffer() local(clear_samples, i) (
@@ -173,6 +184,7 @@ function clear_buffer() local(clear_samples, i) (
     );
   );
   write_pos = 0;
+  delay_position = 0; // Reset ping pong position
 );
 
 // Ultra-fast Catmull-Rom interpolation using pre-calculated coefficient table
@@ -191,7 +203,7 @@ function catmull_rom_interp_fast(p0, p1, p2, p3, t) local(table_index, c0, c1, c
   p0 * c0 + p1 * c1 + p2 * c2 + p3 * c3;
 );
 
-// High-performance cubic delay read with coefficient table optimization
+// High-performance cubic delay read with Catmull-Rom interpolation
 function cubic_delay_read(delay_samples) local(int_delay, frac_delay, base_pos) (
   // Split into integer and fractional parts
   int_delay = floor(delay_samples);
@@ -429,6 +441,7 @@ last_target_mix = target_mix;
 last_target_filter_freq = target_filter_freq;
 last_target_delay_sat = target_delay_sat;
 last_target_output_sat = target_output_sat;
+last_target_pingpong_width = target_pingpong_width;
 
 target_input_gain = 10^(slider20/20);
 target_feedback = 10^(slider21/20);
@@ -441,6 +454,7 @@ target_mix = slider12;
 target_filter_freq = slider30;
 target_delay_sat = slider35;
 target_output_sat = slider36;
+target_pingpong_width = slider37 / 100.0; // Convert percentage to 0.0-1.0
 
 // Check if any parameters changed significantly (for automation/presets)
 abs(target_input_gain - last_target_input_gain) > 0.001 ? gui_cache_dirty = 1;
@@ -450,6 +464,7 @@ abs(target_mix - last_target_mix) > 0.001 ? gui_cache_dirty = 1;
 abs(target_filter_freq - last_target_filter_freq) > 10.0 ? gui_cache_dirty = 1;
 abs(target_delay_sat - last_target_delay_sat) > 0.1 ? gui_cache_dirty = 1;
 abs(target_output_sat - last_target_output_sat) > 0.1 ? gui_cache_dirty = 1;
+abs(target_pingpong_width - last_target_pingpong_width) > 0.01 ? gui_cache_dirty = 1;
 
 // Initialize smoothed values to targets on first run
 !initialized_smooth_values ? (
@@ -462,6 +477,7 @@ abs(target_output_sat - last_target_output_sat) > 0.1 ? gui_cache_dirty = 1;
   smooth_filter_freq = target_filter_freq;
   smooth_delay_sat = target_delay_sat;
   smooth_output_sat = target_output_sat;
+  smooth_pingpong_width = target_pingpong_width;
   
   // CRITICAL: Initialize filters and saturation on first run
   delay_loop_filter.bq_setlp(smooth_filter_freq);
@@ -472,6 +488,7 @@ abs(target_output_sat - last_target_output_sat) > 0.1 ? gui_cache_dirty = 1;
   last_filter_freq = smooth_filter_freq;
   last_delay_sat = smooth_delay_sat;
   last_output_sat = smooth_output_sat;
+  last_pingpong_width = smooth_pingpong_width;
   
   initialized_smooth_values = 1;
 );
@@ -512,6 +529,7 @@ abs(target_mix - smooth_mix) > 0.001 ? param_change_mask |= 32;
 abs(target_filter_freq - smooth_filter_freq) > 10.0 ? param_change_mask |= 64;   // 10Hz threshold
 abs(target_delay_sat - smooth_delay_sat) > 0.1 ? param_change_mask |= 128;     // 0.1% threshold
 abs(target_output_sat - smooth_output_sat) > 0.1 ? param_change_mask |= 256;   // 0.1% threshold
+abs(target_pingpong_width - smooth_pingpong_width) > 0.01 ? param_change_mask |= 512; // 1% threshold
 
 // Only perform smoothing calculations for parameters that are changing
 param_change_mask & 1 ? smooth_input_gain = target_input_gain + (smooth_input_gain - target_input_gain) * gain_smooth_coeff;
@@ -527,6 +545,7 @@ param_change_mask & 64 ? smooth_filter_freq = target_filter_freq + (smooth_filte
 // Saturation drive smoothing (only when changing)
 param_change_mask & 128 ? smooth_delay_sat = target_delay_sat + (smooth_delay_sat - target_delay_sat) * saturation_smooth_coeff;
 param_change_mask & 256 ? smooth_output_sat = target_output_sat + (smooth_output_sat - target_output_sat) * saturation_smooth_coeff;
+param_change_mask & 512 ? smooth_pingpong_width = target_pingpong_width + (smooth_pingpong_width - target_pingpong_width) * gain_smooth_coeff;
 
 // Update filter and saturation only when smoothed values change significantly
 abs(smooth_filter_freq - last_filter_freq) > 10 ? (
@@ -549,7 +568,7 @@ input_aa_filter.bq_lp_stereo(spl0, spl1);
 lp_spl0 = input_aa_filter.left;
 lp_spl1 = input_aa_filter.right;
 
-// Only process delay if we have enough samples for cubic interpolation
+// PROPER PING PONG DELAY PROCESSING (based on Stillwell approach)
 current_delay_samples >= 4 ? ( // Need at least 4 samples for cubic interpolation
   // Read from delay buffer using cubic interpolation
   delayed_samples.cubic_delay_read(current_delay_samples);
@@ -572,10 +591,48 @@ current_delay_samples >= 4 ? ( // Need at least 4 samples for cubic interpolatio
 
   // Write to delay buffer using optimized circular buffer
   buffer_write(buffer_input0, buffer_input1);
+  
+  // PING PONG PROCESSING (like Stillwell delay)
+  smooth_pingpong_width > 0 ? (
+    // Ping pong is enabled - create smooth switching
+    // Calculate smooth switching factor near delay wraparound
+    switch_zone = 400; // Samples for smooth transition
+    abs(delay_position) < switch_zone ? (
+      switch_factor = ping_pong_state ? abs(delay_position) / switch_zone : (switch_zone - abs(delay_position)) / switch_zone;
+    ) : (
+      switch_factor = ping_pong_state; // Full left or right
+    );
+    
+    // Advance delay position and handle wraparound
+    delay_position += 1;
+    delay_position >= current_delay_samples ? (
+      delay_position = 0;
+      ping_pong_state = 1 - ping_pong_state; // Toggle between 0 and 1
+    );
+    
+    // Create mono sum of delayed signal for ping pong
+    delayed_mono = (delayed0 + delayed1) * 0.5;
+    
+    // Calculate pan position based on ping pong width and switch factor
+    ping_pong_pan_base = (1 - smooth_pingpong_width) * 0.5; // Center position when width = 0
+    ping_pong_pan_position = ping_pong_pan_base + smooth_pingpong_width * switch_factor;
+    
+    // Apply ping pong panning to the delayed signal
+    delayed0 = delayed_mono * ping_pong_pan_position;
+    delayed1 = delayed_mono * (1 - ping_pong_pan_position);
+  ) : (
+    // No ping pong - advance delay position for consistency but don't use it
+    delay_position += 1;
+    delay_position >= current_delay_samples ? delay_position = 0;
+  );
+
 ) : (
   // No delay - zero delayed signal, but still write input to buffer
   delayed0 = delayed1 = 0;
   buffer_write(lp_spl0 * smooth_input_gain, lp_spl1 * smooth_input_gain);
+  // Reset delay position when delay is too short
+  delay_position = 0;
+  ping_pong_state = 0;
 );
 
 // Mix dry and wet signals using smoothed mix parameter
@@ -619,6 +676,7 @@ slider30 != last_gui_slider30 ? gui_cache_dirty = 1; // Filter changed
 slider35 != last_gui_slider35 ? gui_cache_dirty = 1; // Delay sat changed
 slider36 != last_gui_slider36 ? gui_cache_dirty = 1; // Output sat changed
 slider11 != last_gui_slider11 ? gui_cache_dirty = 1; // Sync changed
+slider37 != last_gui_slider37 ? gui_cache_dirty = 1; // Ping pong changed
 
 // Only recalculate expensive operations when cache is dirty
 gui_cache_dirty ? (
@@ -652,6 +710,9 @@ gui_cache_dirty ? (
   sprintf(cached_mix_text, "%.0f%%", slider12 * 100);
   sprintf(cached_delay_sat_text, "%.0f%%", slider35);
   sprintf(cached_output_sat_text, "%.0f%%", slider36);
+  
+  // Cache ping pong text
+  sprintf(cached_pingpong_text, "%.0f%%", slider37);
   
   // Always display filter frequency in kHz since minimum is now 1kHz
   sprintf(cached_filter_text, "%.1fkHz", slider30 * 0.001);
@@ -696,6 +757,7 @@ gui_cache_dirty ? (
   last_gui_slider35 = slider35;
   last_gui_slider36 = slider36;
   last_gui_slider11 = slider11;
+  last_gui_slider37 = slider37;
   last_gui_scale = scale;
   
   gui_cache_dirty = 0; // Cache is now clean
@@ -874,11 +936,11 @@ gfx_setfont(1, "Arial", max(7, 9 * scale));
 gfx_x = knob_x - 18 * scale; gfx_y = knob_y2 + 40 * scale;
 gfx_drawstr(cached_filter_text);
 
-// ===== BOTTOM ROW: Saturation Controls =====
+// ===== BOTTOM ROW: Saturation and Ping Pong Controls =====
 knob_y3 = 300 * scale;
 
 // Delay Saturation knob (using cached calculations)
-knob_x = 150 * scale;
+knob_x = 120 * scale;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y3, knob_size/2, 1);
 ind_x = knob_x + sin(cached_delay_sat_angle) * (knob_size/2 - 3);
@@ -897,7 +959,7 @@ gfx_x = knob_x - 12 * scale; gfx_y = knob_y3 + 40 * scale;
 gfx_drawstr(cached_delay_sat_text);
 
 // Output Saturation knob (using cached calculations)
-knob_x = 260 * scale;
+knob_x = 230 * scale;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y3, knob_size/2, 1);
 ind_x = knob_x + sin(cached_output_sat_angle) * (knob_size/2 - 3);
@@ -914,6 +976,28 @@ gfx_drawstr("OUTPUT SAT");
 gfx_setfont(1, "Arial", max(7, 9 * scale));
 gfx_x = knob_x - 12 * scale; gfx_y = knob_y3 + 40 * scale;
 gfx_drawstr(cached_output_sat_text);
+
+// Ping Pong Width knob (NEW - bottom row, right side)
+knob_x = 340 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y3, knob_size/2, 1);
+// Calculate ping pong knob angle
+pingpong_norm = slider37 / 100;
+pingpong_angle = -2.356 + pingpong_norm * 4.712;
+ind_x = knob_x + sin(pingpong_angle) * (knob_size/2 - 3);
+ind_y = knob_y3 - cos(pingpong_angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y3, ind_x, ind_y, 2);
+// Label
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("PING PONG", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y3 + 25 * scale;
+gfx_drawstr("PING PONG");
+// Value (using cached text)
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 12 * scale; gfx_y = knob_y3 + 40 * scale;
+gfx_drawstr(cached_pingpong_text);
 
 // Sync division display (when sync is enabled) - using cached text
 slider11 > 0 ? (
@@ -980,11 +1064,14 @@ mouse_cap & 1 && !(last_mouse_cap & 1) ? (
   );
   
   // Bottom row
-  (mouse_x - 150 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
+  (mouse_x - 120 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
     slider_to_edit = 35; drag_start_y = mouse_y;
   );
-  (mouse_x - 260 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
+  (mouse_x - 230 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
     slider_to_edit = 36; drag_start_y = mouse_y;
+  );
+  (mouse_x - 340 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
+    slider_to_edit = 37; drag_start_y = mouse_y;
   );
   
   // Sync switch
@@ -1090,6 +1177,13 @@ mouse_cap & 1 && slider_to_edit > 0 ? (
     target_output_sat = slider36;
     gui_cache_dirty = 1; // Force GUI cache update
     sliderchange(36);
+  );
+  slider_to_edit == 37 ? ( // Ping pong width
+    slider37 = max(0, min(100, slider37 - mouse_dy * 100 / 300));
+    // Update target ping pong width immediately
+    target_pingpong_width = slider37 / 100.0;
+    gui_cache_dirty = 1; // Force GUI cache update
+    sliderchange(37);
   );
 ) : (
   slider_to_edit = 0;
