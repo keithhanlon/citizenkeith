@@ -17,6 +17,7 @@ Quick links:
 - [Tycho Delay TMA-1](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tycho-delay-tma-1)
 - [SynthiAKS Analog Modular Synthesizer](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#synthiaks-analog-modular-synthesizer)
 - [TapeEmu - Professional Tape Machine Emulation](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tapeemu---professional-tape-machine-emulation)
+- [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
 
 # Delays
 ## ReaFripp Tape Loop Delay
@@ -290,6 +291,29 @@ SynthiAKS (pronounced sinth ee aks) is a faithful emulation of the classic EMS S
 
 1. Manual trigger to start the envelope
 2. Acts like pressing a key on the synthesizer
+
+# MIDI
+## Probabilistic MIDI Note Generator
+![Note Generator Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/NoteGenerator.png?raw=true)
+
+The Probabilistic MIDI Generator creates evolving, generative MIDI patterns using probability-based algorithms. Perfect for ambient music, experimental compositions, modular-style sequencing, and creative improvisation, this plugin puts the power of algorithmic composition at your fingertips.
+Insert it before any MIDI instrument in REAPER, and watch as it generates musically intelligent note sequences that never repeat exactly the same way twice.
+
+### Quick Start Guide
+
+1. Insert the plugin on an empty track before a MIDI instrument
+2. Choose your key with the ROOT knob (60 = C4)
+3. Select a scale using the large SCALE knob
+4. Set pattern density with the TRIGGER knob (70% is a great starting point)
+5. Adjust pattern variation with REPEAT (50% balances repetition and change)
+6. Hit play and hear your generative sequence come to life!
+
+From there, experiment with:
+
+1. VEL RND and DUR RND for more organic, human-like expression
+2. STEPS to change rhythmic subdivision (4 = sixteenth notes, 8 = thirty-second notes)
+3. LENGTH to extend or shorten your pattern phrases
+4. OCTAVES to expand or narrow the melodic range
 
 # Tape Emulation
 ## TapeEmu - Professional Tape Machine Emulation
