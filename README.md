@@ -106,37 +106,37 @@ Tycho Delay is a tape delay emulation that goes beyond basic delay functionality
 
 **Delay (sync)** (Off, 1/32 to 16 bars)
 
-Tempo synchronization with 28 different musical divisions
-1. 0: Off (manual delay time)
-2. 1-28: Various note values including Standard notes (1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8, 16 (bars)), Triplets (T) (1/16T, 1/8T, 1/4T, etc. (2/3 of normal length)) and Dotted (D) (1/32D, 1/16D, 1/8D, etc. (1.5x normal length))
+1. Tempo synchronization with 28 different musical divisions:
+* 0: Off (manual delay time)
+* 1-28: Various note values including Standard notes (1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8, 16 (bars)), Triplets (T) (1/16T, 1/8T, 1/4T, etc. (2/3 of normal length)) and Dotted (D) (1/32D, 1/16D, 1/8D, etc. (1.5x normal length))
 
 **Mix** (0-1)
 
-Blends between dry signal (0) and wet delayed signal (1)
-0.5 gives equal parts dry and wet
+1. Blends between dry signal (0) and wet delayed signal (1)
+2.v0.5 gives equal parts dry and wet
 
 **Input Gain** (-90 to +15 dB)
 
-Adjusts the level of signal going into the delay buffer
-Higher values can drive the tape saturation harder
+1. Adjusts the level of signal going into the delay buffer
+2. Higher values can drive the tape saturation harder
 
 **Feedback** (-90 to +15 dB)
 
-Controls how much delayed signal is fed back into the delay line
-Higher values create longer, more sustained echoes
-Negative dB values prevent runaway feedback
+1. Controls how much delayed signal is fed back into the delay line
+2. Higher values create longer, more sustained echoes
+3. Negative dB values prevent runaway feedback
 
 **Volume** (-30 to +30 dB)
 
-Master output level control for the entire effect
+1. Master output level control for the entire effect
 
 **Dry Out** (-90 to +15 dB)
 
-Independent level control for the dry (unprocessed) signal
+1. Independent level control for the dry (unprocessed) signal
 
 **Wet Out** (-90 to +15 dB)
 
-Independent level control for the wet (delayed) signal
+1. Independent level control for the wet (delayed) signal
 
 **Delay Loop Lowpass** (1,000-15,000 Hz)
 
@@ -146,14 +146,14 @@ Independent level control for the wet (delayed) signal
 
 **Delay Loop Saturation** (1-100%)
 
-Tape-style saturation applied within the delay feedback loop
-Creates harmonic distortion that builds up with each repeat
-Simulates tape compression and saturation characteristics
+1. Tape-style saturation applied within the delay feedback loop
+2. Creates harmonic distortion that builds up with each repeat
+3. Simulates tape compression and saturation characteristics
 
 **Output Saturation** (1-100%)
 
-Saturation applied to the final mixed output
-Adds overall harmonic coloration to the entire effect
+1. Saturation applied to the final mixed output
+2. Adds overall harmonic coloration to the entire effect
 
 # Synths
 
