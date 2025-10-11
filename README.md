@@ -23,14 +23,13 @@ Quick links:
 ## ReaFripp Tape Loop Delay
 ![ReaFripp Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/ReaFripp.png?raw=true)
 
-This plugin is inspired by Frippertronics, Robert Fripp's tape delay technique that utilized two Revox tape machines to create repeated delay. It includes sophisticated optimizations like:
+This plugin is inspired by Frippertronics, Robert Fripp's tape delay technique that utilized two Revox tape machines to create repeated delay. It includes optimizations like:
 
 - Interpolation for smooth playback at fractional delay times
 - Fast sine approximation for wow/flutter calculations
 - Pre-calculated filter coefficients for efficiency
-- A Revox 77-inspired GUI design
 
-This creates an authentic vintage tape delay experience with all the characteristic imperfections and warmth of analog tape loops.
+This creates a vintage tape delay experience with the characteristic imperfections and warmth of analog tape loops.
 
 ### Controls:
 **Loop Length** (0.1-10 seconds)
@@ -94,7 +93,7 @@ This creates an authentic vintage tape delay experience with all the characteris
 ## Tycho Delay TMA-1
 ![Tycho Delay TMA-1 Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TykoDelay.png?raw=true)
 
-Tycho Delay is a tape delay emulation that goes beyond basic delay functionality to provide authentic vintage tape characteristics with modern optimization and flexibility.
+Tycho Delay is a tape delay emulation that goes beyond basic delay functionality to provide vintage tape characteristics with modern optimization and flexibility.
 
 ### Controls:
 
@@ -160,7 +159,7 @@ Tycho Delay is a tape delay emulation that goes beyond basic delay functionality
 ## SynthiAKS Analog Modular Synthesizer
 ![SynthiAKS Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/SynthiAKS.png?raw=true)
 
-SynthiAKS (pronounced sinth ee aks) is a faithful emulation of the classic EMS Synthi AKS modular synthesizer, known for its unique pin matrix patching system and distinctive British analog sound used by artists like Pink Floyd and Brian Eno.
+SynthiAKS (pronounced sinth ee aks) is an emulation of the classic EMS Synthi AKS modular synthesizer, known for its unique pin matrix patching system and distinctive British analog sound used by artists like Pink Floyd and Brian Eno.
 
 ### Features:
 1. 4-pole Synthi-style filter with characteristic resonance
@@ -296,8 +295,8 @@ SynthiAKS (pronounced sinth ee aks) is a faithful emulation of the classic EMS S
 ## Probabilistic MIDI Note Generator
 ![Note Generator Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/NoteGenerator.png?raw=true)
 
-The Probabilistic MIDI Generator creates evolving, generative MIDI patterns using probability-based algorithms. Perfect for ambient music, experimental compositions, modular-style sequencing, and creative improvisation, this plugin puts the power of algorithmic composition at your fingertips.
-Insert it before any MIDI instrument in REAPER, and watch as it generates musically intelligent note sequences that never repeat exactly the same way twice.
+The Probabilistic MIDI Generator creates evolving, generative MIDI patterns using probability-based algorithms. Perfect for ambient music, experimental compositions, modular-style sequencing, and creative improvisation.
+Insert it before any MIDI instrument in REAPER, and watch as it generates note sequences that never repeat exactly the same way twice.
 
 ### Quick Start Guide
 
@@ -319,7 +318,7 @@ From there, experiment with:
 ## TapeEmu - Professional Tape Machine Emulation
 ![TapeEmu Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TapeEmu.png?raw=true)
 
-TapeEmu is a professional tape machine emulation plugin designed to add the warmth, character, and sonic artifacts of classic analog tape recording to digital audio. Features include harmonic saturation, tape hiss, low-frequency head bump, stereo width control, and tape aging effects like dropouts and wow & flutter.
+TapeEmu is a tape machine emulation plugin designed to add the warmth, character, and sonic artifacts of classic analog tape recording to digital audio. Features include harmonic saturation, tape hiss, low-frequency head bump, stereo width control, and tape aging effects like dropouts and wow & flutter.
 
 The plugin offers five different tape machine models (Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, and Basic Tape), each with their own unique saturation curves, compression characteristics, and tonal coloring.
 
