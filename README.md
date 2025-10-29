@@ -17,19 +17,19 @@ Quick links:
 - [Tycho Delay TMA-1](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tycho-delay-tma-1)
 - [SynthiAKS Analog Modular Synthesizer](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#synthiaks-analog-modular-synthesizer)
 - [TapeEmu - Professional Tape Machine Emulation](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tapeemu---professional-tape-machine-emulation)
+- [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
 
 # Delays
 ## ReaFripp Tape Loop Delay
 ![ReaFripp Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/ReaFripp.png?raw=true)
 
-This plugin is inspired by Frippertronics, Robert Fripp's tape delay technique that utilized two Revox tape machines to create repeated delay. It includes sophisticated optimizations like:
+This plugin is inspired by Frippertronics, Robert Fripp's tape delay technique that utilized two Revox tape machines to create repeated delay. It includes optimizations like:
 
 - Interpolation for smooth playback at fractional delay times
 - Fast sine approximation for wow/flutter calculations
 - Pre-calculated filter coefficients for efficiency
-- A Revox 77-inspired GUI design
 
-This creates an authentic vintage tape delay experience with all the characteristic imperfections and warmth of analog tape loops.
+This creates a vintage tape delay experience with the characteristic imperfections and warmth of analog tape loops.
 
 ### Controls:
 **Loop Length** (0.1-10 seconds)
@@ -93,7 +93,7 @@ This creates an authentic vintage tape delay experience with all the characteris
 ## Tycho Delay TMA-1
 ![Tycho Delay TMA-1 Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TykoDelay.png?raw=true)
 
-Tycho Delay is a tape delay emulation that goes beyond basic delay functionality to provide authentic vintage tape characteristics with modern optimization and flexibility.
+Tycho Delay is a tape delay emulation that goes beyond basic delay functionality to provide vintage tape characteristics with modern optimization and flexibility.
 
 ### Controls:
 
@@ -105,37 +105,37 @@ Tycho Delay is a tape delay emulation that goes beyond basic delay functionality
 
 **Delay (sync)** (Off, 1/32 to 16 bars)
 
-Tempo synchronization with 28 different musical divisions
-1. 0: Off (manual delay time)
-2. 1-28: Various note values including Standard notes (1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8, 16 (bars)), Triplets (T) (1/16T, 1/8T, 1/4T, etc. (2/3 of normal length)) and Dotted (D) (1/32D, 1/16D, 1/8D, etc. (1.5x normal length))
+1. Tempo synchronization with 28 different musical divisions:
+* 0: Off (manual delay time)
+* 1-28: Various note values including Standard notes (1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8, 16 (bars)), Triplets (T) (1/16T, 1/8T, 1/4T, etc. (2/3 of normal length)) and Dotted (D) (1/32D, 1/16D, 1/8D, etc. (1.5x normal length))
 
 **Mix** (0-1)
 
-Blends between dry signal (0) and wet delayed signal (1)
-0.5 gives equal parts dry and wet
+1. Blends between dry signal (0) and wet delayed signal (1)
+2.v0.5 gives equal parts dry and wet
 
 **Input Gain** (-90 to +15 dB)
 
-Adjusts the level of signal going into the delay buffer
-Higher values can drive the tape saturation harder
+1. Adjusts the level of signal going into the delay buffer
+2. Higher values can drive the tape saturation harder
 
 **Feedback** (-90 to +15 dB)
 
-Controls how much delayed signal is fed back into the delay line
-Higher values create longer, more sustained echoes
-Negative dB values prevent runaway feedback
+1. Controls how much delayed signal is fed back into the delay line
+2. Higher values create longer, more sustained echoes
+3. Negative dB values prevent runaway feedback
 
 **Volume** (-30 to +30 dB)
 
-Master output level control for the entire effect
+1. Master output level control for the entire effect
 
 **Dry Out** (-90 to +15 dB)
 
-Independent level control for the dry (unprocessed) signal
+1. Independent level control for the dry (unprocessed) signal
 
 **Wet Out** (-90 to +15 dB)
 
-Independent level control for the wet (delayed) signal
+1. Independent level control for the wet (delayed) signal
 
 **Delay Loop Lowpass** (1,000-15,000 Hz)
 
@@ -145,21 +145,21 @@ Independent level control for the wet (delayed) signal
 
 **Delay Loop Saturation** (1-100%)
 
-Tape-style saturation applied within the delay feedback loop
-Creates harmonic distortion that builds up with each repeat
-Simulates tape compression and saturation characteristics
+1. Tape-style saturation applied within the delay feedback loop
+2. Creates harmonic distortion that builds up with each repeat
+3. Simulates tape compression and saturation characteristics
 
 **Output Saturation** (1-100%)
 
-Saturation applied to the final mixed output
-Adds overall harmonic coloration to the entire effect
+1. Saturation applied to the final mixed output
+2. Adds overall harmonic coloration to the entire effect
 
 # Synths
 
 ## SynthiAKS Analog Modular Synthesizer
 ![SynthiAKS Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/SynthiAKS.png?raw=true)
 
-SynthiAKS (pronounced sinth ee aks) is a faithful emulation of the classic EMS Synthi AKS modular synthesizer, known for its unique pin matrix patching system and distinctive British analog sound used by artists like Pink Floyd and Brian Eno.
+SynthiAKS (pronounced sinth ee aks) is an emulation of the classic EMS Synthi AKS modular synthesizer, known for its unique pin matrix patching system and distinctive British analog sound used by artists like Pink Floyd and Brian Eno.
 
 ### Features:
 1. 4-pole Synthi-style filter with characteristic resonance
@@ -291,11 +291,34 @@ SynthiAKS (pronounced sinth ee aks) is a faithful emulation of the classic EMS S
 1. Manual trigger to start the envelope
 2. Acts like pressing a key on the synthesizer
 
+# MIDI
+## Probabilistic MIDI Note Generator
+![Note Generator Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/NoteGenerator.png?raw=true)
+
+The Probabilistic MIDI Generator creates evolving, generative MIDI patterns using probability-based algorithms. Perfect for ambient music, experimental compositions, modular-style sequencing, and creative improvisation.
+Insert it before any MIDI instrument in REAPER, and watch as it generates note sequences that never repeat exactly the same way twice.
+
+### Quick Start Guide
+
+1. Insert the plugin on an empty track before a MIDI instrument
+2. Choose your key with the ROOT knob (60 = C4)
+3. Select a scale using the large SCALE knob
+4. Set pattern density with the TRIGGER knob (70% is a great starting point)
+5. Adjust pattern variation with REPEAT (50% balances repetition and change)
+6. Hit play and hear your generative sequence come to life!
+
+From there, experiment with:
+
+1. VEL RND and DUR RND for more organic, human-like expression
+2. STEPS to change rhythmic subdivision (4 = sixteenth notes, 8 = thirty-second notes)
+3. LENGTH to extend or shorten your pattern phrases
+4. OCTAVES to expand or narrow the melodic range
+
 # Tape Emulation
 ## TapeEmu - Professional Tape Machine Emulation
 ![TapeEmu Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TapeEmu.png?raw=true)
 
-TapeEmu is a professional tape machine emulation plugin designed to add the warmth, character, and sonic artifacts of classic analog tape recording to digital audio. Features include harmonic saturation, tape hiss, low-frequency head bump, stereo width control, and tape aging effects like dropouts and wow & flutter.
+TapeEmu is a tape machine emulation plugin designed to add the warmth, character, and sonic artifacts of classic analog tape recording to digital audio. Features include harmonic saturation, tape hiss, low-frequency head bump, stereo width control, and tape aging effects like dropouts and wow & flutter.
 
 The plugin offers five different tape machine models (Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, and Basic Tape), each with their own unique saturation curves, compression characteristics, and tonal coloring.
 
