@@ -165,7 +165,7 @@ Stargate Ambient Reverb is a dual-stage algorithmic reverb designed for creating
 
 **REVERB SECTION**
 
-**Regen* (0-95%)
+**Regen*** (0-95%)
 
 Controls the feedback amount in the main reverb, determining how long the reverb tail sustains. Higher values create longer, more sustained reverberations.
 
