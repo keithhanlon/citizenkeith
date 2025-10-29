@@ -193,7 +193,7 @@ The key morphing control. At 0%, you hear discrete delays. As you increase it, t
 
 Standard mix control. 0% = completely dry signal, 100% = completely wet reverb signal.
 
-**TAIL EXTENDER SECTION*
+**TAIL EXTENDER SECTION**
 
 **Decay** (0-100%)
 
