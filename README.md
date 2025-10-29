@@ -173,11 +173,6 @@ Controls the feedback amount in the main reverb, determining how long the reverb
 
 High-frequency damping control. Lower values create darker, more natural reverb tails by filtering high frequencies. Higher values preserve brightness for shimmering, ethereal textures.
 
-**Mix** (0-1)
-
-1. Blends between dry signal (0) and wet delayed signal (1)
-2.v0.5 gives equal parts dry and wet
-
 **Shimmer** (0-100%)
 
 Adds subtle pitch modulation to the reverb, creating a chorus-like shimmer effect. Adds movement and animation to the reverb tail without detuning.
