@@ -1,0 +1,1111 @@
+desc:Stargate Ambient Reverb
+author: citizenkeith / Claude AI
+version: 1.0
+about: Diffuse delay lines that morph from simple delays to complex reverb based on diffusion control
+      This JSFX released under GPLv3 license
+
+// Hidden sliders using proper JSFX technique (- prefix hides from default UI)
+slider1:55<0,95,0.1>-Regen (%)
+slider2:80<0,100,0.1>-Brightness (%)
+slider3:50<0,100,0.1>-Shimmer (%)
+slider4:50<10,100,0.1>-Size (%)
+slider5:0<-12,12,0.1>-Pitch Shift (semitones)
+slider6:30<0,100,0.1>-Diffusion (%)
+slider7:50<0,100,0.1>-Dry/Wet (%)
+slider8:50<0,100,0.1>-Tail Decay (%)
+slider9:0<0,100,0.1>-Tail Mix (%)
+
+@init
+// Mouse interaction variables for GUI
+slider_to_edit = 0;
+last_mouse_cap = 0;
+drag_start_y = 0;
+last_mouse_y = 0;
+
+freemem = 0;
+
+// Main diffuse delay lines (6 lines, each can morph from delay to reverb)
+// Much longer delays for proper reverb times
+delay1_size = 44100; delay2_size = 35200; delay3_size = 26400;  // Up to 1 second each
+delay4_size = 19800; delay5_size = 15400; delay6_size = 12100;
+
+// Main delay buffers
+delay1L = freemem; freemem += delay1_size;
+delay1R = freemem; freemem += delay1_size;
+delay2L = freemem; freemem += delay2_size;
+delay2R = freemem; freemem += delay2_size;
+delay3L = freemem; freemem += delay3_size;
+delay3R = freemem; freemem += delay3_size;
+delay4L = freemem; freemem += delay4_size;
+delay4R = freemem; freemem += delay4_size;
+delay5L = freemem; freemem += delay5_size;
+delay5R = freemem; freemem += delay5_size;
+delay6L = freemem; freemem += delay6_size;
+delay6R = freemem; freemem += delay6_size;
+
+// Internal diffusors for each delay line (what makes them "diffuse")
+// Each delay line gets its own set of allpass diffusors
+diff1a_size = 142; diff1b_size = 107; diff1c_size = 89;
+diff2a_size = 179; diff2b_size = 113; diff2c_size = 67;
+diff3a_size = 211; diff3b_size = 127; diff3c_size = 97;
+diff4a_size = 239; diff4b_size = 149; diff4c_size = 109;
+diff5a_size = 277; diff5b_size = 163; diff5c_size = 131;
+diff6a_size = 307; diff6b_size = 181; diff6c_size = 151;
+
+// Allocate diffusor memory
+diff1aL = freemem; freemem += diff1a_size; diff1aR = freemem; freemem += diff1a_size;
+diff1bL = freemem; freemem += diff1b_size; diff1bR = freemem; freemem += diff1b_size;
+diff1cL = freemem; freemem += diff1c_size; diff1cR = freemem; freemem += diff1c_size;
+
+diff2aL = freemem; freemem += diff2a_size; diff2aR = freemem; freemem += diff2a_size;
+diff2bL = freemem; freemem += diff2b_size; diff2bR = freemem; freemem += diff2b_size;
+diff2cL = freemem; freemem += diff2c_size; diff2cR = freemem; freemem += diff2c_size;
+
+diff3aL = freemem; freemem += diff3a_size; diff3aR = freemem; freemem += diff3a_size;
+diff3bL = freemem; freemem += diff3b_size; diff3bR = freemem; freemem += diff3b_size;
+diff3cL = freemem; freemem += diff3c_size; diff3cR = freemem; freemem += diff3c_size;
+
+diff4aL = freemem; freemem += diff4a_size; diff4aR = freemem; freemem += diff4a_size;
+diff4bL = freemem; freemem += diff4b_size; diff4bR = freemem; freemem += diff4b_size;
+diff4cL = freemem; freemem += diff4c_size; diff4cR = freemem; freemem += diff4c_size;
+
+diff5aL = freemem; freemem += diff5a_size; diff5aR = freemem; freemem += diff5a_size;
+diff5bL = freemem; freemem += diff5b_size; diff5bR = freemem; freemem += diff5b_size;
+diff5cL = freemem; freemem += diff5c_size; diff5cR = freemem; freemem += diff5c_size;
+
+diff6aL = freemem; freemem += diff6a_size; diff6aR = freemem; freemem += diff6a_size;
+diff6bL = freemem; freemem += diff6b_size; diff6bR = freemem; freemem += diff6b_size;
+diff6cL = freemem; freemem += diff6c_size; diff6cR = freemem; freemem += diff6c_size;
+
+// Shimmer modulation
+aML = freemem; freemem += 256;
+aMR = freemem; freemem += 256;
+
+// Pitch shift buffers
+pitchBufL = freemem; freemem += 8192;
+pitchBufR = freemem; freemem += 8192;
+
+// Secondary tail reverb (simple, longer delays for tail extension)
+tail1_size = 50000;  // ~1.13 seconds at 44100Hz
+tail2_size = 40000;  // ~0.91 seconds
+tail3_size = 35000;  // ~0.79 seconds
+
+tail1L = freemem; freemem += tail1_size;
+tail1R = freemem; freemem += tail1_size;
+tail2L = freemem; freemem += tail2_size;
+tail2R = freemem; freemem += tail2_size;
+tail3L = freemem; freemem += tail3_size;
+tail3R = freemem; freemem += tail3_size;
+
+// Single allpass diffusor per tail line (keep it simple)
+tail_diff1_size = 257;
+tail_diff2_size = 311;
+tail_diff3_size = 367;
+
+tail_diff1L = freemem; freemem += tail_diff1_size;
+tail_diff1R = freemem; freemem += tail_diff1_size;
+tail_diff2L = freemem; freemem += tail_diff2_size;
+tail_diff2R = freemem; freemem += tail_diff2_size;
+tail_diff3L = freemem; freemem += tail_diff3_size;
+tail_diff3R = freemem; freemem += tail_diff3_size;
+
+// Initialize positions
+delay1L_pos = delay1R_pos = delay2L_pos = delay2R_pos = 0;
+delay3L_pos = delay3R_pos = delay4L_pos = delay4R_pos = 0;
+delay5L_pos = delay5R_pos = delay6L_pos = delay6R_pos = 0;
+
+// Diffusor positions
+diff1aL_pos = diff1aR_pos = diff1bL_pos = diff1bR_pos = diff1cL_pos = diff1cR_pos = 0;
+diff2aL_pos = diff2aR_pos = diff2bL_pos = diff2bR_pos = diff2cL_pos = diff2cR_pos = 0;
+diff3aL_pos = diff3aR_pos = diff3bL_pos = diff3bR_pos = diff3cL_pos = diff3cR_pos = 0;
+diff4aL_pos = diff4aR_pos = diff4bL_pos = diff4bR_pos = diff4cL_pos = diff4cR_pos = 0;
+diff5aL_pos = diff5aR_pos = diff5bL_pos = diff5bR_pos = diff5cL_pos = diff5cR_pos = 0;
+diff6aL_pos = diff6aR_pos = diff6bL_pos = diff6bR_pos = diff6cL_pos = diff6cR_pos = 0;
+
+// Tail reverb positions
+tail1L_pos = tail1R_pos = 0;
+tail2L_pos = tail2R_pos = 0;
+tail3L_pos = tail3R_pos = 0;
+tail_diff1L_pos = tail_diff1R_pos = 0;
+tail_diff2L_pos = tail_diff2R_pos = 0;
+tail_diff3L_pos = tail_diff3R_pos = 0;
+
+countM = 1;
+
+// Pitch shift variables
+pitchBufSize = 8192;
+pitchWriteL = pitchWriteR = 0;
+pitchPhaseL = pitchPhaseR = 0;
+
+// Initialize feedback
+feedback1L = feedback1R = feedback2L = feedback2R = 0;
+feedback3L = feedback3R = feedback4L = feedback4R = 0;
+feedback5L = feedback5R = feedback6L = feedback6R = 0;
+
+// Tail feedback
+tail_fb1L = tail_fb1R = 0;
+tail_fb2L = tail_fb2R = 0;
+tail_fb3L = tail_fb3R = 0;
+
+// Filter states
+iirAL = iirAR = iirBL = iirBR = 0;
+
+// Modulation
+vibM = 0;
+oldfpd = 0.4294967295;
+
+// Dynamic feedback control variables
+energy_tracker = 0;
+safety_reduction = 1.0;
+
+// Gentle DC blocker for feedback paths (~15Hz)
+dc1L = dc1R = dc2L = dc2R = dc3L = dc3R = 0;
+dc4L = dc4R = dc5L = dc5R = dc6L = dc6R = 0;
+dc1L_prev = dc1R_prev = dc2L_prev = dc2R_prev = dc3L_prev = dc3R_prev = 0;
+dc4L_prev = dc4R_prev = dc5L_prev = dc5R_prev = dc6L_prev = dc6R_prev = 0;
+
+// Parameter smoothing to prevent zipper noise
+wet_smooth = 0.5;
+dry_smooth = 0.5;
+
+@slider
+regen_amt = slider1 / 100;
+brightness = slider2 / 100;
+shimmer = slider3 / 100;
+size_amt = (slider4 / 100);
+pitch_shift = slider5;
+diffusion_amt = slider6 / 100;  // Key control - morphs delay lines
+wet_target = slider7 / 100;  // Target value for smoothing
+dry_target = 1.0 - wet_target;
+tail_decay = slider8 / 100;
+tail_mix = slider9 / 100;
+
+// Convert semitones to pitch ratio
+pitch_ratio = pow(2, -pitch_shift / 12);
+
+// Calculate delay lengths based on size
+len1 = floor(delay1_size * size_amt);
+len2 = floor(delay2_size * size_amt);
+len3 = floor(delay3_size * size_amt);
+len4 = floor(delay4_size * size_amt);
+len5 = floor(delay5_size * size_amt);
+len6 = floor(delay6_size * size_amt);
+
+// Wrap positions smoothly when size changes (prevents clicks/pops during automation)
+delay1L_pos >= len1 ? delay1L_pos = delay1L_pos % len1;
+delay1R_pos >= len1 ? delay1R_pos = delay1R_pos % len1;
+delay2L_pos >= len2 ? delay2L_pos = delay2L_pos % len2;
+delay2R_pos >= len2 ? delay2R_pos = delay2R_pos % len2;
+delay3L_pos >= len3 ? delay3L_pos = delay3L_pos % len3;
+delay3R_pos >= len3 ? delay3R_pos = delay3R_pos % len3;
+delay4L_pos >= len4 ? delay4L_pos = delay4L_pos % len4;
+delay4R_pos >= len4 ? delay4R_pos = delay4R_pos % len4;
+delay5L_pos >= len5 ? delay5L_pos = delay5L_pos % len5;
+delay5R_pos >= len5 ? delay5R_pos = delay5R_pos % len5;
+delay6L_pos >= len6 ? delay6L_pos = delay6L_pos % len6;
+delay6R_pos >= len6 ? delay6R_pos = delay6R_pos % len6;
+
+delayM = 256;
+
+// Feedback with size and pitch shift compensation - optimized for maximum tail length
+regen_raw = 0.25 + (regen_amt * 0.7);  // Higher range: 25% to 95%
+size_compensation = 0.95 + (1.0 - size_amt) * 0.05;  // Minimal size reduction
+// Gentler pitch shift compensation 
+pitch_compensation = (abs(pitch_shift) > 0.1) ? (0.85 - abs(pitch_shift) * 0.01) : 0.98;  // Much less aggressive
+regen = regen_raw * size_compensation * pitch_compensation;
+attenuate = (1.0 - (regen / 0.95)) * 0.7;
+
+// Brightness filter (rescaled range)
+lowpass = 0.05 + (brightness * 0.0675);
+
+// Shimmer modulation
+drift = shimmer * 0.002;
+
+// Diffusion gains (0 = simple delay, 1 = full diffusion)
+diff_gain = 0.7 * diffusion_amt;
+
+// OPTION E: Adaptive interconnect reduction (Option 2 - starts at 50%)
+// Keep full interconnect until 50% diffusion, then reduce to prevent feedback loops
+// At 0-50% diffusion: full interconnect (0.45)
+// At 50-100% diffusion: reduces from 0.45 to 0.15
+reduction_amt = (diffusion_amt > 0.5) ? (diffusion_amt - 0.5) * 0.6 : 0;
+interconnect_base = 0.45 - reduction_amt;
+
+// Gentle DC blocker coefficient (~15Hz)
+dc_coeff = 0.9978;  // 15Hz cutoff at 44.1kHz
+
+// Tail reverb parameters
+tail_regen = 0.5 + (tail_decay * 0.4);  // 50% to 90% range
+tail_diff_gain = 0.5;  // Fixed moderate diffusion
+
+@sample
+inputSampleL = spl0;
+inputSampleR = spl1;
+
+drySampleL = inputSampleL;
+drySampleR = inputSampleR;
+
+// Shimmer modulation
+vibM += oldfpd * drift;
+vibM > 6.283185307 ? vibM = 0;
+
+aML[countM] = inputSampleL * attenuate;
+aMR[countM] = inputSampleR * attenuate;
+countM += 1;
+countM >= delayM ? countM = 0;  // Fixed: >= instead of > (buffer is 0-255, delayM is 256)
+
+offsetML = (sin(vibM) + 1.0) * 127;
+offsetMR = (sin(vibM + 1.5708) + 1.0) * 127;
+
+workingML = countM + offsetML;
+workingMR = countM + offsetMR;
+workingML >= delayM ? workingML -= delayM;  // Fixed: >= and subtract delayM not delayM+1
+workingMR >= delayM ? workingMR -= delayM;
+
+// Linear interpolation to eliminate zipper noise/crackling
+readPosML_int = floor(workingML);
+readPosMR_int = floor(workingMR);
+fracML = workingML - readPosML_int;
+fracMR = workingMR - readPosMR_int;
+
+nextPosML = readPosML_int + 1;
+nextPosMR = readPosMR_int + 1;
+nextPosML >= delayM ? nextPosML = 0;  // Fixed: >= instead of >
+nextPosMR >= delayM ? nextPosMR = 0;
+
+interpolML = aML[readPosML_int] * (1 - fracML) + aML[nextPosML] * fracML;
+interpolMR = aMR[readPosMR_int] * (1 - fracMR) + aMR[nextPosMR] * fracMR;
+
+inputSampleL = interpolML;
+inputSampleR = interpolMR;
+
+// Input filtering
+iirAL = (iirAL * (1.0 - lowpass)) + (inputSampleL * lowpass);
+inputSampleL = iirAL;
+iirAR = (iirAR * (1.0 - lowpass)) + (inputSampleR * lowpass);
+inputSampleR = iirAR;
+
+// DIFFUSE DELAY LINE 1 - can morph from simple delay to complex reverb
+// Feed input + feedback into delay
+delay1L[delay1L_pos] = inputSampleL + feedback1L;
+delay1R[delay1R_pos] = inputSampleR + feedback1R;
+delay1L_pos = (delay1L_pos + 1) % len1;
+delay1R_pos = (delay1R_pos + 1) % len1;
+
+// Read from delay
+tap1L = delay1L[delay1L_pos];
+tap1R = delay1R[delay1R_pos];
+
+// Internal diffusion (this is what makes it "diffuse")
+(diffusion_amt > 0.01) ? (
+  // Pass through 3 allpass filters with gain based on diffusion amount
+  temp = diff1aL[diff1aL_pos];
+  diff1aL[diff1aL_pos] = tap1L + temp * diff_gain;
+  diff1aL_pos = (diff1aL_pos + 1) % diff1a_size;
+  tap1L = temp - tap1L * diff_gain;
+  
+  temp = diff1bL[diff1bL_pos];
+  diff1bL[diff1bL_pos] = tap1L + temp * diff_gain;
+  diff1bL_pos = (diff1bL_pos + 1) % diff1b_size;
+  tap1L = temp - tap1L * diff_gain;
+  
+  temp = diff1cL[diff1cL_pos];
+  diff1cL[diff1cL_pos] = tap1L + temp * diff_gain;
+  diff1cL_pos = (diff1cL_pos + 1) % diff1c_size;
+  tap1L = temp - tap1L * diff_gain;
+  
+  // Right channel
+  temp = diff1aR[diff1aR_pos];
+  diff1aR[diff1aR_pos] = tap1R + temp * diff_gain;
+  diff1aR_pos = (diff1aR_pos + 1) % diff1a_size;
+  tap1R = temp - tap1R * diff_gain;
+  
+  temp = diff1bR[diff1bR_pos];
+  diff1bR[diff1bR_pos] = tap1R + temp * diff_gain;
+  diff1bR_pos = (diff1bR_pos + 1) % diff1b_size;
+  tap1R = temp - tap1R * diff_gain;
+  
+  temp = diff1cR[diff1cR_pos];
+  diff1cR[diff1cR_pos] = tap1R + temp * diff_gain;
+  diff1cR_pos = (diff1cR_pos + 1) % diff1c_size;
+  tap1R = temp - tap1R * diff_gain;
+);
+
+out1L = tap1L;
+out1R = tap1R;
+
+// DIFFUSE DELAY LINE 2
+delay2L[delay2L_pos] = inputSampleL + feedback2L;
+delay2R[delay2R_pos] = inputSampleR + feedback2R;
+delay2L_pos = (delay2L_pos + 1) % len2;
+delay2R_pos = (delay2R_pos + 1) % len2;
+
+tap2L = delay2L[delay2L_pos];
+tap2R = delay2R[delay2R_pos];
+
+(diffusion_amt > 0.01) ? (
+  temp = diff2aL[diff2aL_pos];
+  diff2aL[diff2aL_pos] = tap2L + temp * diff_gain;
+  diff2aL_pos = (diff2aL_pos + 1) % diff2a_size;
+  tap2L = temp - tap2L * diff_gain;
+  
+  temp = diff2bL[diff2bL_pos];
+  diff2bL[diff2bL_pos] = tap2L + temp * diff_gain;
+  diff2bL_pos = (diff2bL_pos + 1) % diff2b_size;
+  tap2L = temp - tap2L * diff_gain;
+  
+  temp = diff2cL[diff2cL_pos];
+  diff2cL[diff2cL_pos] = tap2L + temp * diff_gain;
+  diff2cL_pos = (diff2cL_pos + 1) % diff2c_size;
+  tap2L = temp - tap2L * diff_gain;
+  
+  temp = diff2aR[diff2aR_pos];
+  diff2aR[diff2aR_pos] = tap2R + temp * diff_gain;
+  diff2aR_pos = (diff2aR_pos + 1) % diff2a_size;
+  tap2R = temp - tap2R * diff_gain;
+  
+  temp = diff2bR[diff2bR_pos];
+  diff2bR[diff2bR_pos] = tap2R + temp * diff_gain;
+  diff2bR_pos = (diff2bR_pos + 1) % diff2b_size;
+  tap2R = temp - tap2R * diff_gain;
+  
+  temp = diff2cR[diff2cR_pos];
+  diff2cR[diff2cR_pos] = tap2R + temp * diff_gain;
+  diff2cR_pos = (diff2cR_pos + 1) % diff2c_size;
+  tap2R = temp - tap2R * diff_gain;
+);
+
+out2L = tap2L;
+out2R = tap2R;
+
+// DIFFUSE DELAY LINE 3
+delay3L[delay3L_pos] = inputSampleL + feedback3L;
+delay3R[delay3R_pos] = inputSampleR + feedback3R;
+delay3L_pos = (delay3L_pos + 1) % len3;
+delay3R_pos = (delay3R_pos + 1) % len3;
+
+tap3L = delay3L[delay3L_pos];
+tap3R = delay3R[delay3R_pos];
+
+(diffusion_amt > 0.01) ? (
+  temp = diff3aL[diff3aL_pos];
+  diff3aL[diff3aL_pos] = tap3L + temp * diff_gain;
+  diff3aL_pos = (diff3aL_pos + 1) % diff3a_size;
+  tap3L = temp - tap3L * diff_gain;
+  
+  temp = diff3bL[diff3bL_pos];
+  diff3bL[diff3bL_pos] = tap3L + temp * diff_gain;
+  diff3bL_pos = (diff3bL_pos + 1) % diff3b_size;
+  tap3L = temp - tap3L * diff_gain;
+  
+  temp = diff3cL[diff3cL_pos];
+  diff3cL[diff3cL_pos] = tap3L + temp * diff_gain;
+  diff3cL_pos = (diff3cL_pos + 1) % diff3c_size;
+  tap3L = temp - tap3L * diff_gain;
+  
+  temp = diff3aR[diff3aR_pos];
+  diff3aR[diff3aR_pos] = tap3R + temp * diff_gain;
+  diff3aR_pos = (diff3aR_pos + 1) % diff3a_size;
+  tap3R = temp - tap3R * diff_gain;
+  
+  temp = diff3bR[diff3bR_pos];
+  diff3bR[diff3bR_pos] = tap3R + temp * diff_gain;
+  diff3bR_pos = (diff3bR_pos + 1) % diff3b_size;
+  tap3R = temp - tap3R * diff_gain;
+  
+  temp = diff3cR[diff3cR_pos];
+  diff3cR[diff3cR_pos] = tap3R + temp * diff_gain;
+  diff3cR_pos = (diff3cR_pos + 1) % diff3c_size;
+  tap3R = temp - tap3R * diff_gain;
+);
+
+out3L = tap3L;
+out3R = tap3R;
+
+// DIFFUSE DELAY LINE 4
+delay4L[delay4L_pos] = inputSampleL + feedback4L;
+delay4R[delay4R_pos] = inputSampleR + feedback4R;
+delay4L_pos = (delay4L_pos + 1) % len4;
+delay4R_pos = (delay4R_pos + 1) % len4;
+
+tap4L = delay4L[delay4L_pos];
+tap4R = delay4R[delay4R_pos];
+
+(diffusion_amt > 0.01) ? (
+  temp = diff4aL[diff4aL_pos];
+  diff4aL[diff4aL_pos] = tap4L + temp * diff_gain;
+  diff4aL_pos = (diff4aL_pos + 1) % diff4a_size;
+  tap4L = temp - tap4L * diff_gain;
+  
+  temp = diff4bL[diff4bL_pos];
+  diff4bL[diff4bL_pos] = tap4L + temp * diff_gain;
+  diff4bL_pos = (diff4bL_pos + 1) % diff4b_size;
+  tap4L = temp - tap4L * diff_gain;
+  
+  temp = diff4cL[diff4cL_pos];
+  diff4cL[diff4cL_pos] = tap4L + temp * diff_gain;
+  diff4cL_pos = (diff4cL_pos + 1) % diff4c_size;
+  tap4L = temp - tap4L * diff_gain;
+  
+  temp = diff4aR[diff4aR_pos];
+  diff4aR[diff4aR_pos] = tap4R + temp * diff_gain;
+  diff4aR_pos = (diff4aR_pos + 1) % diff4a_size;
+  tap4R = temp - tap4R * diff_gain;
+  
+  temp = diff4bR[diff4bR_pos];
+  diff4bR[diff4bR_pos] = tap4R + temp * diff_gain;
+  diff4bR_pos = (diff4bR_pos + 1) % diff4b_size;
+  tap4R = temp - tap4R * diff_gain;
+  
+  temp = diff4cR[diff4cR_pos];
+  diff4cR[diff4cR_pos] = tap4R + temp * diff_gain;
+  diff4cR_pos = (diff4cR_pos + 1) % diff4c_size;
+  tap4R = temp - tap4R * diff_gain;
+);
+
+out4L = tap4L;
+out4R = tap4R;
+
+// DIFFUSE DELAY LINE 5
+delay5L[delay5L_pos] = inputSampleL + feedback5L;
+delay5R[delay5R_pos] = inputSampleR + feedback5R;
+delay5L_pos = (delay5L_pos + 1) % len5;
+delay5R_pos = (delay5R_pos + 1) % len5;
+
+tap5L = delay5L[delay5L_pos];
+tap5R = delay5R[delay5R_pos];
+
+(diffusion_amt > 0.01) ? (
+  temp = diff5aL[diff5aL_pos];
+  diff5aL[diff5aL_pos] = tap5L + temp * diff_gain;
+  diff5aL_pos = (diff5aL_pos + 1) % diff5a_size;
+  tap5L = temp - tap5L * diff_gain;
+  
+  temp = diff5bL[diff5bL_pos];
+  diff5bL[diff5bL_pos] = tap5L + temp * diff_gain;
+  diff5bL_pos = (diff5bL_pos + 1) % diff5b_size;
+  tap5L = temp - tap5L * diff_gain;
+  
+  temp = diff5cL[diff5cL_pos];
+  diff5cL[diff5cL_pos] = tap5L + temp * diff_gain;
+  diff5cL_pos = (diff5cL_pos + 1) % diff5c_size;
+  tap5L = temp - tap5L * diff_gain;
+  
+  temp = diff5aR[diff5aR_pos];
+  diff5aR[diff5aR_pos] = tap5R + temp * diff_gain;
+  diff5aR_pos = (diff5aR_pos + 1) % diff5a_size;
+  tap5R = temp - tap5R * diff_gain;
+  
+  temp = diff5bR[diff5bR_pos];
+  diff5bR[diff5bR_pos] = tap5R + temp * diff_gain;
+  diff5bR_pos = (diff5bR_pos + 1) % diff5b_size;
+  tap5R = temp - tap5R * diff_gain;
+  
+  temp = diff5cR[diff5cR_pos];
+  diff5cR[diff5cR_pos] = tap5R + temp * diff_gain;
+  diff5cR_pos = (diff5cR_pos + 1) % diff5c_size;
+  tap5R = temp - tap5R * diff_gain;
+);
+
+out5L = tap5L;
+out5R = tap5R;
+
+// DIFFUSE DELAY LINE 6
+delay6L[delay6L_pos] = inputSampleL + feedback6L;
+delay6R[delay6R_pos] = inputSampleR + feedback6R;
+delay6L_pos = (delay6L_pos + 1) % len6;
+delay6R_pos = (delay6R_pos + 1) % len6;
+
+tap6L = delay6L[delay6L_pos];
+tap6R = delay6R[delay6R_pos];
+
+(diffusion_amt > 0.01) ? (
+  temp = diff6aL[diff6aL_pos];
+  diff6aL[diff6aL_pos] = tap6L + temp * diff_gain;
+  diff6aL_pos = (diff6aL_pos + 1) % diff6a_size;
+  tap6L = temp - tap6L * diff_gain;
+  
+  temp = diff6bL[diff6bL_pos];
+  diff6bL[diff6bL_pos] = tap6L + temp * diff_gain;
+  diff6bL_pos = (diff6bL_pos + 1) % diff6b_size;
+  tap6L = temp - tap6L * diff_gain;
+  
+  temp = diff6cL[diff6cL_pos];
+  diff6cL[diff6cL_pos] = tap6L + temp * diff_gain;
+  diff6cL_pos = (diff6cL_pos + 1) % diff6c_size;
+  tap6L = temp - tap6L * diff_gain;
+  
+  temp = diff6aR[diff6aR_pos];
+  diff6aR[diff6aR_pos] = tap6R + temp * diff_gain;
+  diff6aR_pos = (diff6aR_pos + 1) % diff6a_size;
+  tap6R = temp - tap6R * diff_gain;
+  
+  temp = diff6bR[diff6bR_pos];
+  diff6bR[diff6bR_pos] = tap6R + temp * diff_gain;
+  diff6bR_pos = (diff6bR_pos + 1) % diff6b_size;
+  tap6R = temp - tap6R * diff_gain;
+  
+  temp = diff6cR[diff6cR_pos];
+  diff6cR[diff6cR_pos] = tap6R + temp * diff_gain;
+  diff6cR_pos = (diff6cR_pos + 1) % diff6c_size;
+  tap6R = temp - tap6R * diff_gain;
+);
+
+out6L = tap6L;
+out6R = tap6R;
+
+// Mix outputs from all diffuse delay lines
+reverbL = (out1L + out2L + out3L + out4L + out5L + out6L) * 0.167;
+reverbR = (out1R + out2R + out3R + out4R + out5R + out6R) * 0.167;
+
+// DYNAMIC FEEDBACK CONTROL - much more aggressive to prevent runaway
+current_energy = abs(reverbL) + abs(reverbR);
+energy_tracker = energy_tracker * 0.99 + current_energy * 0.01;  // Faster tracking (was 0.999/0.001)
+
+// Much lower threshold for intervention and faster response
+energy_threshold = 0.4;  // Lower threshold (was 0.8)
+(energy_tracker > energy_threshold) ? (
+  // Much more aggressive reduction when energy is building
+  target_reduction = 0.1 + (energy_tracker - energy_threshold) * 4.0;  // Faster, stronger reduction
+  target_reduction = min(target_reduction, 0.9);  // Cap at 90% reduction
+  safety_reduction = safety_reduction * 0.98 + target_reduction * 0.02;  // Faster response
+) : (
+  // Slower recovery to prevent oscillation
+  safety_reduction = safety_reduction * 0.9995 + 1.0 * 0.0005;  // Much slower recovery
+);
+
+// Additional emergency brake for extreme situations
+(current_energy > 1.5) ? (
+  safety_reduction = min(safety_reduction, 0.05);  // Emergency reduction to 5%
+);
+
+safety_reduction = max(safety_reduction, 0.05);  // Never reduce below 5% (was 20%)
+safety_reduction = min(safety_reduction, 1.0);
+
+// Soft saturation on output instead of hard limiting (preserves character)
+reverbL = reverbL * 1.5;  // Increased from 0.8 to 1.5 for louder wet signal
+reverbR = reverbR * 1.5;
+// Tanh-style soft saturation - sounds musical, not harsh
+reverbL = reverbL / (1.0 + reverbL*reverbL*0.15);
+reverbR = reverbR / (1.0 + reverbR*reverbR*0.15);
+
+// Calculate feedback (with pitch shifting)
+feedback_mixL = reverbL;
+feedback_mixR = reverbR;
+
+// PITCH SHIFTING IN FEEDBACK LOOP
+(abs(pitch_shift) > 0.1) ? (
+  pitchBufL[pitchWriteL] = feedback_mixL;
+  pitchBufR[pitchWriteR] = feedback_mixR;
+  pitchWriteL = (pitchWriteL + 1) % pitchBufSize;
+  pitchWriteR = (pitchWriteR + 1) % pitchBufSize;
+  
+  pitchDelay = 2048;
+  readPosL = pitchWriteL - pitchDelay - pitchPhaseL;
+  readPosR = pitchWriteR - pitchDelay - pitchPhaseR;
+  
+  readPosL < 0 ? readPosL += pitchBufSize;
+  readPosR < 0 ? readPosR += pitchBufSize;
+  readPosL >= pitchBufSize ? readPosL -= pitchBufSize;
+  readPosR >= pitchBufSize ? readPosR -= pitchBufSize;
+  
+  pitchPhaseL += (pitch_ratio - 1.0);
+  pitchPhaseR += (pitch_ratio - 1.0);
+  
+  pitchPhaseL >= pitchBufSize ? pitchPhaseL -= pitchBufSize;
+  pitchPhaseR >= pitchBufSize ? pitchPhaseR -= pitchBufSize;
+  pitchPhaseL < -pitchBufSize ? pitchPhaseL += pitchBufSize;
+  pitchPhaseR < -pitchBufSize ? pitchPhaseR += pitchBufSize;
+  
+  readPosL_int = floor(readPosL);
+  readPosR_int = floor(readPosR);
+  fracL = readPosL - readPosL_int;
+  fracR = readPosR - readPosR_int;
+  
+  nextPosL = (readPosL_int + 1) % pitchBufSize;
+  nextPosR = (readPosR_int + 1) % pitchBufSize;
+  
+  pitchShiftedL = pitchBufL[readPosL_int] * (1 - fracL) + pitchBufL[nextPosL] * fracL;
+  pitchShiftedR = pitchBufR[readPosR_int] * (1 - fracR) + pitchBufR[nextPosR] * fracR;
+  
+  pitchShiftedL *= 1.5;  // Increased from 0.8 to 1.5 for louder pitch shift
+  pitchShiftedR *= 1.5;
+  
+  // Immediate limiting on pitch shifted signals but gentler
+  pitchShiftedL = pitchShiftedL / (1.0 + abs(pitchShiftedL) * 0.2);  // Gentler limiting
+  pitchShiftedR = pitchShiftedR / (1.0 + abs(pitchShiftedR) * 0.2);
+  
+  // More prominent pitch shift blend
+  pitch_amount = min(abs(pitch_shift) / 10, 0.95) * (1.0 - abs(pitch_shift) * 0.003);
+  feedback_mixL = feedback_mixL * (1 - pitch_amount) + pitchShiftedL * pitch_amount;
+  feedback_mixR = feedback_mixR * (1 - pitch_amount) + pitchShiftedR * pitch_amount;
+);
+
+// Distribute feedback with dynamic safety control applied
+safe_regen = regen * safety_reduction;  // Apply dynamic reduction
+interconnect_amount = interconnect_base * safety_reduction;  // Adaptive + safety control
+
+feedback1L = feedback_mixL * safe_regen + out6L * safe_regen * interconnect_amount + out4L * safe_regen * 0.25;
+feedback1R = feedback_mixR * safe_regen + out6R * safe_regen * interconnect_amount + out4R * safe_regen * 0.25;
+feedback2L = feedback_mixL * safe_regen * 0.95 + out1L * safe_regen * interconnect_amount + out5L * safe_regen * 0.25;
+feedback2R = feedback_mixR * safe_regen * 0.95 + out1R * safe_regen * interconnect_amount + out5R * safe_regen * 0.25;
+feedback3L = feedback_mixL * safe_regen * 0.9 + out2L * safe_regen * interconnect_amount + out6L * safe_regen * 0.25;
+feedback3R = feedback_mixR * safe_regen * 0.9 + out2R * safe_regen * interconnect_amount + out6R * safe_regen * 0.25;
+feedback4L = feedback_mixL * safe_regen * 0.85 + out3L * safe_regen * interconnect_amount + out1L * safe_regen * 0.25;
+feedback4R = feedback_mixR * safe_regen * 0.85 + out3R * safe_regen * interconnect_amount + out1R * safe_regen * 0.25;
+feedback5L = feedback_mixL * safe_regen * 0.8 + out4L * safe_regen * interconnect_amount + out2L * safe_regen * 0.25;
+feedback5R = feedback_mixR * safe_regen * 0.8 + out4R * safe_regen * interconnect_amount + out2R * safe_regen * 0.25;
+feedback6L = feedback_mixL * safe_regen * 0.75 + out5L * safe_regen * interconnect_amount + out3L * safe_regen * 0.25;
+feedback6R = feedback_mixR * safe_regen * 0.75 + out5R * safe_regen * interconnect_amount + out3R * safe_regen * 0.25;
+
+// Soft saturation instead of hard limiting (preserves character)
+// Tanh-style soft saturation that sounds musical
+feedback1L = feedback1L * 0.7; feedback1L = feedback1L / (1.0 + feedback1L*feedback1L*0.1);
+feedback1R = feedback1R * 0.7; feedback1R = feedback1R / (1.0 + feedback1R*feedback1R*0.1);
+feedback2L = feedback2L * 0.7; feedback2L = feedback2L / (1.0 + feedback2L*feedback2L*0.1);
+feedback2R = feedback2R * 0.7; feedback2R = feedback2R / (1.0 + feedback2R*feedback2R*0.1);
+feedback3L = feedback3L * 0.7; feedback3L = feedback3L / (1.0 + feedback3L*feedback3L*0.1);
+feedback3R = feedback3R * 0.7; feedback3R = feedback3R / (1.0 + feedback3R*feedback3R*0.1);
+feedback4L = feedback4L * 0.7; feedback4L = feedback4L / (1.0 + feedback4L*feedback4L*0.1);
+feedback4R = feedback4R * 0.7; feedback4R = feedback4R / (1.0 + feedback4R*feedback4R*0.1);
+feedback5L = feedback5L * 0.7; feedback5L = feedback5L / (1.0 + feedback5L*feedback5L*0.1);
+feedback5R = feedback5R * 0.7; feedback5R = feedback5R / (1.0 + feedback5L*feedback5R*0.1);
+feedback6L = feedback6L * 0.7; feedback6L = feedback6L / (1.0 + feedback6L*feedback6L*0.1);
+feedback6R = feedback6R * 0.7; feedback6R = feedback6R / (1.0 + feedback6R*feedback6R*0.1);
+
+// OPTION A: Gentle DC blocker (~15Hz) - removes DC offset and deep subsonic only
+// One-pole highpass that's nearly transparent to all audible content
+temp = feedback1L - dc1L_prev; dc1L = temp * dc_coeff + dc1L * (1 - dc_coeff); dc1L_prev = feedback1L; feedback1L = dc1L;
+temp = feedback1R - dc1R_prev; dc1R = temp * dc_coeff + dc1R * (1 - dc_coeff); dc1R_prev = feedback1R; feedback1R = dc1R;
+temp = feedback2L - dc2L_prev; dc2L = temp * dc_coeff + dc2L * (1 - dc_coeff); dc2L_prev = feedback2L; feedback2L = dc2L;
+temp = feedback2R - dc2R_prev; dc2R = temp * dc_coeff + dc2R * (1 - dc_coeff); dc2R_prev = feedback2R; feedback2R = dc2R;
+temp = feedback3L - dc3L_prev; dc3L = temp * dc_coeff + dc3L * (1 - dc_coeff); dc3L_prev = feedback3L; feedback3L = dc3L;
+temp = feedback3R - dc3R_prev; dc3R = temp * dc_coeff + dc3R * (1 - dc_coeff); dc3R_prev = feedback3R; feedback3R = dc3R;
+temp = feedback4L - dc4L_prev; dc4L = temp * dc_coeff + dc4L * (1 - dc_coeff); dc4L_prev = feedback4L; feedback4L = dc4L;
+temp = feedback4R - dc4R_prev; dc4R = temp * dc_coeff + dc4R * (1 - dc_coeff); dc4R_prev = feedback4R; feedback4R = dc4R;
+temp = feedback5L - dc5L_prev; dc5L = temp * dc_coeff + dc5L * (1 - dc_coeff); dc5L_prev = feedback5L; feedback5L = dc5L;
+temp = feedback5R - dc5R_prev; dc5R = temp * dc_coeff + dc5R * (1 - dc_coeff); dc5R_prev = feedback5R; feedback5R = dc5R;
+temp = feedback6L - dc6L_prev; dc6L = temp * dc_coeff + dc6L * (1 - dc_coeff); dc6L_prev = feedback6L; feedback6L = dc6L;
+temp = feedback6R - dc6R_prev; dc6R = temp * dc_coeff + dc6R * (1 - dc_coeff); dc6R_prev = feedback6R; feedback6R = dc6R;
+
+// SECONDARY TAIL REVERB - extends decay smoothly
+(tail_mix > 0.01) ? (
+  // Feed main reverb output into tail reverb
+  tail_inputL = reverbL;
+  tail_inputR = reverbR;
+  
+  // TAIL LINE 1
+  tail1L[tail1L_pos] = tail_inputL + tail_fb1L;
+  tail1R[tail1R_pos] = tail_inputR + tail_fb1R;
+  tail1L_pos = (tail1L_pos + 1) % tail1_size;
+  tail1R_pos = (tail1R_pos + 1) % tail1_size;
+  
+  tail_tap1L = tail1L[tail1L_pos];
+  tail_tap1R = tail1R[tail1R_pos];
+  
+  // Single allpass diffusion (simpler than main reverb)
+  temp = tail_diff1L[tail_diff1L_pos];
+  tail_diff1L[tail_diff1L_pos] = tail_tap1L + temp * tail_diff_gain;
+  tail_diff1L_pos = (tail_diff1L_pos + 1) % tail_diff1_size;
+  tail_tap1L = temp - tail_tap1L * tail_diff_gain;
+  
+  temp = tail_diff1R[tail_diff1R_pos];
+  tail_diff1R[tail_diff1R_pos] = tail_tap1R + temp * tail_diff_gain;
+  tail_diff1R_pos = (tail_diff1R_pos + 1) % tail_diff1_size;
+  tail_tap1R = temp - tail_tap1R * tail_diff_gain;
+  
+  // TAIL LINE 2
+  tail2L[tail2L_pos] = tail_inputL + tail_fb2L;
+  tail2R[tail2R_pos] = tail_inputR + tail_fb2R;
+  tail2L_pos = (tail2L_pos + 1) % tail2_size;
+  tail2R_pos = (tail2R_pos + 1) % tail2_size;
+  
+  tail_tap2L = tail2L[tail2L_pos];
+  tail_tap2R = tail2R[tail2R_pos];
+  
+  temp = tail_diff2L[tail_diff2L_pos];
+  tail_diff2L[tail_diff2L_pos] = tail_tap2L + temp * tail_diff_gain;
+  tail_diff2L_pos = (tail_diff2L_pos + 1) % tail_diff2_size;
+  tail_tap2L = temp - tail_tap2L * tail_diff_gain;
+  
+  temp = tail_diff2R[tail_diff2R_pos];
+  tail_diff2R[tail_diff2R_pos] = tail_tap2R + temp * tail_diff_gain;
+  tail_diff2R_pos = (tail_diff2R_pos + 1) % tail_diff2_size;
+  tail_tap2R = temp - tail_tap2R * tail_diff_gain;
+  
+  // TAIL LINE 3
+  tail3L[tail3L_pos] = tail_inputL + tail_fb3L;
+  tail3R[tail3R_pos] = tail_inputR + tail_fb3R;
+  tail3L_pos = (tail3L_pos + 1) % tail3_size;
+  tail3R_pos = (tail3R_pos + 1) % tail3_size;
+  
+  tail_tap3L = tail3L[tail3L_pos];
+  tail_tap3R = tail3R[tail3R_pos];
+  
+  temp = tail_diff3L[tail_diff3L_pos];
+  tail_diff3L[tail_diff3L_pos] = tail_tap3L + temp * tail_diff_gain;
+  tail_diff3L_pos = (tail_diff3L_pos + 1) % tail_diff3_size;
+  tail_tap3L = temp - tail_tap3L * tail_diff_gain;
+  
+  temp = tail_diff3R[tail_diff3R_pos];
+  tail_diff3R[tail_diff3R_pos] = tail_tap3R + temp * tail_diff_gain;
+  tail_diff3R_pos = (tail_diff3R_pos + 1) % tail_diff3_size;
+  tail_tap3R = temp - tail_tap3R * tail_diff_gain;
+  
+  // Mix tail outputs
+  tail_outL = (tail_tap1L + tail_tap2L + tail_tap3L) * 0.333;
+  tail_outR = (tail_tap1R + tail_tap2R + tail_tap3R) * 0.333;
+  
+  // Soft saturation on tail
+  tail_outL = tail_outL / (1.0 + abs(tail_outL) * 0.3);
+  tail_outR = tail_outR / (1.0 + abs(tail_outR) * 0.3);
+  
+  // Calculate feedback for tail (simple, no interconnection)
+  tail_fb1L = tail_outL * tail_regen;
+  tail_fb1R = tail_outR * tail_regen;
+  tail_fb2L = tail_outL * tail_regen * 0.95;
+  tail_fb2R = tail_outR * tail_regen * 0.95;
+  tail_fb3L = tail_outL * tail_regen * 0.9;
+  tail_fb3R = tail_outR * tail_regen * 0.9;
+  
+  // Mix tail back into main reverb
+  reverbL = reverbL + tail_outL * tail_mix;
+  reverbR = reverbR + tail_outR * tail_mix;
+);
+
+// No brightness filter on reverb output - preserves tail energy
+
+// Smooth dry/wet parameters to prevent zipper noise during automation
+smooth_coeff = 0.005;  // Lower = smoother but slower response
+wet_smooth = wet_smooth * (1 - smooth_coeff) + wet_target * smooth_coeff;
+dry_smooth = dry_smooth * (1 - smooth_coeff) + dry_target * smooth_coeff;
+
+// Final mix
+spl0 = drySampleL * dry_smooth + reverbL * wet_smooth;
+spl1 = drySampleR * dry_smooth + reverbR * wet_smooth;
+
+@gfx 700 400
+
+// Calculate scale factor based on window size
+base_width = 700;
+base_height = 400;
+scale_x = gfx_w / base_width;
+scale_y = gfx_h / base_height;
+scale = min(scale_x, scale_y);
+scale = max(0.5, min(scale, 3.0));
+
+// Revox A77 inspired GUI
+// Silver-grey background
+gfx_r = 0.85; gfx_g = 0.85; gfx_b = 0.85;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+// Title panel
+gfx_r = 0.72; gfx_g = 0.72; gfx_b = 0.72;
+gfx_rect(20 * scale, 20 * scale, (gfx_w - 40 * scale), 50 * scale);
+
+// Control panel
+gfx_rect(20 * scale, 90 * scale, (gfx_w - 40 * scale), 280 * scale);
+
+// Title text
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 18 * scale), 'b');
+gfx_x = 40 * scale; gfx_y = 32 * scale;
+gfx_drawstr("Stargate Ambient Reverb");
+
+gfx_setfont(1, "Arial", max(8, 12 * scale));
+gfx_x = 40 * scale; gfx_y = 52 * scale;
+gfx_drawstr("Diffuse Delay Line Reverb");
+
+// Red accent
+gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
+gfx_rect(gfx_w - 80 * scale, 30 * scale, 40 * scale, 4 * scale);
+
+// Section labels
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 11 * scale), 'b');
+gfx_x = 40 * scale; gfx_y = 105 * scale;
+gfx_drawstr("REVERB");
+
+gfx_x = 520 * scale; gfx_y = 105 * scale;
+gfx_drawstr("TAIL EXTENDER");
+
+// Vertical separator line
+gfx_r = 0.6; gfx_g = 0.6; gfx_b = 0.6;
+separator_x = 490 * scale;
+gfx_line(separator_x, 100 * scale, separator_x, 360 * scale, 2);
+
+// Draw knobs - Top row (Diffuse Reverb section)
+knob_y = 155 * scale;
+knob_size = 30 * scale;
+
+// Regen knob
+knob_x = 70 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y, knob_size/2, 1);
+knob_position = slider1 / 95;
+angle = -2.356 + knob_position * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("REGEN", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
+gfx_drawstr("REGEN");
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
+gfx_printf("%.0f%%", slider1);
+
+// Brightness knob
+knob_x = 160 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y, knob_size/2, 1);
+knob_position = slider2 / 100;
+angle = -2.356 + knob_position * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("BRIGHT", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
+gfx_drawstr("BRIGHT");
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
+gfx_printf("%.0f%%", slider2);
+
+// Shimmer knob
+knob_x = 250 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y, knob_size/2, 1);
+knob_position = slider3 / 100;
+angle = -2.356 + knob_position * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("SHIMMER", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
+gfx_drawstr("SHIMMER");
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
+gfx_printf("%.0f%%", slider3);
+
+// Size knob
+knob_x = 340 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y, knob_size/2, 1);
+knob_position = (slider4 - 10) / 90;
+angle = -2.356 + knob_position * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("SIZE", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
+gfx_drawstr("SIZE");
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
+gfx_printf("%.0f%%", slider4);
+
+// Middle row knobs (Diffuse Reverb section)
+knob_y2 = 260 * scale;
+
+// Pitch Shift knob
+knob_x = 95 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y2, knob_size/2, 1);
+knob_position = (slider5 + 12) / 24;
+angle = -2.356 + knob_position * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y2 - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("PITCH", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
+gfx_drawstr("PITCH");
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 15 * scale; gfx_y = knob_y2 + 40 * scale;
+gfx_printf("%+.1f", slider5);
+
+// Diffusion knob
+knob_x = 205 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y2, knob_size/2, 1);
+knob_position = slider6 / 100;
+angle = -2.356 + knob_position * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y2 - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("DIFFUSION", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
+gfx_drawstr("DIFFUSION");
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 15 * scale; gfx_y = knob_y2 + 40 * scale;
+gfx_printf("%.0f%%", slider6);
+
+// Dry/Wet knob
+knob_x = 315 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y2, knob_size/2, 1);
+knob_position = slider7 / 100;
+angle = -2.356 + knob_position * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y2 - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("DRY/WET", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
+gfx_drawstr("DRY/WET");
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 15 * scale; gfx_y = knob_y2 + 40 * scale;
+gfx_printf("%.0f%%", slider7);
+
+// Secondary Reverb knobs (right side)
+// Tail Decay knob
+knob_x = 555 * scale;
+knob_y = 180 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y, knob_size/2, 1);
+knob_position = slider8 / 100;
+angle = -2.356 + knob_position * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("DECAY", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
+gfx_drawstr("DECAY");
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
+gfx_printf("%.0f%%", slider8);
+
+// Tail Mix knob
+knob_y = 280 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y, knob_size/2, 1);
+knob_position = slider9 / 100;
+angle = -2.356 + knob_position * 4.712;
+ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
+ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("MIX", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
+gfx_drawstr("MIX");
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
+gfx_printf("%.0f%%", slider9);
+
+// Mouse interaction system
+mouse_cap == 1 && last_mouse_cap == 0 ? (
+    // Mouse click started - check what was clicked
+    knob_hit = 0;
+    hit_distance = 25 * scale;
+    
+    // Check top row knobs (diffuse reverb)
+    abs(mouse_x - 70 * scale) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
+        slider_to_edit = 1; knob_hit = 1;
+    ) : abs(mouse_x - 160 * scale) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
+        slider_to_edit = 2; knob_hit = 1;
+    ) : abs(mouse_x - 250 * scale) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
+        slider_to_edit = 3; knob_hit = 1;
+    ) : abs(mouse_x - 340 * scale) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
+        slider_to_edit = 4; knob_hit = 1;
+    ) :
+    
+    // Check middle row knobs (diffuse reverb)
+    abs(mouse_x - 95 * scale) <= hit_distance && abs(mouse_y - 260 * scale) <= hit_distance ? (
+        slider_to_edit = 5; knob_hit = 1;
+    ) : abs(mouse_x - 205 * scale) <= hit_distance && abs(mouse_y - 260 * scale) <= hit_distance ? (
+        slider_to_edit = 6; knob_hit = 1;
+    ) : abs(mouse_x - 315 * scale) <= hit_distance && abs(mouse_y - 260 * scale) <= hit_distance ? (
+        slider_to_edit = 7; knob_hit = 1;
+    ) :
+    
+    // Check secondary reverb knobs (right side)
+    abs(mouse_x - 555 * scale) <= hit_distance && abs(mouse_y - 180 * scale) <= hit_distance ? (
+        slider_to_edit = 8; knob_hit = 1;
+    ) : abs(mouse_x - 555 * scale) <= hit_distance && abs(mouse_y - 280 * scale) <= hit_distance ? (
+        slider_to_edit = 9; knob_hit = 1;
+    );
+    
+    // Initialize drag
+    knob_hit ? (
+        last_mouse_y = mouse_y;
+        drag_start_y = mouse_y;
+    ) : (
+        slider_to_edit = 0;
+    );
+);
+
+// Handle dragging
+mouse_cap == 1 && slider_to_edit > 0 ? (
+    mouse_delta = last_mouse_y - mouse_y;
+    sensitivity = 1.0;
+    
+    // Apply changes with proper scaling
+    slider_to_edit == 1 ? (
+        new_val = slider1 + mouse_delta * 0.5;
+        slider1 = max(0, min(95, new_val));
+        sliderchange(slider1);
+    ) : slider_to_edit == 2 ? (
+        new_val = slider2 + mouse_delta * 0.5;
+        slider2 = max(0, min(100, new_val));
+        sliderchange(slider2);
+    ) : slider_to_edit == 3 ? (
+        new_val = slider3 + mouse_delta * 0.5;
+        slider3 = max(0, min(100, new_val));
+        sliderchange(slider3);
+    ) : slider_to_edit == 4 ? (
+        new_val = slider4 + mouse_delta * 0.5;
+        slider4 = max(10, min(100, new_val));
+        sliderchange(slider4);
+    ) : slider_to_edit == 5 ? (
+        new_val = slider5 + mouse_delta * 0.1;
+        slider5 = max(-12, min(12, new_val));
+        sliderchange(slider5);
+    ) : slider_to_edit == 6 ? (
+        new_val = slider6 + mouse_delta * 0.5;
+        slider6 = max(0, min(100, new_val));
+        sliderchange(slider6);
+    ) : slider_to_edit == 7 ? (
+        new_val = slider7 + mouse_delta * 0.5;
+        slider7 = max(0, min(100, new_val));
+        sliderchange(slider7);
+    ) : slider_to_edit == 8 ? (
+        new_val = slider8 + mouse_delta * 0.5;
+        slider8 = max(0, min(100, new_val));
+        sliderchange(slider8);
+    ) : slider_to_edit == 9 ? (
+        new_val = slider9 + mouse_delta * 0.5;
+        slider9 = max(0, min(100, new_val));
+        sliderchange(slider9);
+    );
+    
+    last_mouse_y = mouse_y;
+);
+
+// Reset when mouse released
+mouse_cap == 0 ? (
+    slider_to_edit = 0;
+);
+
+last_mouse_cap = mouse_cap;

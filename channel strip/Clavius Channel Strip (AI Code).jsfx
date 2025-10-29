@@ -1,0 +1,405 @@
+desc: Clavius Channel Strip
+desc: Channel strip with API 215L-style filters, EQ, Drive, and Compression
+author: Based on Airwindows open source (MIT) and Universal Audio API 215L
+version: 1.0
+tags: channel strip, EQ, compressor, filter, saturation
+
+//===========================================
+// SLIDERS (Parameters)
+//===========================================
+
+// HIGHPASS SECTION (API 215L style: 12-596 Hz, 12dB/octave)
+slider1:12<12,596,1>-Highpass Freq (Hz)
+slider2:0<0,1,1>-HP On/Off
+
+// LOWPASS SECTION (API 215L style: 643Hz-40.8kHz, 6dB/octave)
+slider3:40000<643,40800,1>-Lowpass Freq (Hz)
+slider4:0<0,1,1>-LP On/Off
+
+// EQ SECTION (from Airwindows EQ)
+slider5:0<-12,12,0.1>-Treble (dB)
+slider6:0<-12,12,0.1>-Mid (dB)
+slider7:0<-12,12,0.1>-Bass (dB)
+slider8:6000<1000,16000,1>-Treble Freq (Hz)
+slider9:100<30,1600,1>-Bass Freq (Hz)
+
+// SATURATION (PurestDrive algorithm)
+slider10:0<0,1,0.01>-Drive Amount
+slider11:0<0,1,0.01>-Drive Mix
+
+// COMPRESSOR SECTION
+slider12:-12<-60,0,0.1>-Comp Threshold (dB)
+slider13:3<1,20,0.1>-Comp Ratio
+slider14:10<0.1,100,0.1>-Comp Attack (ms)
+slider15:100<10,1000,0.1>-Comp Release (ms)
+slider16:0<0,1,0.01>-Comp Mix
+
+// OUTPUT
+slider17:0<-18,18,0.1>-Output Gain (dB)
+
+//===========================================
+// INIT
+//===========================================
+@init
+
+// Constants
+pi = 3.14159265358979;
+log2db = 8.6858896380650365530225783783321;
+db2log = 1/log2db;
+
+// Highpass filter state (2 poles for 12dB/octave)
+hp_iirSampleLA = hp_iirSampleLB = 0;
+hp_iirSampleRA = hp_iirSampleRB = 0;
+
+// Lowpass filter state (1 pole for 6dB/octave)
+lp_iirSampleLA = 0;
+lp_iirSampleRA = 0;
+
+// EQ filter state (from Airwindows EQ plugin)
+eq_iirHighSampleLA = eq_iirHighSampleLB = eq_iirHighSampleLC = 0;
+eq_iirHighSampleLD = eq_iirHighSampleLE = 0;
+eq_iirLowSampleLA = eq_iirLowSampleLB = eq_iirLowSampleLC = 0;
+eq_iirLowSampleLD = eq_iirLowSampleLE = 0;
+eq_iirHighSampleL = eq_iirLowSampleL = 0;
+
+eq_iirHighSampleRA = eq_iirHighSampleRB = eq_iirHighSampleRC = 0;
+eq_iirHighSampleRD = eq_iirHighSampleRE = 0;
+eq_iirLowSampleRA = eq_iirLowSampleRB = eq_iirLowSampleRC = 0;
+eq_iirLowSampleRD = eq_iirLowSampleRE = 0;
+eq_iirHighSampleR = eq_iirLowSampleR = 0;
+
+// PurestDrive state - uses previous sample for dynamic saturation
+sat_previousSampleL = sat_previousSampleR = 0;
+
+// Compressor state
+comp_envL = comp_envR = 0;
+
+// GUI interaction variables
+slider_to_edit = 0;
+drag_start_y = 0;
+last_mouse_cap = 0;
+mouse_dy = 0;
+
+// Helper function: Draw text centered
+function draw_text_centered(x, y, txt) (
+  gfx_measurestr(txt, str_w, str_h);
+  gfx_x = x - str_w * 0.5;
+  gfx_y = y;
+  gfx_drawstr(txt);
+);
+
+// Helper function: Draw rotary knob
+function draw_knob(x, y, value, min_val, max_val, label, unit) 
+local(angle, indicator_x, indicator_y, normalized)
+(
+  // Draw knob body (silver-grey)
+  gfx_set(0.6, 0.6, 0.6, 1);
+  gfx_circle(x, y, 25 * scale, 1, 1);
+  
+  // Draw knob outline
+  gfx_set(0.3, 0.3, 0.3, 1);
+  gfx_circle(x, y, 25 * scale, 0, 1);
+  
+  // Draw indicator line (black with white outline)
+  normalized = (value - min_val) / (max_val - min_val);
+  angle = -135 + (normalized * 270); // -135° to +135°
+  angle = angle * $pi / 180;
+  
+  indicator_x = x + cos(angle) * 20 * scale;
+  indicator_y = y + sin(angle) * 20 * scale;
+  
+  gfx_set(1, 1, 1, 1);
+  gfx_line(x, y, indicator_x, indicator_y, 3 * scale);
+  gfx_set(0, 0, 0, 1);
+  gfx_line(x, y, indicator_x, indicator_y, 1.5 * scale);
+  
+  // Draw label above knob
+  gfx_set(0.9, 0.9, 0.9, 1);
+  gfx_setfont(1, "Arial", 13 * scale);
+  draw_text_centered(x, y - 40 * scale, label);
+  
+  // Draw value below knob
+  gfx_setfont(1, "Arial", 11 * scale);
+  sprintf(#value_str, "%.1f%s", value, unit);
+  draw_text_centered(x, y + 32 * scale, #value_str);
+);
+
+// Helper function: Draw switch
+function draw_switch(x, y, value, label_off, label_on)
+local(is_on)
+(
+  is_on = value > 0.5;
+  
+  // Draw switch body
+  gfx_set(0.3, 0.3, 0.3, 1);
+  gfx_rect(x - 15 * scale, y - 10 * scale, 30 * scale, 20 * scale, 1);
+  
+  // Draw switch position (red when on, grey when off)
+  is_on ? (
+    gfx_set(0.8, 0.2, 0.2, 1);
+    gfx_rect(x + 1 * scale, y - 8 * scale, 12 * scale, 16 * scale, 1);
+  ) : (
+    gfx_set(0.5, 0.5, 0.5, 1);
+    gfx_rect(x - 13 * scale, y - 8 * scale, 12 * scale, 16 * scale, 1);
+  );
+  
+  // Draw label
+  gfx_set(0.9, 0.9, 0.9, 1);
+  gfx_setfont(1, "Arial", 11 * scale);
+  draw_text_centered(x, y + 20 * scale, is_on ? label_on : label_off);
+);
+
+// Helper function: Check if mouse is over knob
+function is_over_knob(x, y)
+(
+  sqrt((mouse_x - x)^2 + (mouse_y - y)^2) < 25 * scale;
+);
+
+// Helper function: Check if mouse is over switch
+function is_over_switch(x, y)
+(
+  mouse_x >= (x - 15 * scale) && mouse_x <= (x + 15 * scale) &&
+  mouse_y >= (y - 10 * scale) && mouse_y <= (y + 10 * scale);
+);
+
+//===========================================
+// SLIDER - Parameter update (Airwindows style)
+//===========================================
+@slider
+
+overallscale = srate / 44100.0;
+
+// ===== HIGHPASS (API 215L: 12-596 Hz, 12dB/octave = 2 poles) =====
+hp_freq = slider1;
+hp_on = slider2;
+hp_iir_amount = hp_freq / srate;
+hp_iir_amount = 1.0 - exp(-2.0 * pi * hp_iir_amount);
+
+// ===== LOWPASS (API 215L: 643Hz-40.8kHz, 6dB/octave = 1 pole) =====
+lp_freq = slider3;
+lp_on = slider4;
+lp_iir_amount = lp_freq / srate;
+lp_iir_amount = 1.0 - exp(-2.0 * pi * lp_iir_amount);
+
+// ===== EQ (Airwindows EQ algorithm) =====
+eq_treble_db = slider5;
+eq_mid_db = slider6;
+eq_bass_db = slider7;
+eq_treble_freq = slider8 / 1000.0; // Convert to kHz
+eq_bass_freq = slider9;
+
+// Treble (high shelf) - Airwindows style
+eq_treble_gain = pow(10, eq_treble_db / 20.0);
+eq_high_iir = eq_treble_freq / (eq_treble_freq + 1.0) * overallscale;
+eq_high_iir = eq_high_iir * eq_high_iir;
+
+// Bass (low shelf) - Airwindows style
+eq_bass_gain = pow(10, eq_bass_db / 20.0);
+eq_low_iir = eq_bass_freq / (eq_bass_freq + 30.0) * overallscale;
+eq_low_iir = eq_low_iir * eq_low_iir;
+
+// Mid boost/cut - simple gain
+eq_mid_gain = pow(10, eq_mid_db / 20.0);
+
+// ===== PURESTDRIVE (True Airwindows algorithm) =====
+// From Chris Johnson: "uses previous sample to dynamically blend saturation"
+// Apply value is based on difference between current and previous sample
+sat_drive = slider10;
+sat_mix = slider11;
+sat_intensity = sat_drive; // 0 to 1, controls how much drive is applied
+
+// ===== COMPRESSOR =====
+comp_thresh = slider12;
+comp_ratio = slider13;
+comp_attack = exp(-1000.0 / (slider14 * srate));
+comp_release = exp(-1000.0 / (slider15 * srate));
+comp_mix = slider16;
+
+// ===== OUTPUT =====
+out_gain = pow(10, slider17 / 20.0);
+
+//===========================================
+// SAMPLE - DSP Processing (Airwindows algorithms)
+//===========================================
+@sample
+
+// Store inputs
+inputL = spl0;
+inputR = spl1;
+
+// Denormal protection (Airwindows style)
+(abs(inputL) < 0.00000000000000000001) ? inputL = 0;
+(abs(inputR) < 0.00000000000000000001) ? inputR = 0;
+
+//-------------------------------------------
+// 1. HIGHPASS (API 215L: 12dB/octave = 2 poles)
+//-------------------------------------------
+hp_on ? (
+  hp_inputL = spl0;
+  hp_inputR = spl1;
+  
+  // First pole
+  hp_iirSampleLA = (hp_iirSampleLA * (1.0 - hp_iir_amount)) + (hp_inputL * hp_iir_amount);
+  hp_tempL = hp_inputL - hp_iirSampleLA;
+  hp_iirSampleRA = (hp_iirSampleRA * (1.0 - hp_iir_amount)) + (hp_inputR * hp_iir_amount);
+  hp_tempR = hp_inputR - hp_iirSampleRA;
+  
+  // Second pole
+  hp_iirSampleLB = (hp_iirSampleLB * (1.0 - hp_iir_amount)) + (hp_tempL * hp_iir_amount);
+  hp_tempL = hp_tempL - hp_iirSampleLB;
+  hp_iirSampleRB = (hp_iirSampleRB * (1.0 - hp_iir_amount)) + (hp_tempR * hp_iir_amount);
+  hp_tempR = hp_tempR - hp_iirSampleRB;
+  
+  spl0 = hp_tempL;
+  spl1 = hp_tempR;
+);
+
+//-------------------------------------------
+// 2. LOWPASS (API 215L: 6dB/octave = 1 pole)
+//-------------------------------------------
+lp_on ? (
+  lp_inputL = spl0;
+  lp_inputR = spl1;
+  
+  // Single pole lowpass
+  lp_iirSampleLA = (lp_iirSampleLA * (1.0 - lp_iir_amount)) + (lp_inputL * lp_iir_amount);
+  lp_iirSampleRA = (lp_iirSampleRA * (1.0 - lp_iir_amount)) + (lp_inputR * lp_iir_amount);
+  
+  spl0 = lp_iirSampleLA;
+  spl1 = lp_iirSampleRA;
+);
+
+//-------------------------------------------
+// 3. EQ (Airwindows EQ algorithm)
+//-------------------------------------------
+eq_inputL = spl0;
+eq_inputR = spl1;
+
+// High frequency shelf (Treble)
+eq_iirHighSampleL = (eq_iirHighSampleL * (1.0 - eq_high_iir)) + (eq_inputL * eq_high_iir);
+eq_highProcessL = eq_inputL - eq_iirHighSampleL;
+eq_iirHighSampleR = (eq_iirHighSampleR * (1.0 - eq_high_iir)) + (eq_inputR * eq_high_iir);
+eq_highProcessR = eq_inputR - eq_iirHighSampleR;
+
+// Apply treble gain
+eq_highProcessL = eq_highProcessL * eq_treble_gain;
+eq_highProcessR = eq_highProcessR * eq_treble_gain;
+
+// Blend back
+eq_tempL = eq_iirHighSampleL + eq_highProcessL;
+eq_tempR = eq_iirHighSampleR + eq_highProcessR;
+
+// Low frequency shelf (Bass)
+eq_iirLowSampleL = (eq_iirLowSampleL * (1.0 - eq_low_iir)) + (eq_tempL * eq_low_iir);
+eq_lowProcessL = eq_tempL - eq_iirLowSampleL;
+eq_iirLowSampleR = (eq_iirLowSampleR * (1.0 - eq_low_iir)) + (eq_tempR * eq_low_iir);
+eq_lowProcessR = eq_tempR - eq_iirLowSampleR;
+
+// Apply bass gain to the low frequency content
+eq_iirLowSampleL = eq_iirLowSampleL * eq_bass_gain;
+eq_iirLowSampleR = eq_iirLowSampleR * eq_bass_gain;
+
+// Blend back
+eq_outL = eq_iirLowSampleL + eq_lowProcessL;
+eq_outR = eq_iirLowSampleR + eq_lowProcessR;
+
+// Apply mid gain to whole signal
+spl0 = eq_outL * eq_mid_gain;
+spl1 = eq_outR * eq_mid_gain;
+
+//-------------------------------------------
+// 4. PURESTDRIVE (True Airwindows algorithm)
+//-------------------------------------------
+// From Chris: "uses previous sample to modulate between saturation and dry"
+sat_inputL = spl0;
+sat_inputR = spl1;
+
+sat_intensity > 0.001 ? (
+  // Calculate 'apply' based on current and previous sample
+  // When signal changes slowly (low freq), apply is larger
+  // When signal changes quickly (high freq), apply approaches zero
+  sat_applyL = abs(sat_inputL - sat_previousSampleL);
+  sat_applyR = abs(sat_inputR - sat_previousSampleR);
+  
+  // Intensity control
+  sat_applyL = sat_applyL * sat_intensity;
+  sat_applyR = sat_applyR * sat_intensity;
+  
+  // Apply sin() saturation (smoothest possible curve)
+  sat_processedL = sin(sat_inputL);
+  sat_processedR = sin(sat_inputR);
+  
+  // Dynamically blend: more saturation on dense material, less on transients
+  sat_outL = sat_inputL + (sat_processedL - sat_inputL) * sat_applyL;
+  sat_outR = sat_inputR + (sat_processedR - sat_inputR) * sat_applyR;
+  
+  // Store for next sample
+  sat_previousSampleL = sat_inputL;
+  sat_previousSampleR = sat_inputR;
+  
+  // Mix with dry
+  spl0 = sat_inputL * (1 - sat_mix) + sat_outL * sat_mix;
+  spl1 = sat_inputR * (1 - sat_mix) + sat_outR * sat_mix;
+) : (
+  sat_previousSampleL = sat_inputL;
+  sat_previousSampleR = sat_inputR;
+  spl0 = sat_inputL;
+  spl1 = sat_inputR;
+);
+
+//-------------------------------------------
+// 5. COMPRESSOR (Clean & Musical)
+//-------------------------------------------
+comp_inputL = spl0;
+comp_inputR = spl1;
+
+comp_mix > 0.001 ? (
+  // Peak detection
+  comp_peak = max(abs(comp_inputL), abs(comp_inputR));
+  
+  // Convert to dB
+  comp_peak_db = comp_peak > 0.000001 ? log(comp_peak) * log2db : -120;
+  
+  // Calculate gain reduction
+  comp_over_db = comp_peak_db - comp_thresh;
+  comp_over_db > 0 ? (
+    comp_gain_db = comp_over_db * (1 - 1/comp_ratio);
+    comp_target = pow(10, -comp_gain_db / 20);
+  ) : (
+    comp_target = 1;
+  );
+  
+  // Smooth with attack/release
+  comp_target < comp_envL ? (
+    comp_envL = comp_target + (comp_envL - comp_target) * comp_attack;
+  ) : (
+    comp_envL = comp_target + (comp_envL - comp_target) * comp_release;
+  );
+  
+  comp_target < comp_envR ? (
+    comp_envR = comp_target + (comp_envR - comp_target) * comp_attack;
+  ) : (
+    comp_envR = comp_target + (comp_envR - comp_target) * comp_release;
+  );
+  
+  // Apply compression
+  comp_outL = comp_inputL * comp_envL;
+  comp_outR = comp_inputR * comp_envR;
+  
+  // Mix
+  spl0 = comp_inputL * (1 - comp_mix) + comp_outL * comp_mix;
+  spl1 = comp_inputR * (1 - comp_mix) + comp_outR * comp_mix;
+) : (
+  spl0 = comp_inputL;
+  spl1 = comp_inputR;
+);
+
+//-------------------------------------------
+// 6. OUTPUT GAIN
+//-------------------------------------------
+spl0 *= out_gain;
+spl1 *= out_gain;
+
+// Final denormal protection
+(abs(spl0) < 0.00000000000000000001) ? spl0 = 0;
+(abs(spl1) < 0.00000000000000000001) ? spl1 = 0;
