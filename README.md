@@ -197,7 +197,7 @@ Standard mix control. 0% = completely dry signal, 100% = completely wet reverb s
 
 **Decay** (0-100%)
 
-1. High-frequency filterControls the feedback amount in the secondary reverb stage. This extends the main reverb's tail, allowing for extremely long, infinite-style decays without pushing the main reverb into instability.
+Controls the feedback amount in the secondary reverb stage. This extends the main reverb's tail, allowing for extremely long, infinite-style decays without pushing the main reverb into instability.
 
 **Mix** (0-100%)
 
