@@ -15,6 +15,7 @@ https://reaper.blog/2015/06/quick-tip-how-to-install-js-plugins/
 Quick links:
 - [ReaFripp Tape Loop Delay](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#reafripp-tape-loop-delay)
 - [Tycho Delay TMA-1](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tycho-delay-tma-1)
+- [Stargate Ambient Reverb](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tstargate-ambient-reverb)
 - [SynthiAKS Analog Modular Synthesizer](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#synthiaks-analog-modular-synthesizer)
 - [TapeEmu - Professional Tape Machine Emulation](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tapeemu---professional-tape-machine-emulation)
 - [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
@@ -153,6 +154,59 @@ Tycho Delay is a tape delay emulation that goes beyond basic delay functionality
 
 1. Saturation applied to the final mixed output
 2. Adds overall harmonic coloration to the entire effect
+
+# Reverb
+
+## Stargate Ambient Reverb
+![targate Ambient Reverb Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/Stargate.png?raw=true)
+
+Stargate Ambient Reverb is a dual-stage algorithmic reverb designed for creating lush, expansive ambient spaces. It features a main diffuse reverb engine that can morph from clear delays to dense reverb textures, plus an independent tail extender for infinite, blooming decays. Perfect for ambient music, cinematic soundscapes, and adding otherworldly depth to any source.
+### Controls:
+
+**REVERB SECTION**
+
+**Regen* (0-95%)
+
+Controls the feedback amount in the main reverb, determining how long the reverb tail sustains. Higher values create longer, more sustained reverberations.
+
+**Bright** (0-100$%)
+
+High-frequency damping control. Lower values create darker, more natural reverb tails by filtering high frequencies. Higher values preserve brightness for shimmering, ethereal textures.
+
+**Mix** (0-1)
+
+1. Blends between dry signal (0) and wet delayed signal (1)
+2.v0.5 gives equal parts dry and wet
+
+**Shimmer** (0-100%)
+
+Adds subtle pitch modulation to the reverb, creating a chorus-like shimmer effect. Adds movement and animation to the reverb tail without detuning.
+
+**Size** (10-100%) 
+
+Adjusts the length of the delay lines, scaling the reverb from tight, room-like spaces to vast, cathedral-sized environments.
+
+**Pitch** (-12 to +12 semitones) 
+
+Pitch shifts the reverb feedback, creating shimmer reverb effects. Positive values shift up (classic shimmer), negative values shift down for darker, more ominous tails.
+
+**Diffusion** (0-100%)
+
+The key morphing control. At 0%, you hear discrete delays. As you increase it, the delays diffuse into smooth, dense reverb. Low values = rhythmic delays, high values = lush reverb wash. WATCH OUT: The feedback can get out of control easily.
+
+**Dry/Wet** (0-100%)
+
+Standard mix control. 0% = completely dry signal, 100% = completely wet reverb signal.
+
+**TAIL EXTENDER SECTION*
+
+**Decay** (0-100%)
+
+1. High-frequency filterControls the feedback amount in the secondary reverb stage. This extends the main reverb's tail, allowing for extremely long, infinite-style decays without pushing the main reverb into instability.
+
+**Mix** (0-100%)
+
+Blends the tail extender output back into the main signal. At 0%, the tail extender is off. Increase to add progressively longer, smoother tails for massive ambient textures.
 
 # Synths
 

@@ -49,6 +49,22 @@
       </version>
     </reapack>
   </category>
+    <category name="reverb">
+    <reapack name="Stargate Ambient Reverb (AI Code).jsfx" type="effect" desc="Stargate Ambient Reverb">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Diffuse delay lines that morph from simple delays to complex reverb based on diffusion control. This JSFX released under GPLv3 license\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Stargate%20Ambient%20Reverb%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
   <category name="synth">
     <reapack name="SynthiAKS - Modular Analog Synthesizer (AI Code).jsfx" type="effect" desc="SynthiAKS Analog Modular Synthesizer">
       <metadata>
