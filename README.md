@@ -15,7 +15,7 @@ https://reaper.blog/2015/06/quick-tip-how-to-install-js-plugins/
 Quick links:
 - [ReaFripp Tape Loop Delay](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#reafripp-tape-loop-delay)
 - [Tycho Delay TMA-1](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tycho-delay-tma-1)
-- [Stargate Ambient Reverb](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tstargate-ambient-reverb)
+- [Stargate Ambient Reverb](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#stargate-ambient-reverb)
 - [SynthiAKS Analog Modular Synthesizer](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#synthiaks-analog-modular-synthesizer)
 - [TapeEmu - Professional Tape Machine Emulation](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tapeemu---professional-tape-machine-emulation)
 - [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
@@ -165,7 +165,7 @@ Stargate Ambient Reverb is a dual-stage algorithmic reverb designed for creating
 
 **REVERB SECTION**
 
-**Regen*** (0-95%)
+**Regen** (0-95%)
 
 Controls the feedback amount in the main reverb, determining how long the reverb tail sustains. Higher values create longer, more sustained reverberations.
 
