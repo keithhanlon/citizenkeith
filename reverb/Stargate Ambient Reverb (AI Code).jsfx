@@ -1,8 +1,9 @@
 desc:Stargate Ambient Reverb
 author: citizenkeith / Claude AI
-version: 1.0
+version: 1.1
 about: Diffuse delay lines that morph from simple delays to complex reverb based on diffusion control
       This JSFX released under GPLv3 license
+      Optimized for lower memory usage
 
 // Hidden sliders using proper JSFX technique (- prefix hides from default UI)
 slider1:55<0,95,0.1>-Regen (%)
@@ -24,10 +25,10 @@ last_mouse_y = 0;
 
 freemem = 0;
 
+// Reduced buffer sizes for lower memory footprint
 // Main diffuse delay lines (6 lines, each can morph from delay to reverb)
-// Much longer delays for proper reverb times
-delay1_size = 44100; delay2_size = 35200; delay3_size = 26400;  // Up to 1 second each
-delay4_size = 19800; delay5_size = 15400; delay6_size = 12100;
+delay1_size = 22050; delay2_size = 17600; delay3_size = 13200;  // Reduced by ~50%
+delay4_size = 9900; delay5_size = 7700; delay6_size = 6050;
 
 // Main delay buffers
 delay1L = freemem; freemem += delay1_size;
@@ -43,14 +44,13 @@ delay5R = freemem; freemem += delay5_size;
 delay6L = freemem; freemem += delay6_size;
 delay6R = freemem; freemem += delay6_size;
 
-// Internal diffusors for each delay line (what makes them "diffuse")
-// Each delay line gets its own set of allpass diffusors
-diff1a_size = 142; diff1b_size = 107; diff1c_size = 89;
-diff2a_size = 179; diff2b_size = 113; diff2c_size = 67;
-diff3a_size = 211; diff3b_size = 127; diff3c_size = 97;
-diff4a_size = 239; diff4b_size = 149; diff4c_size = 109;
-diff5a_size = 277; diff5b_size = 163; diff5c_size = 131;
-diff6a_size = 307; diff6b_size = 181; diff6c_size = 151;
+// Internal diffusors for each delay line (reduced sizes)
+diff1a_size = 113; diff1b_size = 85; diff1c_size = 71;
+diff2a_size = 143; diff2b_size = 90; diff2c_size = 53;
+diff3a_size = 168; diff3b_size = 101; diff3c_size = 77;
+diff4a_size = 191; diff4b_size = 119; diff4c_size = 87;
+diff5a_size = 221; diff5b_size = 130; diff5c_size = 104;
+diff6a_size = 245; diff6b_size = 144; diff6c_size = 120;
 
 // Allocate diffusor memory
 diff1aL = freemem; freemem += diff1a_size; diff1aR = freemem; freemem += diff1a_size;
@@ -81,14 +81,14 @@ diff6cL = freemem; freemem += diff6c_size; diff6cR = freemem; freemem += diff6c_
 aML = freemem; freemem += 256;
 aMR = freemem; freemem += 256;
 
-// Pitch shift buffers
-pitchBufL = freemem; freemem += 8192;
-pitchBufR = freemem; freemem += 8192;
+// Pitch shift buffers (reduced size)
+pitchBufL = freemem; freemem += 4096;
+pitchBufR = freemem; freemem += 4096;
 
-// Secondary tail reverb (simple, longer delays for tail extension)
-tail1_size = 50000;  // ~1.13 seconds at 44100Hz
-tail2_size = 40000;  // ~0.91 seconds
-tail3_size = 35000;  // ~0.79 seconds
+// Secondary tail reverb (reduced sizes)
+tail1_size = 25000;  // Reduced from 50000
+tail2_size = 20000;  // Reduced from 40000
+tail3_size = 17500;  // Reduced from 35000
 
 tail1L = freemem; freemem += tail1_size;
 tail1R = freemem; freemem += tail1_size;
@@ -97,10 +97,10 @@ tail2R = freemem; freemem += tail2_size;
 tail3L = freemem; freemem += tail3_size;
 tail3R = freemem; freemem += tail3_size;
 
-// Single allpass diffusor per tail line (keep it simple)
-tail_diff1_size = 257;
-tail_diff2_size = 311;
-tail_diff3_size = 367;
+// Single allpass diffusor per tail line (reduced sizes)
+tail_diff1_size = 205;
+tail_diff2_size = 248;
+tail_diff3_size = 293;
 
 tail_diff1L = freemem; freemem += tail_diff1_size;
 tail_diff1R = freemem; freemem += tail_diff1_size;
@@ -133,7 +133,7 @@ tail_diff3L_pos = tail_diff3R_pos = 0;
 countM = 1;
 
 // Pitch shift variables
-pitchBufSize = 8192;
+pitchBufSize = 4096;  // Reduced from 8192
 pitchWriteL = pitchWriteR = 0;
 pitchPhaseL = pitchPhaseR = 0;
 
@@ -600,7 +600,7 @@ feedback_mixR = reverbR;
   pitchWriteL = (pitchWriteL + 1) % pitchBufSize;
   pitchWriteR = (pitchWriteR + 1) % pitchBufSize;
   
-  pitchDelay = 2048;
+  pitchDelay = 1024;  // Reduced from 2048 to match smaller buffer
   readPosL = pitchWriteL - pitchDelay - pitchPhaseL;
   readPosR = pitchWriteR - pitchDelay - pitchPhaseR;
   
@@ -820,26 +820,58 @@ gfx_drawstr("Diffuse Delay Line Reverb");
 gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
 gfx_rect(gfx_w - 80 * scale, 30 * scale, 40 * scale, 4 * scale);
 
-// Section labels
+// Calculate section dimensions
+separator_x = 490 * scale;
+left_section_start = 20 * scale;
+left_section_width = separator_x - left_section_start;
+right_section_start = separator_x;
+right_section_width = (gfx_w - 40 * scale) - separator_x;
+
+// Section labels - centered in their respective sections
 gfx_r = 0; gfx_g = 0; gfx_b = 0;
 gfx_setfont(1, "Arial", max(8, 11 * scale), 'b');
-gfx_x = 40 * scale; gfx_y = 105 * scale;
+
+// REVERB header - centered in left section
+gfx_measurestr("REVERB", label_w, label_h);
+gfx_x = left_section_start + (left_section_width - label_w) / 2;
+gfx_y = 105 * scale;
 gfx_drawstr("REVERB");
 
-gfx_x = 520 * scale; gfx_y = 105 * scale;
+// TAIL EXTENDER header - centered in right section
+gfx_measurestr("TAIL EXTENDER", label_w, label_h);
+gfx_x = right_section_start + (right_section_width - label_w) / 2;
+gfx_y = 105 * scale;
 gfx_drawstr("TAIL EXTENDER");
 
 // Vertical separator line
 gfx_r = 0.6; gfx_g = 0.6; gfx_b = 0.6;
-separator_x = 490 * scale;
 gfx_line(separator_x, 100 * scale, separator_x, 360 * scale, 2);
 
-// Draw knobs - Top row (Diffuse Reverb section)
-knob_y = 155 * scale;
+// REVERB SECTION - Calculate knob positions with equal margins
 knob_size = 30 * scale;
+margin = 40 * scale;  // Equal margin on both sides
 
+// Top row - 4 knobs evenly spaced
+knob_y = 155 * scale;
+available_width = left_section_width - (2 * margin);
+knob_spacing_top = available_width / 3;  // 3 spaces for 4 knobs
+
+knob1_x = left_section_start + margin;
+knob2_x = knob1_x + knob_spacing_top;
+knob3_x = knob2_x + knob_spacing_top;
+knob4_x = knob3_x + knob_spacing_top;
+
+// Bottom row - 3 knobs evenly spaced
+knob_y2 = 260 * scale;
+knob_spacing_bottom = available_width / 2;  // 2 spaces for 3 knobs
+
+knob5_x = left_section_start + margin;
+knob6_x = knob5_x + knob_spacing_bottom;
+knob7_x = knob6_x + knob_spacing_bottom;
+
+// Draw knobs - Top row (REVERB)
 // Regen knob
-knob_x = 70 * scale;
+knob_x = knob1_x;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y, knob_size/2, 1);
 knob_position = slider1 / 95;
@@ -858,7 +890,7 @@ gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
 gfx_printf("%.0f%%", slider1);
 
 // Brightness knob
-knob_x = 160 * scale;
+knob_x = knob2_x;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y, knob_size/2, 1);
 knob_position = slider2 / 100;
@@ -877,7 +909,7 @@ gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
 gfx_printf("%.0f%%", slider2);
 
 // Shimmer knob
-knob_x = 250 * scale;
+knob_x = knob3_x;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y, knob_size/2, 1);
 knob_position = slider3 / 100;
@@ -896,7 +928,7 @@ gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
 gfx_printf("%.0f%%", slider3);
 
 // Size knob
-knob_x = 340 * scale;
+knob_x = knob4_x;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y, knob_size/2, 1);
 knob_position = (slider4 - 10) / 90;
@@ -914,11 +946,9 @@ gfx_setfont(1, "Arial", max(7, 9 * scale));
 gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
 gfx_printf("%.0f%%", slider4);
 
-// Middle row knobs (Diffuse Reverb section)
-knob_y2 = 260 * scale;
-
+// Bottom row (REVERB)
 // Pitch Shift knob
-knob_x = 95 * scale;
+knob_x = knob5_x;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y2, knob_size/2, 1);
 knob_position = (slider5 + 12) / 24;
@@ -937,7 +967,7 @@ gfx_x = knob_x - 15 * scale; gfx_y = knob_y2 + 40 * scale;
 gfx_printf("%+.1f", slider5);
 
 // Diffusion knob
-knob_x = 205 * scale;
+knob_x = knob6_x;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y2, knob_size/2, 1);
 knob_position = slider6 / 100;
@@ -956,7 +986,7 @@ gfx_x = knob_x - 15 * scale; gfx_y = knob_y2 + 40 * scale;
 gfx_printf("%.0f%%", slider6);
 
 // Dry/Wet knob
-knob_x = 315 * scale;
+knob_x = knob7_x;
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y2, knob_size/2, 1);
 knob_position = slider7 / 100;
@@ -974,10 +1004,12 @@ gfx_setfont(1, "Arial", max(7, 9 * scale));
 gfx_x = knob_x - 15 * scale; gfx_y = knob_y2 + 40 * scale;
 gfx_printf("%.0f%%", slider7);
 
-// Secondary Reverb knobs (right side)
-// Tail Decay knob
-knob_x = 555 * scale;
-knob_y = 180 * scale;
+// TAIL EXTENDER SECTION - knobs centered in section and aligned with reverb rows
+tail_center_x = right_section_start + (right_section_width / 2);
+
+// Tail Decay knob - aligned with top row
+knob_x = tail_center_x;
+knob_y = 155 * scale;  // Same as top reverb row
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y, knob_size/2, 1);
 knob_position = slider8 / 100;
@@ -995,8 +1027,8 @@ gfx_setfont(1, "Arial", max(7, 9 * scale));
 gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
 gfx_printf("%.0f%%", slider8);
 
-// Tail Mix knob
-knob_y = 280 * scale;
+// Tail Mix knob - aligned with bottom row
+knob_y = 260 * scale;  // Same as bottom reverb row
 gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
 gfx_circle(knob_x, knob_y, knob_size/2, 1);
 knob_position = slider9 / 100;
@@ -1020,30 +1052,30 @@ mouse_cap == 1 && last_mouse_cap == 0 ? (
     knob_hit = 0;
     hit_distance = 25 * scale;
     
-    // Check top row knobs (diffuse reverb)
-    abs(mouse_x - 70 * scale) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
+    // Check top row knobs (reverb)
+    abs(mouse_x - knob1_x) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
         slider_to_edit = 1; knob_hit = 1;
-    ) : abs(mouse_x - 160 * scale) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
+    ) : abs(mouse_x - knob2_x) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
         slider_to_edit = 2; knob_hit = 1;
-    ) : abs(mouse_x - 250 * scale) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
+    ) : abs(mouse_x - knob3_x) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
         slider_to_edit = 3; knob_hit = 1;
-    ) : abs(mouse_x - 340 * scale) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
+    ) : abs(mouse_x - knob4_x) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
         slider_to_edit = 4; knob_hit = 1;
     ) :
     
-    // Check middle row knobs (diffuse reverb)
-    abs(mouse_x - 95 * scale) <= hit_distance && abs(mouse_y - 260 * scale) <= hit_distance ? (
+    // Check bottom row knobs (reverb)
+    abs(mouse_x - knob5_x) <= hit_distance && abs(mouse_y - 260 * scale) <= hit_distance ? (
         slider_to_edit = 5; knob_hit = 1;
-    ) : abs(mouse_x - 205 * scale) <= hit_distance && abs(mouse_y - 260 * scale) <= hit_distance ? (
+    ) : abs(mouse_x - knob6_x) <= hit_distance && abs(mouse_y - 260 * scale) <= hit_distance ? (
         slider_to_edit = 6; knob_hit = 1;
-    ) : abs(mouse_x - 315 * scale) <= hit_distance && abs(mouse_y - 260 * scale) <= hit_distance ? (
+    ) : abs(mouse_x - knob7_x) <= hit_distance && abs(mouse_y - 260 * scale) <= hit_distance ? (
         slider_to_edit = 7; knob_hit = 1;
     ) :
     
-    // Check secondary reverb knobs (right side)
-    abs(mouse_x - 555 * scale) <= hit_distance && abs(mouse_y - 180 * scale) <= hit_distance ? (
+    // Check tail extender knobs (right side)
+    abs(mouse_x - tail_center_x) <= hit_distance && abs(mouse_y - 155 * scale) <= hit_distance ? (
         slider_to_edit = 8; knob_hit = 1;
-    ) : abs(mouse_x - 555 * scale) <= hit_distance && abs(mouse_y - 280 * scale) <= hit_distance ? (
+    ) : abs(mouse_x - tail_center_x) <= hit_distance && abs(mouse_y - 260 * scale) <= hit_distance ? (
         slider_to_edit = 9; knob_hit = 1;
     );
     
