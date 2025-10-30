@@ -1,6 +1,6 @@
 desc: Clavius Channel Strip
 desc: Channel strip with API 215L-style filters, EQ, Drive, and Compression
-author: Based on Airwindows open source (MIT) and Universal Audio API 215L
+author: citizenkeith and Claude AI - Based on Airwindows open source (MIT) and Universal Audio API 215L
 version: 1.0
 tags: channel strip, EQ, compressor, filter, saturation
 
