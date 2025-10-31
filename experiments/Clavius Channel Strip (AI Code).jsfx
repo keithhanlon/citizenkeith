@@ -9,33 +9,33 @@ tags: channel strip, EQ, compressor, filter, saturation
 //===========================================
 
 // HIGHPASS SECTION (API 215L style: 12-596 Hz, 12dB/octave)
-slider1:12<12,596,1>-Highpass Freq (Hz)
-slider2:0<0,1,1>-HP On/Off
+slider1:12<12,596,1>Highpass Freq (Hz)
+slider2:0<0,1,1>HP On/Off
 
 // LOWPASS SECTION (API 215L style: 643Hz-40.8kHz, 6dB/octave)
-slider3:40000<643,40800,1>-Lowpass Freq (Hz)
-slider4:0<0,1,1>-LP On/Off
+slider3:40000<643,40800,1>Lowpass Freq (Hz)
+slider4:0<0,1,1>LP On/Off
 
 // EQ SECTION (from Airwindows EQ)
-slider5:0<-12,12,0.1>-Treble (dB)
-slider6:0<-12,12,0.1>-Mid (dB)
-slider7:0<-12,12,0.1>-Bass (dB)
-slider8:6000<1000,16000,1>-Treble Freq (Hz)
-slider9:100<30,1600,1>-Bass Freq (Hz)
+slider5:0<-12,12,0.1>Treble (dB)
+slider6:0<-12,12,0.1>Mid (dB)
+slider7:0<-12,12,0.1>Bass (dB)
+slider8:6000<1000,16000,1>Treble Freq (Hz)
+slider9:100<30,1600,1>Bass Freq (Hz)
 
 // SATURATION (PurestDrive algorithm)
-slider10:0<0,1,0.01>-Drive Amount
-slider11:0<0,1,0.01>-Drive Mix
+slider10:0<0,1,0.01>Drive Amount
+slider11:0<0,1,0.01>Drive Mix
 
 // COMPRESSOR SECTION
-slider12:-12<-60,0,0.1>-Comp Threshold (dB)
-slider13:3<1,20,0.1>-Comp Ratio
-slider14:10<0.1,100,0.1>-Comp Attack (ms)
-slider15:100<10,1000,0.1>-Comp Release (ms)
-slider16:0<0,1,0.01>-Comp Mix
+slider12:-12<-60,0,0.1>Comp Threshold (dB)
+slider13:3<1,20,0.1>Comp Ratio
+slider14:10<0.1,100,0.1>Comp Attack (ms)
+slider15:100<10,1000,0.1>Comp Release (ms)
+slider16:0<0,1,0.01>Comp Mix
 
 // OUTPUT
-slider17:0<-18,18,0.1>-Output Gain (dB)
+slider17:0<-18,18,0.1>Output Gain (dB)
 
 //===========================================
 // INIT
