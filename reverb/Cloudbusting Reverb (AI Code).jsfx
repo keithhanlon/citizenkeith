@@ -1,0 +1,637 @@
+desc: Cloudbusting Reverb
+version: 1.0
+author: citizenkeith - Claude AI
+about:
+  # Cloudbusting Reverb
+  
+  A professional algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, 
+  per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections.
+  
+  ## Credits
+  Based on the CloudSeed reverb algorithm by Valdemar Erlingsson (Ghost Note Audio).
+  Original CloudSeed: https://github.com/GhostNoteAudio/CloudSeedCore
+  
+  ## License
+  This plugin is released under the MIT License, matching the CloudSeed source.
+  
+  CloudSeed original license:
+  MIT License - Copyright (c) 2017 Valdemar Erlingsson
+  
+  Cloudbusting Reverb JSFX port:
+  MIT License - Copyright (c) 2026 citizenkeith
+  
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
+  and associated documentation files (the "Software"), to deal in the Software without restriction, 
+  including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+  and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so.
+
+slider1:size=0.7<0.1,2.0,0.01>Size
+slider2:decay=0.85<0,0.995,0.001>Decay
+slider3:diffusion=0.7<0,0.85,0.01>Diffusion
+slider4:diffusionStages=4<0,8,1>Diffusion Stages
+slider5:modDepth=0.3<0,1,0.01>Mod Depth
+slider6:modRate=0.25<0.01,2,0.01>Mod Rate (Hz)
+slider7:damping=0<0,1,0.01>Damping
+slider8:lowCut=20<20,500,1>Low Cut (Hz)
+slider9:highCut=20000<1000,20000,1>High Cut (Hz)
+slider10:predelay=0<0,200,1>Pre-delay (ms)
+slider11:earlyMix=0.5<0,1,0.01>Early Reflections
+slider12:mix=0.5<0,1,0.01>Mix
+slider13:outputLevel=1.0<0,2,0.01>Output Level
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+
+// Power-of-2 buffer size
+bufsize = 131072;
+
+// Pre-delay buffer (16384 = ~340ms at 48kHz)
+predelay_bufsize = 16384;
+predelay_L = 0;
+predelay_R = predelay_L + predelay_bufsize;
+
+// Allpass diffusion buffers
+ap1_L = predelay_R + predelay_bufsize;
+ap2_L = ap1_L + bufsize;
+ap3_L = ap2_L + bufsize;
+ap4_L = ap3_L + bufsize;
+ap5_L = ap4_L + bufsize;
+ap6_L = ap5_L + bufsize;
+ap7_L = ap6_L + bufsize;
+ap8_L = ap7_L + bufsize;
+
+ap1_R = ap8_L + bufsize;
+ap2_R = ap1_R + bufsize;
+ap3_R = ap2_R + bufsize;
+ap4_R = ap3_R + bufsize;
+ap5_R = ap4_R + bufsize;
+ap6_R = ap5_R + bufsize;
+ap7_R = ap6_R + bufsize;
+ap8_R = ap7_R + bufsize;
+
+// Comb filter buffers
+comb1_L = ap8_R + bufsize;
+comb2_L = comb1_L + bufsize;
+comb3_L = comb2_L + bufsize;
+comb4_L = comb3_L + bufsize;
+comb1_R = comb4_L + bufsize;
+comb2_R = comb1_R + bufsize;
+comb3_R = comb2_R + bufsize;
+comb4_R = comb3_R + bufsize;
+
+mem_end = comb4_R + bufsize;
+
+// Zero all buffers
+memset(0, 0, mem_end);
+
+// Initialize write positions
+predelay_pos = 0;
+ap1_pos_L = ap2_pos_L = ap3_pos_L = ap4_pos_L = 0;
+ap5_pos_L = ap6_pos_L = ap7_pos_L = ap8_pos_L = 0;
+ap1_pos_R = ap2_pos_R = ap3_pos_R = ap4_pos_R = 0;
+ap5_pos_R = ap6_pos_R = ap7_pos_R = ap8_pos_R = 0;
+
+comb1_pos_L = comb2_pos_L = comb3_pos_L = comb4_pos_L = 0;
+comb1_pos_R = comb2_pos_R = comb3_pos_R = comb4_pos_R = 0;
+
+// LFO phases - spread evenly across 2π for maximum decorrelation
+lfo_phase_1L = 0;
+lfo_phase_2L = (2 * $pi) / 8 * 1;
+lfo_phase_3L = (2 * $pi) / 8 * 2;
+lfo_phase_4L = (2 * $pi) / 8 * 3;
+lfo_phase_1R = (2 * $pi) / 8 * 4;
+lfo_phase_2R = (2 * $pi) / 8 * 5;
+lfo_phase_3R = (2 * $pi) / 8 * 6;
+lfo_phase_4R = (2 * $pi) / 8 * 7;
+
+// Parameter smoothing to prevent zipper noise
+size_smooth = 0.7; // Initialize to default
+size_coeff = 0.005; // Smoothing coefficient (~10ms at 48kHz)
+
+// Damping coefficient smoothing
+damp_coeff_smooth = 0;
+damp_smooth_coeff = 0.005; // Same smoothing time as size
+
+// Diffusion stages smoothing
+stages_smooth = 4; // Initialize to default
+stages_coeff = 0.01; // Faster smoothing for discrete parameter (~5ms)
+
+// Damping filter states (one per comb)
+damp1_L = damp2_L = damp3_L = damp4_L = 0;
+damp1_R = damp2_R = damp3_R = damp4_R = 0;
+
+// Input filter states (biquad HP and LP)
+hp_x1_L = hp_x2_L = hp_y1_L = hp_y2_L = 0;
+hp_x1_R = hp_x2_R = hp_y1_R = hp_y2_R = 0;
+lp_x1_L = lp_x2_L = lp_y1_L = lp_y2_L = 0;
+lp_x1_R = lp_x2_R = lp_y1_R = lp_y2_R = 0;
+
+// Allpass filter function
+function allpass(buffer, pos, delay_samples, g, input) 
+  local(read_pos, delayed, output)
+(
+  read_pos = (pos - delay_samples) & (bufsize - 1);
+  delayed = buffer[read_pos];
+  output = -g * input + delayed;
+  buffer[pos] = input + g * output;
+  output;
+);
+
+@slider
+
+// Modulation parameters (calculated from sliders)
+lfo_increment = 2 * $pi * modRate / srate;
+mod_amount_samples = modDepth * 50; // Max ±50 samples (~1ms at 48kHz) - increased from 20
+
+// Pre-delay in samples
+predelay_samples = (predelay * 0.001 * srate) | 0; // Convert ms to samples
+
+// Early reflection tap delays (in samples, prime-based for natural sound)
+// These are relative to the pre-delay point
+er_tap1 = (srate * 0.013) | 0;  // 13ms
+er_tap2 = (srate * 0.019) | 0;  // 19ms  
+er_tap3 = (srate * 0.023) | 0;  // 23ms
+er_tap4 = (srate * 0.029) | 0;  // 29ms
+er_tap5 = (srate * 0.037) | 0;  // 37ms
+er_tap6 = (srate * 0.043) | 0;  // 43ms
+er_tap7 = (srate * 0.053) | 0;  // 53ms
+er_tap8 = (srate * 0.061) | 0;  // 61ms
+
+// Early reflection levels (decay envelope)
+er_level1 = 0.8;
+er_level2 = 0.7;
+er_level3 = 0.6;
+er_level4 = 0.5;
+er_level5 = 0.4;
+er_level6 = 0.3;
+er_level7 = 0.25;
+er_level8 = 0.2;
+
+// Input high-pass filter (Low Cut)
+freq_hp = max(20, min(lowCut, 500));
+w0_hp = 2 * $pi * freq_hp / srate;
+alpha_hp = sin(w0_hp) / (2 * 0.707);
+hp_b0 = (1 + cos(w0_hp)) / 2;
+hp_b1 = -(1 + cos(w0_hp));
+hp_b2 = (1 + cos(w0_hp)) / 2;
+hp_a0 = 1 + alpha_hp;
+hp_a1 = -2 * cos(w0_hp);
+hp_a2 = 1 - alpha_hp;
+hp_b0 /= hp_a0;
+hp_b1 /= hp_a0;
+hp_b2 /= hp_a0;
+hp_a1 /= hp_a0;
+hp_a2 /= hp_a0;
+
+// Input low-pass filter (High Cut)
+freq_lp = max(1000, min(highCut, srate * 0.49));
+w0_lp = 2 * $pi * freq_lp / srate;
+alpha_lp = sin(w0_lp) / (2 * 0.707);
+lp_b0 = (1 - cos(w0_lp)) / 2;
+lp_b1 = 1 - cos(w0_lp);
+lp_b2 = (1 - cos(w0_lp)) / 2;
+lp_a0 = 1 + alpha_lp;
+lp_a1 = -2 * cos(w0_lp);
+lp_a2 = 1 - alpha_lp;
+lp_b0 /= lp_a0;
+lp_b1 /= lp_a0;
+lp_b2 /= lp_a0;
+lp_a1 /= lp_a0;
+lp_a2 /= lp_a0;
+
+// Damping coefficient (one-pole lowpass)
+// Only calculated if damping > 0
+damp_coeff = damping > 0 ? damping * 0.5 : 0;
+
+@sample
+
+// Smooth the Size parameter to prevent zipper noise when adjusting
+size_smooth += size_coeff * (size - size_smooth);
+
+// Smooth the damping coefficient to prevent clicks during automation
+damp_coeff_target = damping * 0.5;
+damp_coeff_smooth += damp_smooth_coeff * (damp_coeff_target - damp_coeff_smooth);
+damp_coeff = damp_coeff_smooth;
+
+// Smooth diffusion stages to prevent clicks when changing stage count
+stages_smooth += stages_coeff * (diffusionStages - stages_smooth);
+
+// Calculate delay times using smoothed size
+// Comb filter base delays
+base_delay = srate * 0.03 * size_smooth;
+comb1_delay = (base_delay * 1.000);
+comb2_delay = (base_delay * 1.193);
+comb3_delay = (base_delay * 1.414);
+comb4_delay = (base_delay * 1.618);
+comb1_delay_R = (comb1_delay * 1.0313);
+comb2_delay_R = (comb2_delay * 1.0313);
+comb3_delay_R = (comb3_delay * 1.0313);
+comb4_delay_R = (comb4_delay * 1.0313);
+
+// Allpass diffusion delays
+ap1_delay = (srate * 0.0050 * size_smooth) | 0;
+ap2_delay = (srate * 0.0117 * size_smooth) | 0;
+ap3_delay = (srate * 0.0197 * size_smooth) | 0;
+ap4_delay = (srate * 0.0293 * size_smooth) | 0;
+ap5_delay = (srate * 0.0373 * size_smooth) | 0;
+ap6_delay = (srate * 0.0431 * size_smooth) | 0;
+ap7_delay = (srate * 0.0593 * size_smooth) | 0;
+ap8_delay = (srate * 0.0677 * size_smooth) | 0;
+
+ap1_delay_R = (ap1_delay * 1.021) | 0;
+ap2_delay_R = (ap2_delay * 1.021) | 0;
+ap3_delay_R = (ap3_delay * 1.021) | 0;
+ap4_delay_R = (ap4_delay * 1.021) | 0;
+ap5_delay_R = (ap5_delay * 1.021) | 0;
+ap6_delay_R = (ap6_delay * 1.021) | 0;
+ap7_delay_R = (ap7_delay * 1.021) | 0;
+ap8_delay_R = (ap8_delay * 1.021) | 0;
+
+// Input filtering (HP then LP)
+// High-pass left
+hp_out_L = hp_b0*spl0 + hp_b1*hp_x1_L + hp_b2*hp_x2_L - hp_a1*hp_y1_L - hp_a2*hp_y2_L;
+hp_x2_L = hp_x1_L; hp_x1_L = spl0;
+hp_y2_L = hp_y1_L; hp_y1_L = hp_out_L;
+
+// High-pass right
+hp_out_R = hp_b0*spl1 + hp_b1*hp_x1_R + hp_b2*hp_x2_R - hp_a1*hp_y1_R - hp_a2*hp_y2_R;
+hp_x2_R = hp_x1_R; hp_x1_R = spl1;
+hp_y2_R = hp_y1_R; hp_y1_R = hp_out_R;
+
+// Low-pass left
+lp_out_L = lp_b0*hp_out_L + lp_b1*lp_x1_L + lp_b2*lp_x2_L - lp_a1*lp_y1_L - lp_a2*lp_y2_L;
+lp_x2_L = lp_x1_L; lp_x1_L = hp_out_L;
+lp_y2_L = lp_y1_L; lp_y1_L = lp_out_L;
+
+// Low-pass right
+lp_out_R = lp_b0*hp_out_R + lp_b1*lp_x1_R + lp_b2*lp_x2_R - lp_a1*lp_y1_R - lp_a2*lp_y2_R;
+lp_x2_R = lp_x1_R; lp_x1_R = hp_out_R;
+lp_y2_R = lp_y1_R; lp_y1_R = lp_out_R;
+
+// Filtered input
+inL = lp_out_L;
+inR = lp_out_R;
+
+// ============================================
+// PRE-DELAY & EARLY REFLECTIONS (PHASE 5)
+// ============================================
+
+// Write filtered input to pre-delay buffer FIRST
+predelay_L[predelay_pos] = inL;
+predelay_R[predelay_pos] = inR;
+
+// NOW read from pre-delay buffer (after writing)
+// When predelay_samples = 0, this reads the sample we just wrote = zero latency
+read_pos_pd = (predelay_pos - predelay_samples) & (predelay_bufsize - 1);
+delayed_L = predelay_L[read_pos_pd];
+delayed_R = predelay_R[read_pos_pd];
+
+// Generate early reflections (8 taps)
+// These are always generated, crossfade at output controls the mix
+er_L = 0;
+er_R = 0;
+
+// Tap 1
+tap_pos = (predelay_pos - predelay_samples - er_tap1) & (predelay_bufsize - 1);
+er_L += predelay_L[tap_pos] * er_level1;
+er_R += predelay_R[tap_pos] * er_level2; // Slightly different levels for stereo
+
+// Tap 2
+tap_pos = (predelay_pos - predelay_samples - er_tap2) & (predelay_bufsize - 1);
+er_L += predelay_L[tap_pos] * er_level2;
+er_R += predelay_R[tap_pos] * er_level3;
+
+// Tap 3
+tap_pos = (predelay_pos - predelay_samples - er_tap3) & (predelay_bufsize - 1);
+er_L += predelay_L[tap_pos] * er_level3;
+er_R += predelay_R[tap_pos] * er_level4;
+
+// Tap 4
+tap_pos = (predelay_pos - predelay_samples - er_tap4) & (predelay_bufsize - 1);
+er_L += predelay_L[tap_pos] * er_level4;
+er_R += predelay_R[tap_pos] * er_level5;
+
+// Tap 5
+tap_pos = (predelay_pos - predelay_samples - er_tap5) & (predelay_bufsize - 1);
+er_L += predelay_L[tap_pos] * er_level5;
+er_R += predelay_R[tap_pos] * er_level6;
+
+// Tap 6
+tap_pos = (predelay_pos - predelay_samples - er_tap6) & (predelay_bufsize - 1);
+er_L += predelay_L[tap_pos] * er_level6;
+er_R += predelay_R[tap_pos] * er_level7;
+
+// Tap 7
+tap_pos = (predelay_pos - predelay_samples - er_tap7) & (predelay_bufsize - 1);
+er_L += predelay_L[tap_pos] * er_level7;
+er_R += predelay_R[tap_pos] * er_level8;
+
+// Tap 8
+tap_pos = (predelay_pos - predelay_samples - er_tap8) & (predelay_bufsize - 1);
+er_L += predelay_L[tap_pos] * er_level8;
+er_R += predelay_R[tap_pos] * er_level1; // Wrap around for variety
+
+// Scale ER level and blend with delayed signal
+// earlyMix controls how much ER is mixed into the reverb input
+er_L *= 0.3 * earlyMix;
+er_R *= 0.3 * earlyMix;
+
+// Advance pre-delay write position
+predelay_pos = (predelay_pos + 1) & (predelay_bufsize - 1);
+
+// Mix delayed signal with early reflections before diffusion
+// This feeds ER into the reverb network (more natural)
+diffL = delayed_L + er_L;
+diffR = delayed_R + er_R;
+
+// ============================================
+// DIFFUSION NETWORK (PHASE 2)
+// ============================================
+
+// diffL and diffR now contain just the delayed signal
+// ER is kept separate and mixed at the output
+
+// Each stage crossfades smoothly based on stages_smooth
+// stage_frac = 1 when fully active, 0 when bypassed, fractional when transitioning
+
+// Stage 1
+stages_smooth >= 0 ? (
+  stage_frac = min(1, max(0, stages_smooth));
+  stage_frac > 0 ? (
+    wet_L = allpass(ap1_L, ap1_pos_L, ap1_delay, diffusion, diffL);
+    wet_R = allpass(ap1_R, ap1_pos_R, ap1_delay_R, diffusion, diffR);
+    diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
+    diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
+  );
+  ap1_pos_L = (ap1_pos_L + 1) & (bufsize - 1);
+  ap1_pos_R = (ap1_pos_R + 1) & (bufsize - 1);
+);
+
+// Stage 2
+stages_smooth >= 1 ? (
+  stage_frac = min(1, max(0, stages_smooth - 1));
+  stage_frac > 0 ? (
+    wet_L = allpass(ap2_L, ap2_pos_L, ap2_delay, diffusion, diffL);
+    wet_R = allpass(ap2_R, ap2_pos_R, ap2_delay_R, diffusion, diffR);
+    diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
+    diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
+  );
+  ap2_pos_L = (ap2_pos_L + 1) & (bufsize - 1);
+  ap2_pos_R = (ap2_pos_R + 1) & (bufsize - 1);
+);
+
+// Stage 3
+stages_smooth >= 2 ? (
+  stage_frac = min(1, max(0, stages_smooth - 2));
+  stage_frac > 0 ? (
+    wet_L = allpass(ap3_L, ap3_pos_L, ap3_delay, diffusion, diffL);
+    wet_R = allpass(ap3_R, ap3_pos_R, ap3_delay_R, diffusion, diffR);
+    diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
+    diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
+  );
+  ap3_pos_L = (ap3_pos_L + 1) & (bufsize - 1);
+  ap3_pos_R = (ap3_pos_R + 1) & (bufsize - 1);
+);
+
+// Stage 4
+stages_smooth >= 3 ? (
+  stage_frac = min(1, max(0, stages_smooth - 3));
+  stage_frac > 0 ? (
+    wet_L = allpass(ap4_L, ap4_pos_L, ap4_delay, diffusion, diffL);
+    wet_R = allpass(ap4_R, ap4_pos_R, ap4_delay_R, diffusion, diffR);
+    diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
+    diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
+  );
+  ap4_pos_L = (ap4_pos_L + 1) & (bufsize - 1);
+  ap4_pos_R = (ap4_pos_R + 1) & (bufsize - 1);
+);
+
+// Stage 5
+stages_smooth >= 4 ? (
+  stage_frac = min(1, max(0, stages_smooth - 4));
+  stage_frac > 0 ? (
+    wet_L = allpass(ap5_L, ap5_pos_L, ap5_delay, diffusion, diffL);
+    wet_R = allpass(ap5_R, ap5_pos_R, ap5_delay_R, diffusion, diffR);
+    diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
+    diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
+  );
+  ap5_pos_L = (ap5_pos_L + 1) & (bufsize - 1);
+  ap5_pos_R = (ap5_pos_R + 1) & (bufsize - 1);
+);
+
+// Stage 6
+stages_smooth >= 5 ? (
+  stage_frac = min(1, max(0, stages_smooth - 5));
+  stage_frac > 0 ? (
+    wet_L = allpass(ap6_L, ap6_pos_L, ap6_delay, diffusion, diffL);
+    wet_R = allpass(ap6_R, ap6_pos_R, ap6_delay_R, diffusion, diffR);
+    diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
+    diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
+  );
+  ap6_pos_L = (ap6_pos_L + 1) & (bufsize - 1);
+  ap6_pos_R = (ap6_pos_R + 1) & (bufsize - 1);
+);
+
+// Stage 7
+stages_smooth >= 6 ? (
+  stage_frac = min(1, max(0, stages_smooth - 6));
+  stage_frac > 0 ? (
+    wet_L = allpass(ap7_L, ap7_pos_L, ap7_delay, diffusion, diffL);
+    wet_R = allpass(ap7_R, ap7_pos_R, ap7_delay_R, diffusion, diffR);
+    diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
+    diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
+  );
+  ap7_pos_L = (ap7_pos_L + 1) & (bufsize - 1);
+  ap7_pos_R = (ap7_pos_R + 1) & (bufsize - 1);
+);
+
+// Stage 8
+stages_smooth >= 7 ? (
+  stage_frac = min(1, max(0, stages_smooth - 7));
+  stage_frac > 0 ? (
+    wet_L = allpass(ap8_L, ap8_pos_L, ap8_delay, diffusion, diffL);
+    wet_R = allpass(ap8_R, ap8_pos_R, ap8_delay_R, diffusion, diffR);
+    diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
+    diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
+  );
+  ap8_pos_L = (ap8_pos_L + 1) & (bufsize - 1);
+  ap8_pos_R = (ap8_pos_R + 1) & (bufsize - 1);
+);
+
+// ============================================
+// MODULATED COMB FILTERS (NEW IN PHASE 3)
+// ============================================
+
+// Update LFO phases
+lfo_phase_1L += lfo_increment;
+lfo_phase_2L += lfo_increment;
+lfo_phase_3L += lfo_increment;
+lfo_phase_4L += lfo_increment;
+lfo_phase_1R += lfo_increment;
+lfo_phase_2R += lfo_increment;
+lfo_phase_3R += lfo_increment;
+lfo_phase_4R += lfo_increment;
+
+// Wrap phases
+lfo_phase_1L >= 2*$pi ? lfo_phase_1L -= 2*$pi;
+lfo_phase_2L >= 2*$pi ? lfo_phase_2L -= 2*$pi;
+lfo_phase_3L >= 2*$pi ? lfo_phase_3L -= 2*$pi;
+lfo_phase_4L >= 2*$pi ? lfo_phase_4L -= 2*$pi;
+lfo_phase_1R >= 2*$pi ? lfo_phase_1R -= 2*$pi;
+lfo_phase_2R >= 2*$pi ? lfo_phase_2R -= 2*$pi;
+lfo_phase_3R >= 2*$pi ? lfo_phase_3R -= 2*$pi;
+lfo_phase_4R >= 2*$pi ? lfo_phase_4R -= 2*$pi;
+
+// COMB FILTER 1 LEFT (with modulation)
+mod1L = sin(lfo_phase_1L) * mod_amount_samples;
+delay1L = comb1_delay + mod1L;
+read_pos = comb1_pos_L - delay1L;
+read_pos < 0 ? read_pos += bufsize;
+// Linear interpolation for fractional delay
+read_int = read_pos | 0;
+frac = read_pos - read_int;
+s1 = comb1_L[read_int & (bufsize - 1)];
+s2 = comb1_L[(read_int + 1) & (bufsize - 1)];
+comb1_out_L = s1 + frac * (s2 - s1);
+// Damping (one-pole lowpass) - only if enabled
+damp_coeff > 0 ? (
+  damp1_L += damp_coeff * (comb1_out_L - damp1_L);
+  comb1_out_L = damp1_L;
+);
+comb1_L[comb1_pos_L] = diffL + comb1_out_L * decay;
+comb1_pos_L = (comb1_pos_L + 1) & (bufsize - 1);
+
+// COMB FILTER 2 LEFT
+mod2L = sin(lfo_phase_2L) * mod_amount_samples;
+delay2L = comb2_delay + mod2L;
+read_pos = comb2_pos_L - delay2L;
+read_pos < 0 ? read_pos += bufsize;
+read_int = read_pos | 0;
+frac = read_pos - read_int;
+s1 = comb2_L[read_int & (bufsize - 1)];
+s2 = comb2_L[(read_int + 1) & (bufsize - 1)];
+comb2_out_L = s1 + frac * (s2 - s1);
+damp_coeff > 0 ? (
+  damp2_L += damp_coeff * (comb2_out_L - damp2_L);
+  comb2_out_L = damp2_L;
+);
+comb2_L[comb2_pos_L] = diffL + comb2_out_L * decay;
+comb2_pos_L = (comb2_pos_L + 1) & (bufsize - 1);
+
+// COMB FILTER 3 LEFT
+mod3L = sin(lfo_phase_3L) * mod_amount_samples;
+delay3L = comb3_delay + mod3L;
+read_pos = comb3_pos_L - delay3L;
+read_pos < 0 ? read_pos += bufsize;
+read_int = read_pos | 0;
+frac = read_pos - read_int;
+s1 = comb3_L[read_int & (bufsize - 1)];
+s2 = comb3_L[(read_int + 1) & (bufsize - 1)];
+comb3_out_L = s1 + frac * (s2 - s1);
+damp_coeff > 0 ? (
+  damp3_L += damp_coeff * (comb3_out_L - damp3_L);
+  comb3_out_L = damp3_L;
+);
+comb3_L[comb3_pos_L] = diffL + comb3_out_L * decay;
+comb3_pos_L = (comb3_pos_L + 1) & (bufsize - 1);
+
+// COMB FILTER 4 LEFT
+mod4L = sin(lfo_phase_4L) * mod_amount_samples;
+delay4L = comb4_delay + mod4L;
+read_pos = comb4_pos_L - delay4L;
+read_pos < 0 ? read_pos += bufsize;
+read_int = read_pos | 0;
+frac = read_pos - read_int;
+s1 = comb4_L[read_int & (bufsize - 1)];
+s2 = comb4_L[(read_int + 1) & (bufsize - 1)];
+comb4_out_L = s1 + frac * (s2 - s1);
+damp_coeff > 0 ? (
+  damp4_L += damp_coeff * (comb4_out_L - damp4_L);
+  comb4_out_L = damp4_L;
+);
+comb4_L[comb4_pos_L] = diffL + comb4_out_L * decay;
+comb4_pos_L = (comb4_pos_L + 1) & (bufsize - 1);
+
+// COMB FILTER 1 RIGHT
+mod1R = sin(lfo_phase_1R) * mod_amount_samples;
+delay1R = comb1_delay_R + mod1R;
+read_pos = comb1_pos_R - delay1R;
+read_pos < 0 ? read_pos += bufsize;
+read_int = read_pos | 0;
+frac = read_pos - read_int;
+s1 = comb1_R[read_int & (bufsize - 1)];
+s2 = comb1_R[(read_int + 1) & (bufsize - 1)];
+comb1_out_R = s1 + frac * (s2 - s1);
+damp_coeff > 0 ? (
+  damp1_R += damp_coeff * (comb1_out_R - damp1_R);
+  comb1_out_R = damp1_R;
+);
+comb1_R[comb1_pos_R] = diffR + comb1_out_R * decay;
+comb1_pos_R = (comb1_pos_R + 1) & (bufsize - 1);
+
+// COMB FILTER 2 RIGHT
+mod2R = sin(lfo_phase_2R) * mod_amount_samples;
+delay2R = comb2_delay_R + mod2R;
+read_pos = comb2_pos_R - delay2R;
+read_pos < 0 ? read_pos += bufsize;
+read_int = read_pos | 0;
+frac = read_pos - read_int;
+s1 = comb2_R[read_int & (bufsize - 1)];
+s2 = comb2_R[(read_int + 1) & (bufsize - 1)];
+comb2_out_R = s1 + frac * (s2 - s1);
+damp_coeff > 0 ? (
+  damp2_R += damp_coeff * (comb2_out_R - damp2_R);
+  comb2_out_R = damp2_R;
+);
+comb2_R[comb2_pos_R] = diffR + comb2_out_R * decay;
+comb2_pos_R = (comb2_pos_R + 1) & (bufsize - 1);
+
+// COMB FILTER 3 RIGHT
+mod3R = sin(lfo_phase_3R) * mod_amount_samples;
+delay3R = comb3_delay_R + mod3R;
+read_pos = comb3_pos_R - delay3R;
+read_pos < 0 ? read_pos += bufsize;
+read_int = read_pos | 0;
+frac = read_pos - read_int;
+s1 = comb3_R[read_int & (bufsize - 1)];
+s2 = comb3_R[(read_int + 1) & (bufsize - 1)];
+comb3_out_R = s1 + frac * (s2 - s1);
+damp_coeff > 0 ? (
+  damp3_R += damp_coeff * (comb3_out_R - damp3_R);
+  comb3_out_R = damp3_R;
+);
+comb3_R[comb3_pos_R] = diffR + comb3_out_R * decay;
+comb3_pos_R = (comb3_pos_R + 1) & (bufsize - 1);
+
+// COMB FILTER 4 RIGHT
+mod4R = sin(lfo_phase_4R) * mod_amount_samples;
+delay4R = comb4_delay_R + mod4R;
+read_pos = comb4_pos_R - delay4R;
+read_pos < 0 ? read_pos += bufsize;
+read_int = read_pos | 0;
+frac = read_pos - read_int;
+s1 = comb4_R[read_int & (bufsize - 1)];
+s2 = comb4_R[(read_int + 1) & (bufsize - 1)];
+comb4_out_R = s1 + frac * (s2 - s1);
+damp_coeff > 0 ? (
+  damp4_R += damp_coeff * (comb4_out_R - damp4_R);
+  comb4_out_R = damp4_R;
+);
+comb4_R[comb4_pos_R] = diffR + comb4_out_R * decay;
+comb4_pos_R = (comb4_pos_R + 1) & (bufsize - 1);
+
+// Sum comb outputs (wet signal - includes ER that was fed into diffusion)
+wetL = (comb1_out_L + comb2_out_L + comb3_out_L + comb4_out_L) * 0.25;
+wetR = (comb1_out_R + comb2_out_R + comb3_out_R + comb4_out_R) * 0.25;
+
+// Mix dry and wet
+spl0 = spl0 * (1 - mix) + wetL * mix;
+spl1 = spl1 * (1 - mix) + wetR * mix;
+
+// Apply output level
+spl0 *= outputLevel;
+spl1 *= outputLevel;

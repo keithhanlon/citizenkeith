@@ -1,0 +1,479 @@
+desc: Tempo Tremolo
+author: Keith
+version: 1.0
+changelog: Initial release
+provides: tempo_tremolo.jsfx
+
+slider1:sync=1<0,1,1{Off,On}>Tempo Sync
+slider2:rate_hz=4<0.1,20,0.01>Rate (Hz)
+slider3:rate_sync=3<0,9,1{1/16,1/8T,1/8,1/4T,1/4,1/2T,1/2,1/1,2/1,4/1}>Rate (Sync)
+slider4:depth=0.8<0,1,0.01>Depth
+slider5:shape=1<0,2,0.01>Wave Shape
+slider6:phase=0<0,1,0.01>Stereo Phase
+
+options:gfx_hz=60 no_meter
+
+@init
+ext_noinit = 1;
+
+// Note division values in beats
+note_divs = 16;
+note_div_values = 0;
+note_div_values[0] = 0.25;    // 1/16
+note_div_values[1] = 1/3;     // 1/8T (triplet)
+note_div_values[2] = 0.5;     // 1/8
+note_div_values[3] = 2/3;     // 1/4T
+note_div_values[4] = 1.0;     // 1/4
+note_div_values[5] = 4/3;     // 1/2T
+note_div_values[6] = 2.0;     // 1/2
+note_div_values[7] = 4.0;     // 1/1
+note_div_values[8] = 8.0;     // 2/1
+note_div_values[9] = 16.0;    // 4/1
+
+phase_l = 0;
+phase_r = 0;
+
+// Smoothing for rate changes
+smooth_rate = 4.0; // Hz to start
+target_rate = 4.0;
+smooth_coef = 0;
+
+// Gain smoothing to prevent clicks
+smooth_gain_l = 1;
+smooth_gain_r = 1;
+
+// GUI variables
+slider_to_edit = 0;
+drag_start_y = 0;
+last_mouse_cap = 0;
+gui_cache_dirty = 1;
+last_gui_scale = 0;
+last_gui_rate_hz = -1;
+last_gui_rate_sync = -1;
+last_gui_depth = -1;
+last_gui_shape = -1;
+last_gui_phase = -1;
+last_gui_sync = -1;
+
+// Wave shape functions
+function square_wave(phase) (
+  phase < 0.5 ? 1 : 0;
+);
+
+function triangle_wave(phase) (
+  phase < 0.5 ? (phase * 4) : (2 - phase * 4);
+);
+
+function sine_wave(phase) (
+  sin(phase * 2 * $pi) * 0.5 + 0.5;
+);
+
+// Morphing wave shape function
+function morph_wave(phase, shape_val) 
+local(sq, tri, sn)
+(
+  sq = square_wave(phase);
+  tri = triangle_wave(phase);
+  sn = sine_wave(phase);
+  
+  shape_val < 1 ? (
+    // Morph from square (0) to triangle (1)
+    sq * (1 - shape_val) + tri * shape_val;
+  ) : (
+    // Morph from triangle (1) to sine (2)
+    tri * (2 - shape_val) + sn * (shape_val - 1);
+  );
+);
+
+@slider
+current_depth = depth;
+current_shape = shape;
+stereo_phase_offset = phase;
+
+// Smoothing coefficient (20ms smooth time)
+smooth_coef = exp(-1 / (0.02 * srate));
+
+// Update rate based on sync mode
+sync ? (
+  // Tempo sync mode
+  rate_div = note_div_values[rate_sync];
+) : (
+  // Free-running Hz mode
+  current_rate_hz = rate_hz;
+);
+
+@block
+// Get tempo information
+playing = play_state & 1;
+current_tempo = tempo;
+
+sync && playing ? (
+  // Calculate frequency from tempo and note division
+  beats_per_second = current_tempo / 60;
+  cycles_per_second = beats_per_second / rate_div;
+  target_rate = cycles_per_second;
+) : !sync ? (
+  // Use slider rate
+  target_rate = rate_hz;
+) : (
+  // Synced but not playing - use last known rate or default
+  target_rate = max(0.1, target_rate);
+);
+
+// Smooth the rate changes to prevent clicks
+smooth_rate = target_rate + (smooth_rate - target_rate) * smooth_coef;
+
+// Calculate phase increment per sample
+phase_inc = smooth_rate / srate;
+
+@sample
+// Update phases
+phase_l += phase_inc;
+phase_l >= 1 ? phase_l -= 1;
+
+phase_r = phase_l + stereo_phase_offset;
+phase_r >= 1 ? phase_r -= 1;
+
+// Generate tremolo modulation
+mod_l = morph_wave(phase_l, current_shape);
+mod_r = morph_wave(phase_r, current_shape);
+
+// Apply depth control (1 - depth creates no modulation, depth creates full modulation)
+target_gain_l = 1 - current_depth + (mod_l * current_depth);
+target_gain_r = 1 - current_depth + (mod_r * current_depth);
+
+// Smooth the gain values to prevent clicks
+smooth_gain_l = target_gain_l + (smooth_gain_l - target_gain_l) * smooth_coef;
+smooth_gain_r = target_gain_r + (smooth_gain_r - target_gain_r) * smooth_coef;
+
+// Apply tremolo
+spl0 *= smooth_gain_l;
+spl1 *= smooth_gain_r;
+
+@gfx 550 375
+
+// Calculate scale factor
+base_width = 550;
+base_height = 375;
+scale_x = gfx_w / base_width;
+scale_y = gfx_h / base_height;
+scale = min(scale_x, scale_y);
+scale = max(0.5, min(scale, 3.0));
+
+// GUI caching - recalculate when parameters change
+scale != last_gui_scale ? gui_cache_dirty = 1;
+rate_hz != last_gui_rate_hz ? gui_cache_dirty = 1;
+rate_sync != last_gui_rate_sync ? gui_cache_dirty = 1;
+depth != last_gui_depth ? gui_cache_dirty = 1;
+shape != last_gui_shape ? gui_cache_dirty = 1;
+phase != last_gui_phase ? gui_cache_dirty = 1;
+sync != last_gui_sync ? gui_cache_dirty = 1;
+
+gui_cache_dirty ? (
+  // Cache knob angles (expensive trig)
+  sync ? (
+    rate_norm = rate_sync / 9;
+  ) : (
+    rate_norm = (log(rate_hz) - log(0.1)) / (log(20) - log(0.1));
+  );
+  cached_rate_angle = -2.356 + rate_norm * 4.712;
+  cached_depth_angle = -2.356 + depth * 4.712;
+  cached_shape_angle = -2.356 + (shape / 2) * 4.712;
+  cached_phase_angle = -2.356 + phase * 4.712;
+  
+  // Cache text strings (expensive sprintf)
+  sprintf(cached_rate_text, "%.2f Hz", rate_hz);
+  sprintf(cached_depth_text, "%.0f%%", depth * 100);
+  sprintf(cached_phase_text, "%.0f%%", phase * 100);
+  
+  // Shape label
+  shape <= 0.66 ? cached_shape_text = "SQUARE";
+  shape > 0.66 && shape <= 1.34 ? cached_shape_text = "TRIANGLE";
+  shape > 1.34 ? cached_shape_text = "SINE";
+  
+  // Sync division text
+  rate_sync == 0 ? cached_sync_div_text = "1/16";
+  rate_sync == 1 ? cached_sync_div_text = "1/8T";
+  rate_sync == 2 ? cached_sync_div_text = "1/8";
+  rate_sync == 3 ? cached_sync_div_text = "1/4T";
+  rate_sync == 4 ? cached_sync_div_text = "1/4";
+  rate_sync == 5 ? cached_sync_div_text = "1/2T";
+  rate_sync == 6 ? cached_sync_div_text = "1/2";
+  rate_sync == 7 ? cached_sync_div_text = "1/1";
+  rate_sync == 8 ? cached_sync_div_text = "2/1";
+  rate_sync == 9 ? cached_sync_div_text = "4/1";
+  
+  // Update cache state
+  last_gui_scale = scale;
+  last_gui_rate_hz = rate_hz;
+  last_gui_rate_sync = rate_sync;
+  last_gui_depth = depth;
+  last_gui_shape = shape;
+  last_gui_phase = phase;
+  last_gui_sync = sync;
+  gui_cache_dirty = 0;
+);
+
+// Silver-grey background (Revox style)
+gfx_r = 0.85; gfx_g = 0.85; gfx_b = 0.85;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+// Title panel
+gfx_r = 0.72; gfx_g = 0.72; gfx_b = 0.72;
+gfx_rect(20 * scale, 20 * scale, (gfx_w - 40 * scale), 50 * scale);
+
+// Control panel
+gfx_rect(20 * scale, 90 * scale, (gfx_w - 40 * scale), 260 * scale);
+
+// Title text
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 18 * scale), 'b');
+gfx_x = 40 * scale; gfx_y = 32 * scale;
+gfx_drawstr("TEMPO TREMOLO");
+
+gfx_setfont(1, "Arial", max(8, 12 * scale));
+gfx_x = 40 * scale; gfx_y = 52 * scale;
+gfx_drawstr("Morphing Waveform Modulation");
+
+// Red accent stripe
+gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
+gfx_rect(gfx_w - 80 * scale, 30 * scale, 40 * scale, 4 * scale);
+
+// Knob properties
+knob_size = 30 * scale;
+
+// ===== TOP ROW: Main Controls =====
+knob_y1 = 130 * scale;
+
+// Rate knob
+knob_x = 80 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y1, knob_size/2, 1);
+ind_x = knob_x + sin(cached_rate_angle) * (knob_size/2 - 3);
+ind_y = knob_y1 - cos(cached_rate_angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y1, ind_x, ind_y, 2);
+// Label
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+sync ? (
+  gfx_measurestr("RATE (SYNC)", label_w, label_h);
+  gfx_x = knob_x - label_w/2; gfx_y = knob_y1 + 25 * scale;
+  gfx_drawstr("RATE (SYNC)");
+) : (
+  gfx_measurestr("RATE (Hz)", label_w, label_h);
+  gfx_x = knob_x - label_w/2; gfx_y = knob_y1 + 25 * scale;
+  gfx_drawstr("RATE (Hz)");
+);
+// Value
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+sync ? (
+  gfx_measurestr(cached_sync_div_text, val_w, val_h);
+  gfx_x = knob_x - val_w/2; gfx_y = knob_y1 + 40 * scale;
+  gfx_drawstr(cached_sync_div_text);
+) : (
+  gfx_measurestr(cached_rate_text, val_w, val_h);
+  gfx_x = knob_x - val_w/2; gfx_y = knob_y1 + 40 * scale;
+  gfx_drawstr(cached_rate_text);
+);
+
+// Depth knob
+knob_x = 200 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y1, knob_size/2, 1);
+ind_x = knob_x + sin(cached_depth_angle) * (knob_size/2 - 3);
+ind_y = knob_y1 - cos(cached_depth_angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y1, ind_x, ind_y, 2);
+// Label
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("DEPTH", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y1 + 25 * scale;
+gfx_drawstr("DEPTH");
+// Value
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_measurestr(cached_depth_text, val_w, val_h);
+gfx_x = knob_x - val_w/2; gfx_y = knob_y1 + 40 * scale;
+gfx_drawstr(cached_depth_text);
+
+// Shape knob
+knob_x = 320 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y1, knob_size/2, 1);
+ind_x = knob_x + sin(cached_shape_angle) * (knob_size/2 - 3);
+ind_y = knob_y1 - cos(cached_shape_angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y1, ind_x, ind_y, 2);
+// Label
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("SHAPE", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y1 + 25 * scale;
+gfx_drawstr("SHAPE");
+// Value
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_measurestr(cached_shape_text, val_w, val_h);
+gfx_x = knob_x - val_w/2; gfx_y = knob_y1 + 40 * scale;
+gfx_drawstr(cached_shape_text);
+
+// Sync switch
+switch_x = 450 * scale;
+switch_y = knob_y1;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_rect(switch_x - 15, switch_y - 8, 30, 16);
+sync ? (gfx_r = 0.55; gfx_g = 0; gfx_b = 0;) : (gfx_r = 0.25; gfx_g = 0.25; gfx_b = 0.25;);
+gfx_rect(switch_x + (sync ? 2 : -13), switch_y - 6, 11, 12);
+// Label
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("SYNC", label_w, label_h);
+gfx_x = switch_x - label_w/2; gfx_y = switch_y + 18 * scale;
+gfx_drawstr("SYNC");
+
+// ===== BOTTOM ROW: Stereo Phase and Waveform Display =====
+knob_y2 = 250 * scale;
+
+// Stereo Phase knob
+knob_x = 80 * scale;
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_circle(knob_x, knob_y2, knob_size/2, 1);
+ind_x = knob_x + sin(cached_phase_angle) * (knob_size/2 - 3);
+ind_y = knob_y2 - cos(cached_phase_angle) * (knob_size/2 - 3);
+gfx_r = 1; gfx_g = 1; gfx_b = 1;
+gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
+// Label
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(8, 10 * scale));
+gfx_measurestr("STEREO", label_w, label_h);
+gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
+gfx_drawstr("STEREO");
+// Value
+gfx_setfont(1, "Arial", max(7, 9 * scale));
+gfx_measurestr(cached_phase_text, val_w, val_h);
+gfx_x = knob_x - val_w/2; gfx_y = knob_y2 + 40 * scale;
+gfx_drawstr(cached_phase_text);
+
+// Waveform display
+wave_x = 200 * scale;
+wave_y = knob_y2 - 15 * scale;
+wave_w = 240 * scale;
+wave_h = 60 * scale;
+
+// Display background
+gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
+gfx_rect(wave_x, wave_y, wave_w, wave_h);
+
+gfx_r = 0.1; gfx_g = 0.1; gfx_b = 0.1;
+gfx_rect(wave_x + 2, wave_y + 2, wave_w - 4, wave_h - 4);
+
+// Draw waveform with padding to keep line inside black area
+gfx_r = 0; gfx_g = 0.8; gfx_b = 0;
+gfx_a = 0.9;
+wave_padding = 4; // Extra padding to keep line thickness inside
+i = 0;
+loop(wave_w - 4,
+  phase_sample = i / (wave_w - 4);
+  wave_val = morph_wave(phase_sample, shape);
+  y_pos = wave_y + 2 + wave_padding + (wave_h - 4 - wave_padding * 2) * (1 - wave_val);
+  
+  i == 0 ? (
+    gfx_x = wave_x + 2 + i;
+    gfx_y = y_pos;
+  ) : (
+    gfx_lineto(wave_x + 2 + i, y_pos, 1);
+  );
+  
+  i += 1;
+);
+gfx_a = 1;
+
+// Waveform label
+gfx_r = 0; gfx_g = 0; gfx_b = 0;
+gfx_setfont(1, "Arial", max(6, 8 * scale));
+gfx_measurestr("WAVEFORM", label_w, label_h);
+gfx_x = wave_x + wave_w/2 - label_w/2; 
+gfx_y = wave_y + wave_h + 8 * scale;
+gfx_drawstr("WAVEFORM");
+
+// Mouse interaction
+mouse_cap & 1 && !(last_mouse_cap & 1) ? (
+  // Rate knob
+  (mouse_x - 80 * scale)^2 + (mouse_y - knob_y1)^2 < (15 * scale)^2 ? (
+    sync ? (
+      slider_to_edit = 3; // rate_sync
+    ) : (
+      slider_to_edit = 2; // rate_hz
+    );
+    drag_start_y = mouse_y;
+  );
+  
+  // Depth knob
+  (mouse_x - 200 * scale)^2 + (mouse_y - knob_y1)^2 < (15 * scale)^2 ? (
+    slider_to_edit = 4;
+    drag_start_y = mouse_y;
+  );
+  
+  // Shape knob
+  (mouse_x - 320 * scale)^2 + (mouse_y - knob_y1)^2 < (15 * scale)^2 ? (
+    slider_to_edit = 5;
+    drag_start_y = mouse_y;
+  );
+  
+  // Stereo Phase knob
+  (mouse_x - 80 * scale)^2 + (mouse_y - knob_y2)^2 < (15 * scale)^2 ? (
+    slider_to_edit = 6;
+    drag_start_y = mouse_y;
+  );
+  
+  // Sync switch
+  mouse_x >= switch_x - 15 && mouse_x <= switch_x + 15 && 
+  mouse_y >= switch_y - 8 && mouse_y <= switch_y + 8 ? (
+    sync = !sync;
+    sliderchange(1);
+    gui_cache_dirty = 1;
+  );
+);
+
+// Knob dragging
+mouse_cap & 1 && slider_to_edit > 0 ? (
+  mouse_dy = mouse_y - drag_start_y;
+  drag_start_y = mouse_y;
+  
+  slider_to_edit == 2 ? ( // Rate Hz (log scale)
+    log_val = log(rate_hz);
+    new_log = log_val - mouse_dy * (log(20) - log(0.1)) / 200;
+    rate_hz = max(0.1, min(20, exp(new_log)));
+    sliderchange(2);
+    gui_cache_dirty = 1;
+  );
+  
+  slider_to_edit == 3 ? ( // Rate Sync
+    rate_sync = max(0, min(9, rate_sync - mouse_dy / 20));
+    sliderchange(3);
+    gui_cache_dirty = 1;
+  );
+  
+  slider_to_edit == 4 ? ( // Depth
+    depth = max(0, min(1, depth - mouse_dy / 200));
+    sliderchange(4);
+    gui_cache_dirty = 1;
+  );
+  
+  slider_to_edit == 5 ? ( // Shape
+    shape = max(0, min(2, shape - mouse_dy / 100));
+    sliderchange(5);
+    gui_cache_dirty = 1;
+  );
+  
+  slider_to_edit == 6 ? ( // Stereo Phase
+    phase = max(0, min(1, phase - mouse_dy / 200));
+    sliderchange(6);
+    gui_cache_dirty = 1;
+  );
+) : (
+  slider_to_edit = 0;
+);
+
+last_mouse_cap = mouse_cap;
+

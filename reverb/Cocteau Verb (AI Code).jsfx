@@ -1,0 +1,2073 @@
+desc:Cocteau Verb
+version: 1.0
+author: citizenkeith and Claude AI
+about: Stereo widener, BBD chorus, ping pong delay and three reverb choices, for a Robin Guthrie-inspired tone.
+// Released under GPLv3 License
+// Stage 1: Stereo widener (VoChorus-style opposing EQ curves - always on)
+// Stage 2: BBD-style chorus (dual delay, 180° phase)
+// Stage 3: Ping-pong delay with variable time & feedback
+// Stage 4: Triple reverb algorithms
+//   - Verbity2: Dense plate reverb (from chmaha's Bricastic2 Reverb)
+//   - Bloom: Alesis Midiverb II emulation (Airwindows MV2)
+//   - Dattorro: Natural room/hall reverb (Jon Dattorro algorithm)
+//
+// CREDITS:
+// Verbity2 implementation adapted from "Bricastic2 Reverb" by chmaha
+// https://github.com/chmaha/airwindows-JSFX-ports (GPLv3 License)
+// Bricastic2 uses DSP from Airwindows "Verbity2" by Chris Johnson (MIT License)
+// https://github.com/airwindows/airwindows/tree/master/plugins/LinuxVST/src/Verbity2
+//
+// Bloom implementation adapted from Airwindows "MV2" by Chris Johnson (MIT License)
+// https://github.com/airwindows/airwindows/tree/master/plugins/MacAU/MV2
+//
+// Dattorro algorithm from "Effect Design, Part 1: Reverberator and Other Filters"
+// Jon Dattorro, Journal of the Audio Engineering Society, Vol. 45, No. 9, 1997
+//
+// Widener inspired by mrelwood's VoChorus (opposing EQ curves avoid comb filtering)
+//
+// Original plugin concept and additional DSP by Keith Barr
+// Released under GPLv3 License
+//
+// === CHORUS SECTION (Sliders 1-2) ===
+// - Chorus Level: Chorus wet/dry mix
+// - Chorus EQ: Tilt EQ from dark (LO) to bright (HI)
+//
+// === DELAY SECTION (Sliders 10-12) ===
+// - Delay Mix: Ping-pong delay blend
+// - Delay Time: Delay time in milliseconds
+// - Delay Feedback: Delay repeat intensity
+//
+// === REVERB SECTION (Sliders 20-28) ===
+// - Reverb Type: Verbity2 / Bloom / Dattorro (default: Verbity2)
+//
+// VERBITY2 CONTROLS:
+// - Size: Room/plate size (default: 75%)
+// - Decay: Reverb decay time (default: 65%)
+// - Dampen: High-frequency damping (default: 25%)
+// - Pre-Delay: Pre-delay before reverb
+// - High-Pass/Low-Pass: Frequency filtering
+// - Width: Stereo width
+// - Mix: Reverb wet/dry balance (default: 50%)
+//
+// BLOOM (MIDIVERB II) CONTROLS:
+// - Size: Depth (number of allpass stages, 0-27)
+// - Decay: Regen (feedback level with Midiverb-style steps)
+// - Dampen: Bright (high-frequency rolloff, 0% = brightest)
+// - Pre-Delay: Pre-delay before reverb
+// - High-Pass/Low-Pass: Frequency filtering
+// - Width: Stereo width  
+// - Mix: Reverb wet/dry balance
+//
+// DATTORRO (FIGURE-8) CONTROLS:
+// - Size: Room size (scales delay times)
+// - Decay: Decay time (feedback gain)
+// - Dampen: High-frequency damping in feedback
+// - Pre-Delay: Pre-delay before reverb
+// - High-Pass/Low-Pass: Frequency filtering
+// - Width: Stereo width
+// - Mix: Reverb wet/dry balance
+
+slider1:45<0,100,1>Chorus Level (%)
+slider2:50<0,100,1>Chorus EQ (LO-HI)
+
+slider10:30<0,100,1>Delay Mix (%)
+slider11:375<100,1000,1>Delay Time (ms)
+slider12:26<0,95,1>Delay Feedback (%)
+
+slider20:0<0,2,1{Verbity2,Bloom,Dattorro}>Reverb Type
+slider21:75<0,100,1>Reverb Size (%)
+slider22:65<0,100,1>Reverb Decay (%)
+slider23:25<0,100,1>Reverb Dampen (%)
+slider24:0<0,100,0.1>Reverb Pre-Delay (ms)
+slider25:140<50,300,5>Reverb High-Pass (Hz)
+slider26:10<1,20,.1>Reverb Low-Pass (KHz)
+slider27:100<-150,150,1>Reverb Width (%)
+slider28:50<0,100,1>Reverb Mix (%)
+
+@init
+// === WIDENER EQ FUNCTIONS (VoChorus-style opposing curves) ===
+function widener_eq_init(freq gain_db)
+  instance(a0 a1 a2 b0 b1 b2 x1 x2 y1 y2)
+  local(omega sinw cosw alpha A)
+(
+  // Peaking EQ filter (for opposing cuts)
+  omega = 2 * $pi * freq / srate;
+  sinw = sin(omega);
+  cosw = cos(omega);
+  
+  // Fixed Q for smooth cuts
+  alpha = sinw / (2 * 1.5);  // Q = 1.5
+  
+  // Convert dB to linear gain
+  A = 10^(gain_db / 40);
+  
+  // Cookbook coefficients for peaking filter
+  b0 = 1 + alpha * A;
+  b1 = -2 * cosw;
+  b2 = 1 - alpha * A;
+  a0 = 1 + alpha / A;
+  a1 = -2 * cosw;
+  a2 = 1 - alpha / A;
+  
+  // Normalize
+  b0 /= a0;
+  b1 /= a0;
+  b2 /= a0;
+  a1 /= a0;
+  a2 /= a0;
+  
+  // Initialize state
+  x1 = x2 = y1 = y2 = 0;
+);
+
+function widener_eq_process(input)
+  instance(a1 a2 b0 b1 b2 x1 x2 y1 y2)
+  local(output)
+(
+  output = b0 * input + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+  
+  x2 = x1;
+  x1 = input;
+  y2 = y1;
+  y1 = output;
+  
+  output;
+);
+
+// === BBD CHORUS ===
+max_chorus_delay_ms = 12;
+max_chorus_samples = ceil(max_chorus_delay_ms * 0.001 * srate);
+
+// Allocate BBD buffers
+bbd_buffer_1_L = 0;
+bbd_buffer_1_R = bbd_buffer_1_L + max_chorus_samples;
+bbd_buffer_2_L = bbd_buffer_1_R + max_chorus_samples;
+bbd_buffer_2_R = bbd_buffer_2_L + max_chorus_samples;
+
+write_pos_bbd1_L = 0;
+write_pos_bbd1_R = 0;
+write_pos_bbd2_L = 0;
+write_pos_bbd2_R = 0;
+
+// Chorus parameters
+chorus_center_delay = 7.5;
+chorus_depth = 2.0;
+chorus_rate = 0.35;
+lfo_phase = 0;
+
+// Pre-emphasis/De-emphasis filters
+pre_emph_freq = 2000;
+de_emph_freq = 2000;
+pre_coeff = exp(-2 * $pi * pre_emph_freq / srate);
+de_coeff = exp(-2 * $pi * de_emph_freq / srate);
+
+pre_z1_L = 0;
+pre_z1_R = 0;
+de_z1_L = 0;
+de_z1_R = 0;
+
+// Tilt EQ
+eq_low_freq = 400;
+eq_high_freq = 3000;
+eq_low_coeff = exp(-2 * $pi * eq_low_freq / srate);
+eq_high_coeff = exp(-2 * $pi * eq_high_freq / srate);
+
+eq_low_z1_L = 0;
+eq_low_z1_R = 0;
+eq_high_z1_L = 0;
+eq_high_z1_R = 0;
+
+// Parameter smoothing
+smooth_coeff = exp(-2 * $pi * 10 / srate);
+smooth_delay_mix = 0;
+smooth_feedback = 0;
+smooth_reverb_mix = 0;
+
+// === PING-PONG DELAY ===
+max_delay_time_samples = ceil(1.0 * srate);
+
+delay_buffer_L = bbd_buffer_2_R + max_chorus_samples;
+delay_buffer_R = delay_buffer_L + max_delay_time_samples;
+
+delay_write_pos_L = 0;
+delay_write_pos_R = 0;
+
+delay_width = 1.0;
+delay_lowcut_freq = 300;
+delay_highcut_freq = 6000;
+
+lp_coeff = exp(-2 * $pi * delay_highcut_freq / srate);
+hp_coeff = exp(-2 * $pi * delay_lowcut_freq / srate);
+
+delay_lp_L = 0;
+delay_lp_R = 0;
+delay_hp_L = 0;
+delay_hp_R = 0;
+
+delay_mod_rate = 0.5;
+delay_mod_depth = 0.8;
+delay_mod_phase = 0;
+
+// === VERBITY2 REVERB (from chmaha's Bricastic2) ===
+// Pre-delay buffer
+max_reverb_predelay_samples = ceil(0.1 * srate); // 100ms max
+
+reverb_predelay_L = delay_buffer_R + max_delay_time_samples;
+reverb_predelay_R = reverb_predelay_L + max_reverb_predelay_samples;
+reverb_predelay_write_L = 0;
+reverb_predelay_write_R = 0;
+
+// Verbity2 uses 25 delay lines (5 groups of 5)
+freemem = reverb_predelay_R + max_reverb_predelay_samples;
+
+// Left channel delays
+L.aA = freemem; freemem += 5005;
+L.aF = freemem; freemem += 4953;
+L.aK = freemem; freemem += 4921;
+L.aP = freemem; freemem += 4801;
+L.aU = freemem; freemem += 4753;
+
+L.aB = freemem; freemem += 4351;
+L.aG = freemem; freemem += 4159;
+L.aL = freemem; freemem += 3931;
+L.aQ = freemem; freemem += 3531;
+L.aV = freemem; freemem += 3331;
+
+L.aC = freemem; freemem += 3325;
+L.aH = freemem; freemem += 2793;
+L.aM = freemem; freemem += 2769;
+L.aR = freemem; freemem += 2391;
+L.aW = freemem; freemem += 2349;
+
+L.aD = freemem; freemem += 2143;
+L.aI = freemem; freemem += 1813;
+L.aN = freemem; freemem += 1735;
+L.aS = freemem; freemem += 1173;
+L.aX = freemem; freemem += 789;
+
+L.aE = freemem; freemem += 679;
+L.aJ = freemem; freemem += 645;
+L.aO = freemem; freemem += 441;
+L.aT = freemem; freemem += 351;
+L.aY = freemem; freemem += 283;
+
+L.lastRef = freemem; freemem += 7;
+
+// Right channel delays
+R.aA = freemem; freemem += 5005;
+R.aF = freemem; freemem += 4953;
+R.aK = freemem; freemem += 4921;
+R.aP = freemem; freemem += 4801;
+R.aU = freemem; freemem += 4753;
+
+R.aB = freemem; freemem += 4351;
+R.aG = freemem; freemem += 4159;
+R.aL = freemem; freemem += 3931;
+R.aQ = freemem; freemem += 3531;
+R.aV = freemem; freemem += 3331;
+
+R.aC = freemem; freemem += 3325;
+R.aH = freemem; freemem += 2793;
+R.aM = freemem; freemem += 2769;
+R.aR = freemem; freemem += 2391;
+R.aW = freemem; freemem += 2349;
+
+R.aD = freemem; freemem += 2143;
+R.aI = freemem; freemem += 1813;
+R.aN = freemem; freemem += 1735;
+R.aS = freemem; freemem += 1173;
+R.aX = freemem; freemem += 789;
+
+R.aE = freemem; freemem += 679;
+R.aJ = freemem; freemem += 645;
+R.aO = freemem; freemem += 441;
+R.aT = freemem; freemem += 351;
+R.aY = freemem; freemem += 283;
+
+R.lastRef = freemem; freemem += 7;
+
+// === BLOOM REVERB BUFFERS (Alesis Midiverb II emulation - 26 cascaded allpass) ===
+// 26 cascaded allpass filters (A through Z)
+mv2_aAL = freemem; freemem += 15150;
+mv2_aAR = freemem; freemem += 15150;
+mv2_aBL = freemem; freemem += 14618;
+mv2_aBR = freemem; freemem += 14618;
+mv2_aCL = freemem; freemem += 14358;
+mv2_aCR = freemem; freemem += 14358;
+mv2_aDL = freemem; freemem += 13818;
+mv2_aDR = freemem; freemem += 13818;
+mv2_aEL = freemem; freemem += 13562;
+mv2_aER = freemem; freemem += 13562;
+mv2_aFL = freemem; freemem += 13046;
+mv2_aFR = freemem; freemem += 13046;
+mv2_aGL = freemem; freemem += 11966;
+mv2_aGR = freemem; freemem += 11966;
+mv2_aHL = freemem; freemem += 11130;
+mv2_aHR = freemem; freemem += 11130;
+mv2_aIL = freemem; freemem += 10598;
+mv2_aIR = freemem; freemem += 10598;
+mv2_aJL = freemem; freemem += 9810;
+mv2_aJR = freemem; freemem += 9810;
+mv2_aKL = freemem; freemem += 9522;
+mv2_aKR = freemem; freemem += 9522;
+mv2_aLL = freemem; freemem += 8982;
+mv2_aLR = freemem; freemem += 8982;
+mv2_aML = freemem; freemem += 8786;
+mv2_aMR = freemem; freemem += 8786;
+mv2_aNL = freemem; freemem += 8462;
+mv2_aNR = freemem; freemem += 8462;
+mv2_aOL = freemem; freemem += 8310;
+mv2_aOR = freemem; freemem += 8310;
+mv2_aPL = freemem; freemem += 7982;
+mv2_aPR = freemem; freemem += 7982;
+mv2_aQL = freemem; freemem += 7322;
+mv2_aQR = freemem; freemem += 7322;
+mv2_aRL = freemem; freemem += 6818;
+mv2_aRR = freemem; freemem += 6818;
+mv2_aSL = freemem; freemem += 6506;
+mv2_aSR = freemem; freemem += 6506;
+mv2_aTL = freemem; freemem += 6002;
+mv2_aTR = freemem; freemem += 6002;
+mv2_aUL = freemem; freemem += 5838;
+mv2_aUR = freemem; freemem += 5838;
+mv2_aVL = freemem; freemem += 5502;
+mv2_aVR = freemem; freemem += 5502;
+mv2_aWL = freemem; freemem += 5010;
+mv2_aWR = freemem; freemem += 5010;
+mv2_aXL = freemem; freemem += 4850;
+mv2_aXR = freemem; freemem += 4850;
+mv2_aYL = freemem; freemem += 4296;
+mv2_aYR = freemem; freemem += 4296;
+mv2_aZL = freemem; freemem += 4180;
+mv2_aZR = freemem; freemem += 4180;
+
+// Bloom allpass indices (delay sizes = buffer size - 1)
+mv2_alpA = mv2_delayA = 15149;
+mv2_alpB = mv2_delayB = 14617;
+mv2_alpC = mv2_delayC = 14357;
+mv2_alpD = mv2_delayD = 13817;
+mv2_alpE = mv2_delayE = 13561;
+mv2_alpF = mv2_delayF = 13045;
+mv2_alpG = mv2_delayG = 11965;
+mv2_alpH = mv2_delayH = 11129;
+mv2_alpI = mv2_delayI = 10597;
+mv2_alpJ = mv2_delayJ = 9809;
+mv2_alpK = mv2_delayK = 9521;
+mv2_alpL = mv2_delayL = 8981;
+mv2_alpM = mv2_delayM = 8785;
+mv2_alpN = mv2_delayN = 8461;
+mv2_alpO = mv2_delayO = 8309;
+mv2_alpP = mv2_delayP = 7981;
+mv2_alpQ = mv2_delayQ = 7321;
+mv2_alpR = mv2_delayR = 6817;
+mv2_alpS = mv2_delayS = 6505;
+mv2_alpT = mv2_delayT = 6001;
+mv2_alpU = mv2_delayU = 5837;
+mv2_alpV = mv2_delayV = 5501;
+mv2_alpW = mv2_delayW = 5009;
+mv2_alpX = mv2_delayX = 4849;
+mv2_alpY = mv2_delayY = 4295;
+mv2_alpZ = mv2_delayZ = 4179;
+
+// Bloom averaging filters (for damping)
+mv2_avgAL = mv2_avgAR = 0;
+mv2_avgBL = mv2_avgBR = 0;
+mv2_avgCL = mv2_avgCR = 0;
+mv2_avgDL = mv2_avgDR = 0;
+mv2_avgEL = mv2_avgER = 0;
+mv2_avgFL = mv2_avgFR = 0;
+mv2_avgGL = mv2_avgGR = 0;
+mv2_avgHL = mv2_avgHR = 0;
+mv2_avgIL = mv2_avgIR = 0;
+mv2_avgJL = mv2_avgJR = 0;
+mv2_avgKL = mv2_avgKR = 0;
+mv2_avgLL = mv2_avgLR = 0;
+mv2_avgML = mv2_avgMR = 0;
+mv2_avgNL = mv2_avgNR = 0;
+mv2_avgOL = mv2_avgOR = 0;
+mv2_avgPL = mv2_avgPR = 0;
+mv2_avgQL = mv2_avgQR = 0;
+mv2_avgRL = mv2_avgRR = 0;
+mv2_avgSL = mv2_avgSR = 0;
+mv2_avgTL = mv2_avgTR = 0;
+mv2_avgUL = mv2_avgUR = 0;
+mv2_avgVL = mv2_avgVR = 0;
+mv2_avgWL = mv2_avgWR = 0;
+mv2_avgXL = mv2_avgXR = 0;
+mv2_avgYL = mv2_avgYR = 0;
+mv2_avgZL = mv2_avgZR = 0;
+
+// Bloom feedback
+mv2_feedbackL = mv2_feedbackR = 0;
+
+// Bloom lastRef for oversampling (same as Verbity2)
+mv2_lastRefL = freemem; freemem += 7;
+mv2_lastRefR = freemem; freemem += 7;
+
+// === DATTORRO REVERB BUFFERS (Figure-8 topology) ===
+// Input diffusion: 4 series allpass filters
+dat_ap1 = freemem; freemem += 210;   // 142 samples @ 29.8kHz -> scaled to 44.1kHz
+dat_ap2 = freemem; freemem += 159;   // 107 samples scaled
+dat_ap3 = freemem; freemem += 562;   // 379 samples scaled
+dat_ap4 = freemem; freemem += 410;   // 277 samples scaled
+
+// Tank A (left): delay1 -> ap1 -> delay2
+dat_delayA1 = freemem; freemem += 4500;  // Main delay line
+dat_apA1 = freemem; freemem += 1800;     // Decay diffusion allpass
+dat_delayA2 = freemem; freemem += 3500;  // Second delay line
+
+// Tank B (right): delay1 -> ap1 -> delay2  
+dat_delayB1 = freemem; freemem += 4200;  // Main delay line
+dat_apB1 = freemem; freemem += 1650;     // Decay diffusion allpass
+dat_delayB2 = freemem; freemem += 3200;  // Second delay line
+
+// Indices for Dattorro buffers
+dat_ap1_idx = 0;
+dat_ap2_idx = 0;
+dat_ap3_idx = 0;
+dat_ap4_idx = 0;
+dat_delayA1_idx = 0;
+dat_apA1_idx = 0;
+dat_delayA2_idx = 0;
+dat_delayB1_idx = 0;
+dat_apB1_idx = 0;
+dat_delayB2_idx = 0;
+
+// Buffer sizes (length - 1 for wraparound)
+dat_ap1_len = 209;
+dat_ap2_len = 158;
+dat_ap3_len = 561;
+dat_ap4_len = 409;
+dat_delayA1_len = 4499;
+dat_apA1_len = 1799;
+dat_delayA2_len = 3499;
+dat_delayB1_len = 4199;
+dat_apB1_len = 1649;
+dat_delayB2_len = 3199;
+
+// Dattorro modulation LFOs
+dat_lfo1 = 0;
+dat_lfo2 = 0;
+dat_lfo_rate = 0.5 / srate;  // Slow modulation
+
+// Dattorro damping filters (one-pole lowpass in feedback)
+dat_dampA = 0;
+dat_dampB = 0;
+
+// Initialize counters
+countA = countB = countC = countD = countE = 1;
+countF = countG = countH = countI = countJ = 1;
+countK = countL = countM = countN = countO = 1;
+countP = countQ = countR = countS = countT = 1;
+countU = countV = countW = countX = countY = 1;
+
+// Initialize feedback variables
+L.feedbackA = L.feedbackB = L.feedbackC = L.feedbackD = L.feedbackE = 0;
+L.previousA = L.previousB = L.previousC = L.previousD = L.previousE = 0;
+R.feedbackA = R.feedbackB = R.feedbackC = R.feedbackD = R.feedbackE = 0;
+R.previousA = R.previousB = R.previousC = R.previousD = R.previousE = 0;
+
+// Initialize interpolate
+L.interpolate = 0;
+R.interpolate = 0;
+
+// Initialize cycle counter
+cycle = 0;
+
+// Clear all delay buffers
+memset(L.aA, 0, 5005);
+memset(L.aF, 0, 4953);
+memset(L.aK, 0, 4921);
+memset(L.aP, 0, 4801);
+memset(L.aU, 0, 4753);
+memset(L.aB, 0, 4351);
+memset(L.aG, 0, 4159);
+memset(L.aL, 0, 3931);
+memset(L.aQ, 0, 3531);
+memset(L.aV, 0, 3331);
+memset(L.aC, 0, 3325);
+memset(L.aH, 0, 2793);
+memset(L.aM, 0, 2769);
+memset(L.aR, 0, 2391);
+memset(L.aW, 0, 2349);
+memset(L.aD, 0, 2143);
+memset(L.aI, 0, 1813);
+memset(L.aN, 0, 1735);
+memset(L.aS, 0, 1173);
+memset(L.aX, 0, 789);
+memset(L.aE, 0, 679);
+memset(L.aJ, 0, 645);
+memset(L.aO, 0, 441);
+memset(L.aT, 0, 351);
+memset(L.aY, 0, 283);
+memset(L.lastRef, 0, 7);
+
+memset(R.aA, 0, 5005);
+memset(R.aF, 0, 4953);
+memset(R.aK, 0, 4921);
+memset(R.aP, 0, 4801);
+memset(R.aU, 0, 4753);
+memset(R.aB, 0, 4351);
+memset(R.aG, 0, 4159);
+memset(R.aL, 0, 3931);
+memset(R.aQ, 0, 3531);
+memset(R.aV, 0, 3331);
+memset(R.aC, 0, 3325);
+memset(R.aH, 0, 2793);
+memset(R.aM, 0, 2769);
+memset(R.aR, 0, 2391);
+memset(R.aW, 0, 2349);
+memset(R.aD, 0, 2143);
+memset(R.aI, 0, 1813);
+memset(R.aN, 0, 1735);
+memset(R.aS, 0, 1173);
+memset(R.aX, 0, 789);
+memset(R.aE, 0, 679);
+memset(R.aJ, 0, 645);
+memset(R.aO, 0, 441);
+memset(R.aT, 0, 351);
+memset(R.aY, 0, 283);
+memset(R.lastRef, 0, 7);
+
+// Clear Bloom reverb buffers (26 allpass filters)
+memset(mv2_aAL, 0, 15150); memset(mv2_aAR, 0, 15150);
+memset(mv2_aBL, 0, 14618); memset(mv2_aBR, 0, 14618);
+memset(mv2_aCL, 0, 14358); memset(mv2_aCR, 0, 14358);
+memset(mv2_aDL, 0, 13818); memset(mv2_aDR, 0, 13818);
+memset(mv2_aEL, 0, 13562); memset(mv2_aER, 0, 13562);
+memset(mv2_aFL, 0, 13046); memset(mv2_aFR, 0, 13046);
+memset(mv2_aGL, 0, 11966); memset(mv2_aGR, 0, 11966);
+memset(mv2_aHL, 0, 11130); memset(mv2_aHR, 0, 11130);
+memset(mv2_aIL, 0, 10598); memset(mv2_aIR, 0, 10598);
+memset(mv2_aJL, 0, 9810); memset(mv2_aJR, 0, 9810);
+memset(mv2_aKL, 0, 9522); memset(mv2_aKR, 0, 9522);
+memset(mv2_aLL, 0, 8982); memset(mv2_aLR, 0, 8982);
+memset(mv2_aML, 0, 8786); memset(mv2_aMR, 0, 8786);
+memset(mv2_aNL, 0, 8462); memset(mv2_aNR, 0, 8462);
+memset(mv2_aOL, 0, 8310); memset(mv2_aOR, 0, 8310);
+memset(mv2_aPL, 0, 7982); memset(mv2_aPR, 0, 7982);
+memset(mv2_aQL, 0, 7322); memset(mv2_aQR, 0, 7322);
+memset(mv2_aRL, 0, 6818); memset(mv2_aRR, 0, 6818);
+memset(mv2_aSL, 0, 6506); memset(mv2_aSR, 0, 6506);
+memset(mv2_aTL, 0, 6002); memset(mv2_aTR, 0, 6002);
+memset(mv2_aUL, 0, 5838); memset(mv2_aUR, 0, 5838);
+memset(mv2_aVL, 0, 5502); memset(mv2_aVR, 0, 5502);
+memset(mv2_aWL, 0, 5010); memset(mv2_aWR, 0, 5010);
+memset(mv2_aXL, 0, 4850); memset(mv2_aXR, 0, 4850);
+memset(mv2_aYL, 0, 4296); memset(mv2_aYR, 0, 4296);
+memset(mv2_aZL, 0, 4180); memset(mv2_aZR, 0, 4180);
+memset(mv2_lastRefL, 0, 7); memset(mv2_lastRefR, 0, 7);
+
+// Clear Dattorro reverb buffers
+memset(dat_ap1, 0, 210);
+memset(dat_ap2, 0, 159);
+memset(dat_ap3, 0, 562);
+memset(dat_ap4, 0, 410);
+memset(dat_delayA1, 0, 4500);
+memset(dat_apA1, 0, 1800);
+memset(dat_delayA2, 0, 3500);
+memset(dat_delayB1, 0, 4200);
+memset(dat_apB1, 0, 1650);
+memset(dat_delayB2, 0, 3200);
+
+// Initialize random number generator
+UINT32_MAX = 4294967295;
+L.fpd = 1.0; while (L.fpd < 16386) (L.fpd = rand()*UINT32_MAX);
+R.fpd = 1.0; while (R.fpd < 16386) (R.fpd = rand()*UINT32_MAX);
+
+// Reverb filter states
+iirAL = iirAR = 0;
+iirBL = iirBR = 0;
+
+// === VERBITY2 FUNCTIONS (from chmaha's Bricastic2) ===
+function cycleEnd1()
+  instance(feedbackA feedbackB feedbackC feedbackD feedbackE
+    interpolate previousA previousB previousC previousD previousE
+    outA outB outC outD outE aA aB aC aD aE aF aG aH aI aJ
+    delayA delayB delayC delayD delayE
+    outF outG outH outI outJ aK aL aM aN aO
+    delayF delayG delayH delayI delayJ
+    outK outL outM outN outO aP aQ aR aS aT
+    delayK delayL delayM delayN delayO
+    outP outQ outR outS outT aU aV aW aX aY
+    delayP delayQ delayR delayS delayT
+    outU outV outW outX outY
+    delayU delayV delayW delayX delayY
+    inputSample lastRef
+    countA countB countC countD countE countF countG countH countI countJ countK
+     countL countM countN countO countP countQ countR countS countT countU countV
+      countW countX countY
+    )(
+  
+  feedbackA = (feedbackA*(1.0-interpolate))+(previousA*interpolate); previousA = feedbackA;
+  feedbackB = (feedbackB*(1.0-interpolate))+(previousB*interpolate); previousB = feedbackB;
+  feedbackC = (feedbackC*(1.0-interpolate))+(previousC*interpolate); previousC = feedbackC;
+  feedbackD = (feedbackD*(1.0-interpolate))+(previousD*interpolate); previousD = feedbackD;
+  feedbackE = (feedbackE*(1.0-interpolate))+(previousE*interpolate); previousE = feedbackE;
+  
+  aA[countA] = inputSample + (feedbackA * (regen*(1.0-abs(feedbackA*regen))));
+  aB[countB] = inputSample + (feedbackB * (regen*(1.0-abs(feedbackB*regen))));
+  aC[countC] = inputSample + (feedbackC * (regen*(1.0-abs(feedbackC*regen))));
+  aD[countD] = inputSample + (feedbackD * (regen*(1.0-abs(feedbackD*regen))));
+  aE[countE] = inputSample + (feedbackE * (regen*(1.0-abs(feedbackE*regen))));
+
+  countA+=1; (countA < 0 || countA > delayA) ? countA = 0;
+  countB+=1; (countB < 0 || countB > delayB) ? countB = 0;
+  countC+=1; (countC < 0 || countC > delayC) ? countC = 0;
+  countD+=1; (countD < 0 || countD > delayD) ? countD = 0;
+  countE+=1; (countE < 0 || countE > delayE) ? countE = 0;
+  
+  outA = aA[countA-((countA > delayA)?delayA+1:0)];
+  outB = aB[countB-((countB > delayB)?delayB+1:0)];
+  outC = aC[countC-((countC > delayC)?delayC+1:0)];
+  outD = aD[countD-((countD > delayD)?delayD+1:0)];
+  outE = aE[countE-((countE > delayE)?delayE+1:0)];
+  
+  aF[countF] = ((outA*3.0) - ((outB + outC + outD + outE)*2.0));
+  aG[countG] = ((outB*3.0) - ((outA + outC + outD + outE)*2.0));
+  aH[countH] = ((outC*3.0) - ((outA + outB + outD + outE)*2.0));
+  aI[countI] = ((outD*3.0) - ((outA + outB + outC + outE)*2.0));
+  aJ[countJ] = ((outE*3.0) - ((outA + outB + outC + outD)*2.0));
+  
+  countF+=1; (countF < 0 || countF > delayF) ? countF = 0;
+  countG+=1; (countG < 0 || countG > delayG) ? countG = 0;
+  countH+=1; (countH < 0 || countH > delayH) ? countH = 0;
+  countI+=1; (countI < 0 || countI > delayI) ? countI = 0;
+  countJ+=1; (countJ < 0 || countJ > delayJ) ? countJ = 0;
+
+  outF = aF[countF-((countF > delayF)?delayF+1:0)];
+  outG = aG[countG-((countG > delayG)?delayG+1:0)];
+  outH = aH[countH-((countH > delayH)?delayH+1:0)];
+  outI = aI[countI-((countI > delayI)?delayI+1:0)];
+  outJ = aJ[countJ-((countJ > delayJ)?delayJ+1:0)];
+  
+  aK[countK] = ((outF*3.0) - ((outG + outH + outI + outJ)*2.0));
+  aL[countL] = ((outG*3.0) - ((outF + outH + outI + outJ)*2.0));
+  aM[countM] = ((outH*3.0) - ((outF + outG + outI + outJ)*2.0));
+  aN[countN] = ((outI*3.0) - ((outF + outG + outH + outJ)*2.0));
+  aO[countO] = ((outJ*3.0) - ((outF + outG + outH + outI)*2.0));
+
+  countK+=1; (countK < 0 || countK > delayK) ? countK = 0;
+  countL+=1; (countL < 0 || countL > delayL) ? countL = 0;
+  countM+=1; (countM < 0 || countM > delayM) ? countM = 0;
+  countN+=1; (countN < 0 || countN > delayN) ? countN = 0;
+  countO+=1; (countO < 0 || countO > delayO) ? countO = 0;
+
+  outK = aK[countK-((countK > delayK)?delayK+1:0)];
+  outL = aL[countL-((countL > delayL)?delayL+1:0)];
+  outM = aM[countM-((countM > delayM)?delayM+1:0)];
+  outN = aN[countN-((countN > delayN)?delayN+1:0)];
+  outO = aO[countO-((countO > delayO)?delayO+1:0)];
+  
+  aP[countP] = ((outK*3.0) - ((outL + outM + outN + outO)*2.0));
+  aQ[countQ] = ((outL*3.0) - ((outK + outM + outN + outO)*2.0));
+  aR[countR] = ((outM*3.0) - ((outK + outL + outN + outO)*2.0));
+  aS[countS] = ((outN*3.0) - ((outK + outL + outM + outO)*2.0));
+  aT[countT] = ((outO*3.0) - ((outK + outL + outM + outN)*2.0));
+  
+  countP+=1; (countP < 0 || countP > delayP) ? countP = 0;
+  countQ+=1; (countQ < 0 || countQ > delayQ) ? countQ = 0;
+  countR+=1; (countR < 0 || countR > delayR) ? countR = 0;
+  countS+=1; (countS < 0 || countS > delayS) ? countS = 0;
+  countT+=1; (countT < 0 || countT > delayT) ? countT = 0;
+
+  outP = aP[countP-((countP > delayP)?delayP+1:0)];
+  outQ = aQ[countQ-((countQ > delayQ)?delayQ+1:0)];
+  outR = aR[countR-((countR > delayR)?delayR+1:0)];
+  outS = aS[countS-((countS > delayS)?delayS+1:0)];
+  outT = aT[countT-((countT > delayT)?delayT+1:0)];
+  
+  aU[countU] = ((outP*3.0) - ((outQ + outR + outS + outT)*2.0));
+  aV[countV] = ((outQ*3.0) - ((outP + outR + outS + outT)*2.0));
+  aW[countW] = ((outR*3.0) - ((outP + outQ + outS + outT)*2.0));
+  aX[countX] = ((outS*3.0) - ((outP + outQ + outR + outT)*2.0));
+  aY[countY] = ((outT*3.0) - ((outP + outQ + outR + outS)*2.0));
+
+  countU+=1; (countU < 0 || countU > delayU) ? countU = 0;
+  countV+=1; (countV < 0 || countV > delayV) ? countV = 0;
+  countW+=1; (countW < 0 || countW > delayW) ? countW = 0;
+  countX+=1; (countX < 0 || countX > delayX) ? countX = 0;
+  countY+=1; (countY < 0 || countY > delayY) ? countY = 0;
+
+  outU = aU[countU-((countU > delayU)?delayU+1:0)];
+  outV = aV[countV-((countV > delayV)?delayV+1:0)];
+  outW = aW[countW-((countW > delayW)?delayW+1:0)];
+  outX = aX[countX-((countX > delayX)?delayX+1:0)];
+  outY = aY[countY-((countY > delayY)?delayY+1:0)];
+);
+
+function cycleEnd2()
+  instance(inputSample outU outV outW outX outY lastRef)(
+  
+  inputSample = (outU + outV + outW + outX + outY)*0.0016;
+
+  (cycleEnd == 4) ? (
+    lastRef[0] = lastRef[4]; 
+    lastRef[2] = (lastRef[0] + inputSample)/2; 
+    lastRef[1] = (lastRef[0] + lastRef[2])/2; 
+    lastRef[3] = (lastRef[2] + inputSample)/2; 
+    lastRef[4] = inputSample; 
+  );
+  (cycleEnd == 3) ? (
+    lastRef[0] = lastRef[3]; 
+    lastRef[2] = (lastRef[0]+lastRef[0]+inputSample)/3; 
+    lastRef[1] = (lastRef[0]+inputSample+inputSample)/3; 
+    lastRef[3] = inputSample; 
+  );
+  (cycleEnd == 2) ? (
+    lastRef[0] = lastRef[2]; 
+    lastRef[1] = (lastRef[0] + inputSample)/2; 
+    lastRef[2] = inputSample; 
+  );
+  (cycleEnd == 1) ? (
+    lastRef[0] = inputSample;
+  );
+);
+
+@slider
+effect_level = slider1 * 0.01;
+eq_balance = slider2 * 0.01;
+delay_mix_target = slider10 * 0.01;
+delay_time_ms = slider11;
+delay_feedback_target = slider12 * 0.01;
+reverb_type = slider20;
+reverb_size = slider21 * 0.01;
+reverb_decay = slider22 * 0.01;
+reverb_dampen = slider23 * 0.01;
+reverb_predelay_ms = slider24;
+reverb_hpf = slider25;
+reverb_lpf = slider26 * 1000;
+reverb_width = slider27 * 0.01;
+reverb_mix = slider28 * 0.01;
+
+// === WIDENER EQ SETUP (VoChorus-style opposing cuts) ===
+// Gentle cuts at opposing frequencies to create width without comb filtering
+widener_cut_db = -6;  // 6dB cuts
+widener_gain = 10^(6 / 20);  // Compensate for cuts
+
+// L channel cuts at: 120, 480, 1920 Hz
+widener_L1.widener_eq_init(120, widener_cut_db);
+widener_L2.widener_eq_init(480, widener_cut_db);
+widener_L3.widener_eq_init(1920, widener_cut_db);
+
+// R channel cuts at: 240, 960, 3840 Hz (opposing)
+widener_R1.widener_eq_init(240, widener_cut_db);
+widener_R2.widener_eq_init(960, widener_cut_db);
+widener_R3.widener_eq_init(3840, widener_cut_db);
+
+// Update delay time
+delay_time_samples = ceil(delay_time_ms * 0.001 * srate);
+
+// Verbity2 parameters
+overallscale = srate / 44100;
+cycleEnd = floor(overallscale) | 0;
+cycleEnd = max(1, min(4, cycleEnd));
+cycle = 0;
+
+// Room size calculation
+A = min(0.94, 0.94 * pow(reverb_size, 1.1));
+size = pow(A, 1.3) * 0.97 + 0.03;
+
+// Decay calculation
+decay1 = min(1, reverb_decay * 2);
+decay1 = pow(decay1, 0.6) * 0.5 + max(0, reverb_decay * 2 - 1) ^ 1.4 * 0.5;
+B = min(1 - 0.2 * A * A, pow(decay1, 1.5));
+regen = (1.0 - pow(1.0 - B, 3.0)) * 0.00032;
+
+// Damping
+interpolateMax = 0.01 + reverb_dampen * 0.5;
+
+// Width
+widtha = 1 - abs(reverb_width) ^ 0.5;
+
+// Pre-delay length
+reverb_prelen = min(max_reverb_predelay_samples, floor(reverb_predelay_ms * 0.001 * srate));
+
+// Set delay line lengths (scaled by size)
+L.delayA = floor(5003 * size); L.delayF = floor(4951 * size);
+L.delayK = floor(4919 * size); L.delayP = floor(4799 * size);
+L.delayU = floor(4751 * size);
+
+L.delayB = floor(4349 * size); L.delayG = floor(4157 * size);
+L.delayL = floor(3929 * size); L.delayQ = floor(3529 * size);
+L.delayV = floor(3329 * size);
+
+L.delayC = floor(3323 * size); L.delayH = floor(2791 * size);
+L.delayM = floor(2767 * size); L.delayR = floor(2389 * size);
+L.delayW = floor(2347 * size);
+
+L.delayD = floor(2141 * size); L.delayI = floor(1811 * size);
+L.delayN = floor(1733 * size); L.delayS = floor(1171 * size);
+L.delayX = floor(787 * size);
+
+L.delayE = floor(677 * size); L.delayJ = floor(643 * size);
+L.delayO = floor(439 * size); L.delayT = floor(349 * size);
+L.delayY = floor(281 * size);
+
+// Stereo spread (slightly different for R)
+st = 0.08;
+st1 = 1 + st;
+st2 = 1 - st;
+
+R.delayA = L.delayA * st1; R.delayF = L.delayF * st2;
+R.delayK = L.delayK * st1; R.delayP = L.delayP * st2;
+R.delayU = L.delayU * st1;
+
+R.delayB = L.delayB * st2; R.delayG = L.delayG * st1;
+R.delayL = L.delayL * st2; R.delayQ = L.delayQ * st1;
+R.delayV = L.delayV * st2;
+
+R.delayC = L.delayC * st1; R.delayH = L.delayH * st2;
+R.delayM = L.delayM * st1; R.delayR = L.delayR * st2;
+R.delayW = L.delayW * st1;
+
+R.delayD = L.delayD * st2; R.delayI = L.delayI * st1;
+R.delayN = L.delayN * st2; R.delayS = L.delayS * st1;
+R.delayX = L.delayX * st2;
+
+R.delayE = L.delayE * st1; R.delayJ = L.delayJ * st2;
+R.delayO = L.delayO * st1; R.delayT = L.delayT * st2;
+R.delayY = L.delayY * st1;
+
+// High-pass and low-pass coefficients
+highpass = 0.002 + (reverb_hpf / 300) * 0.045;
+highpass /= sqrt(overallscale);
+
+lowpass = 1.0 - ((1 - reverb_lpf / 20000) ^ 0.89145 * 0.85);
+lowpass /= sqrt(overallscale);
+
+// === BLOOM REVERB PARAMETERS (Alesis Midiverb II emulation) ===
+// Stage: Number of allpass filters active (0-27)
+mv2_stage = floor(reverb_size * 27.0);
+
+// Damp: Which stages get averaging filter (inverted: 0% = brightest)
+mv2_damp = floor((1.0 - reverb_dampen) * mv2_stage);
+
+// Feedback level (Midiverb-style quantized steps)
+mv2_feedbacklevel = reverb_decay;
+mv2_feedbacklevel <= 0.0625 ? mv2_feedbacklevel = 0.0;              // Off
+mv2_feedbacklevel > 0.0625 && mv2_feedbacklevel <= 0.125 ? mv2_feedbacklevel = 0.0625;   // -24dB
+mv2_feedbacklevel > 0.125 && mv2_feedbacklevel <= 0.25 ? mv2_feedbacklevel = 0.125;      // -18dB
+mv2_feedbacklevel > 0.25 && mv2_feedbacklevel <= 0.5 ? mv2_feedbacklevel = 0.25;         // -12dB
+mv2_feedbacklevel > 0.5 && mv2_feedbacklevel <= 0.99 ? mv2_feedbacklevel = 0.5;          // -6dB
+mv2_feedbacklevel > 0.99 ? mv2_feedbacklevel = 1.0;                 // 0dB
+
+// Gain (output level) - always 1.0 for now
+mv2_gain = 1.0;
+
+// === DATTORRO REVERB PARAMETERS (Figure-8 topology) ===
+// Size: Scales all delay times
+dat_size = 0.5 + reverb_size * 0.5;  // 0.5 to 1.0 scaling
+
+// Input diffusion coefficient (reduced for stability)
+dat_input_diffusion = 0.5;
+
+// Decay diffusion (allpass coefficient in tanks)
+dat_decay_diffusion = 0.5;
+
+// Feedback gain (decay time) - balanced range
+dat_decay = 0.4 + reverb_decay * 0.35;  // 0.4 to 0.75
+
+// Damping (one-pole lowpass coefficient in feedback)
+// Higher value = more damping = darker sound
+dat_damping = 0.15 + reverb_dampen * 0.4;  // 0.15 to 0.55 (gentle damping)
+
+// Modulation depth (in samples) - reduced to prevent instability
+dat_mod_depth = 3.0;  // Gentle modulation
+
+@block
+cycle > cycleEnd - 1 ? cycle = cycleEnd - 1;
+
+@sample
+// === PARAMETER SMOOTHING ===
+smooth_delay_mix = delay_mix_target * (1 - smooth_coeff) + smooth_delay_mix * smooth_coeff;
+smooth_feedback = delay_feedback_target * (1 - smooth_coeff) + smooth_feedback * smooth_coeff;
+smooth_reverb_mix = reverb_mix * (1 - smooth_coeff) + smooth_reverb_mix * smooth_coeff;
+
+// === STAGE 1: STEREO WIDENER (VoChorus-style opposing EQ) ===
+// Input signal
+widener_in_L = spl0;
+widener_in_R = spl1;
+
+// Apply opposing EQ cuts (L channel)
+widener_in_L = widener_L1.widener_eq_process(widener_in_L);
+widener_in_L = widener_L2.widener_eq_process(widener_in_L);
+widener_in_L = widener_L3.widener_eq_process(widener_in_L);
+
+// Apply opposing EQ cuts (R channel)
+widener_in_R = widener_R1.widener_eq_process(widener_in_R);
+widener_in_R = widener_R2.widener_eq_process(widener_in_R);
+widener_in_R = widener_R3.widener_eq_process(widener_in_R);
+
+// Apply makeup gain to compensate for cuts
+widened_L = widener_in_L * widener_gain;
+widened_R = widener_in_R * widener_gain;
+
+// === STAGE 2: BBD CHORUS ===
+// LFO
+lfo_phase += chorus_rate * 2 * $pi / srate;
+lfo_phase > 2 * $pi ? lfo_phase -= 2 * $pi;
+
+lfo1 = sin(lfo_phase);
+lfo2 = sin(lfo_phase + $pi);
+
+// Pre-emphasis (boost treble before BBD)
+pre_hp_L = widened_L - pre_z1_L;
+pre_z1_L = widened_L * (1 - pre_coeff) + pre_z1_L * pre_coeff;
+pre_emphasized_L = widened_L + pre_hp_L * 0.5;
+
+pre_hp_R = widened_R - pre_z1_R;
+pre_z1_R = widened_R * (1 - pre_coeff) + pre_z1_R * pre_coeff;
+pre_emphasized_R = widened_R + pre_hp_R * 0.5;
+
+// Write to BBD buffers
+bbd_buffer_1_L[write_pos_bbd1_L] = pre_emphasized_L;
+bbd_buffer_1_R[write_pos_bbd1_R] = pre_emphasized_R;
+bbd_buffer_2_L[write_pos_bbd2_L] = pre_emphasized_L;
+bbd_buffer_2_R[write_pos_bbd2_R] = pre_emphasized_R;
+
+// Calculate modulated read positions
+delay1 = (chorus_center_delay + lfo1 * chorus_depth) * 0.001 * srate;
+delay2 = (chorus_center_delay + lfo2 * chorus_depth) * 0.001 * srate;
+
+read1_L = write_pos_bbd1_L - delay1;
+read1_L < 0 ? read1_L += max_chorus_samples;
+read2_L = write_pos_bbd2_L - delay2;
+read2_L < 0 ? read2_L += max_chorus_samples;
+
+read1_R = write_pos_bbd1_R - delay1;
+read1_R < 0 ? read1_R += max_chorus_samples;
+read2_R = write_pos_bbd2_R - delay2;
+read2_R < 0 ? read2_R += max_chorus_samples;
+
+// Interpolated reads
+read1_L_int = floor(read1_L);
+read1_L_frac = read1_L - read1_L_int;
+read1_L_next = (read1_L_int + 1) % max_chorus_samples;
+
+delayed1_L = bbd_buffer_1_L[read1_L_int] * (1 - read1_L_frac) + bbd_buffer_1_L[read1_L_next] * read1_L_frac;
+
+read2_L_int = floor(read2_L);
+read2_L_frac = read2_L - read2_L_int;
+read2_L_next = (read2_L_int + 1) % max_chorus_samples;
+
+delayed2_L = bbd_buffer_2_L[read2_L_int] * (1 - read2_L_frac) + bbd_buffer_2_L[read2_L_next] * read2_L_frac;
+
+read1_R_int = floor(read1_R);
+read1_R_frac = read1_R - read1_R_int;
+read1_R_next = (read1_R_int + 1) % max_chorus_samples;
+
+delayed1_R = bbd_buffer_1_R[read1_R_int] * (1 - read1_R_frac) + bbd_buffer_1_R[read1_R_next] * read1_R_frac;
+
+read2_R_int = floor(read2_R);
+read2_R_frac = read2_R - read2_R_int;
+read2_R_next = (read2_R_int + 1) % max_chorus_samples;
+
+delayed2_R = bbd_buffer_2_R[read2_R_int] * (1 - read2_R_frac) + bbd_buffer_2_R[read2_R_next] * read2_R_frac;
+
+write_pos_bbd1_L = (write_pos_bbd1_L + 1) % max_chorus_samples;
+write_pos_bbd1_R = (write_pos_bbd1_R + 1) % max_chorus_samples;
+write_pos_bbd2_L = (write_pos_bbd2_L + 1) % max_chorus_samples;
+write_pos_bbd2_R = (write_pos_bbd2_R + 1) % max_chorus_samples;
+
+// Mix both delays
+chorused_L = (delayed1_L + delayed2_L) * 0.5;
+chorused_R = (delayed1_R + delayed2_R) * 0.5;
+
+// De-emphasis (cut treble after BBD)
+de_lp_L = chorused_L * (1 - de_coeff) + de_z1_L * de_coeff;
+de_z1_L = de_lp_L;
+chorused_L = chorused_L - (chorused_L - de_lp_L) * 0.5;
+
+de_lp_R = chorused_R * (1 - de_coeff) + de_z1_R * de_coeff;
+de_z1_R = de_lp_R;
+chorused_R = chorused_R - (chorused_R - de_lp_R) * 0.5;
+
+// Tilt EQ
+eq_low_shelf_L = widened_L * (1 - eq_low_coeff) + eq_low_z1_L * eq_low_coeff;
+eq_low_z1_L = eq_low_shelf_L;
+eq_high_shelf_L = chorused_L - eq_high_z1_L;
+eq_high_z1_L = chorused_L * (1 - eq_high_coeff) + eq_high_z1_L * eq_high_coeff;
+
+eq_low_shelf_R = widened_R * (1 - eq_low_coeff) + eq_low_z1_R * eq_low_coeff;
+eq_low_z1_R = eq_low_shelf_R;
+eq_high_shelf_R = chorused_R - eq_high_z1_R;
+eq_high_z1_R = chorused_R * (1 - eq_high_coeff) + eq_high_z1_R * eq_high_coeff;
+
+eq_boost_low = (eq_balance - 0.5) * -2;
+eq_boost_high = (eq_balance - 0.5) * 2;
+
+eq_chorused_L = chorused_L + eq_low_shelf_L * eq_boost_low + eq_high_shelf_L * eq_boost_high;
+eq_chorused_R = chorused_R + eq_low_shelf_R * eq_boost_low + eq_high_shelf_R * eq_boost_high;
+
+// Mix with dry
+chorus_out_L = widened_L * (1 - effect_level) + eq_chorused_L * effect_level;
+chorus_out_R = widened_R * (1 - effect_level) + eq_chorused_R * effect_level;
+
+// === STAGE 3: PING-PONG DELAY ===
+delay_mod_phase += delay_mod_rate * 2 * $pi / srate;
+delay_mod_phase > 2 * $pi ? delay_mod_phase -= 2 * $pi;
+
+mod_offset = sin(delay_mod_phase) * delay_mod_depth * 0.001 * srate;
+
+read_delay_L = delay_write_pos_L - delay_time_samples + mod_offset;
+read_delay_L < 0 ? read_delay_L += max_delay_time_samples;
+
+read_delay_R = delay_write_pos_R - delay_time_samples - mod_offset;
+read_delay_R < 0 ? read_delay_R += max_delay_time_samples;
+
+read_delay_L_int = floor(read_delay_L);
+read_delay_L_frac = read_delay_L - read_delay_L_int;
+read_delay_L_next = (read_delay_L_int + 1) % max_delay_time_samples;
+
+delayed_L = delay_buffer_L[read_delay_L_int] * (1 - read_delay_L_frac) + delay_buffer_L[read_delay_L_next] * read_delay_L_frac;
+
+read_delay_R_int = floor(read_delay_R);
+read_delay_R_frac = read_delay_R - read_delay_R_int;
+read_delay_R_next = (read_delay_R_int + 1) % max_delay_time_samples;
+
+delayed_R = delay_buffer_R[read_delay_R_int] * (1 - read_delay_R_frac) + delay_buffer_R[read_delay_R_next] * read_delay_R_frac;
+
+// High-pass filter
+delay_hp_temp_L = delayed_L - delay_hp_L;
+delay_hp_L = delayed_L * (1 - hp_coeff) + delay_hp_L * hp_coeff;
+delayed_L = delay_hp_temp_L;
+
+delay_hp_temp_R = delayed_R - delay_hp_R;
+delay_hp_R = delayed_R * (1 - hp_coeff) + delay_hp_R * hp_coeff;
+delayed_R = delay_hp_temp_R;
+
+// Low-pass filter
+delay_lp_L = delayed_L * (1 - lp_coeff) + delay_lp_L * lp_coeff;
+delayed_L = delay_lp_L;
+
+delay_lp_R = delayed_R * (1 - lp_coeff) + delay_lp_R * lp_coeff;
+delayed_R = delay_lp_R;
+
+// Write with cross-feedback
+delay_buffer_L[delay_write_pos_L] = chorus_out_L + delayed_R * smooth_feedback;
+delay_buffer_R[delay_write_pos_R] = chorus_out_R + delayed_L * smooth_feedback;
+
+delay_write_pos_L = (delay_write_pos_L + 1) % max_delay_time_samples;
+delay_write_pos_R = (delay_write_pos_R + 1) % max_delay_time_samples;
+
+// Mix
+delay_out_L = chorus_out_L * (1 - smooth_delay_mix) + delayed_L * delay_width * smooth_delay_mix;
+delay_out_R = chorus_out_R * (1 - smooth_delay_mix) + delayed_R * delay_width * smooth_delay_mix;
+
+// === STAGE 4: VERBITY2 REVERB ===
+reverb_type == 0 ? (
+  // Store dry signal
+  dryL = delay_out_L;
+  dryR = delay_out_R;
+  
+  // Pre-delay
+  reverb_predelay_L[reverb_predelay_write_L] = delay_out_L;
+  reverb_predelay_R[reverb_predelay_write_R] = delay_out_R;
+  
+  predelay_read_L = reverb_predelay_write_L - reverb_prelen;
+  predelay_read_L < 0 ? predelay_read_L += max_reverb_predelay_samples;
+  
+  predelay_read_R = reverb_predelay_write_R - reverb_prelen;
+  predelay_read_R < 0 ? predelay_read_R += max_reverb_predelay_samples;
+  
+  L.inputSample = reverb_predelay_L[predelay_read_L];
+  R.inputSample = reverb_predelay_R[predelay_read_R];
+  
+  reverb_predelay_write_L = (reverb_predelay_write_L + 1) % max_reverb_predelay_samples;
+  reverb_predelay_write_R = (reverb_predelay_write_R + 1) % max_reverb_predelay_samples;
+  
+  // High-pass filter
+  abs(iirAL) < 1.18*10^-37 ? iirAL = 0.0;
+  iirAL = iirAL * (1.0 - highpass) + L.inputSample * highpass;
+  L.inputSample -= iirAL;
+  
+  abs(iirAR) < 1.18*10^-37 ? iirAR = 0.0;
+  iirAR = iirAR * (1.0 - highpass) + R.inputSample * highpass;
+  R.inputSample -= iirAR;
+  
+  // Interpolation amount
+  L.interpolate = interpolateMax + interpolateMax * (L.fpd / UINT32_MAX);
+  R.interpolate = interpolateMax + interpolateMax * (R.fpd / UINT32_MAX);
+  
+  cycle += 1;
+  cycle == cycleEnd ? (
+    // Process both channels
+    L.cycleEnd1();
+    R.cycleEnd1();
+    
+    // Cross-channel feedback
+    fbm = 1.9;
+    R.feedbackA = (L.outU * 3.0) - ((L.outV + L.outW + L.outX + L.outY) * fbm);
+    L.feedbackB = (L.outV * 3.0) - ((L.outU + L.outW + L.outX + L.outY) * fbm);
+    R.feedbackC = (L.outW * 3.0) - ((L.outU + L.outV + L.outX + L.outY) * fbm);
+    L.feedbackD = (L.outX * 3.0) - ((L.outU + L.outV + L.outW + L.outY) * fbm);
+    R.feedbackE = (L.outY * 3.0) - ((L.outU + L.outV + L.outW + L.outX) * fbm);
+    
+    L.feedbackA = (R.outU * 3.0) - ((R.outV + R.outW + R.outX + R.outY) * fbm);
+    R.feedbackB = (R.outV * 3.0) - ((R.outU + R.outW + R.outX + R.outY) * fbm);
+    L.feedbackC = (R.outW * 3.0) - ((R.outU + R.outV + R.outX + R.outY) * fbm);
+    R.feedbackD = (R.outX * 3.0) - ((R.outU + R.outV + R.outW + R.outY) * fbm);
+    L.feedbackE = (R.outY * 3.0) - ((R.outU + R.outV + R.outW + R.outX) * fbm);
+    
+    L.cycleEnd2();
+    R.cycleEnd2();
+    
+    cycle = 0;
+    L.inputSample = L.lastRef[cycle];
+    R.inputSample = R.lastRef[cycle];
+  ) : (
+    L.inputSample = L.lastRef[cycle];
+    R.inputSample = R.lastRef[cycle];
+  );
+  
+  // Low-pass filter
+  abs(iirBL) < 1.18*10^-37 ? iirBL = 0.0;
+  iirBL = iirBL * (1.0 - lowpass) + L.inputSample * lowpass;
+  
+  abs(iirBR) < 1.18*10^-37 ? iirBR = 0.0;
+  iirBR = iirBR * (1.0 - lowpass) + R.inputSample * lowpass;
+  
+  wetL = iirBL;
+  wetR = iirBR;
+  
+  // Stereo width adjustment
+  reverb_width != 1 ? (
+    reverb_width < 0 ? (
+      tmpL = wetL;
+      wetL = wetR;
+      wetR = tmpL;
+    );
+    tmpL = wetL * (1 - 0.3 * widtha) + widtha * 0.7 * wetR;
+    tmpR = wetR * (1 - 0.3 * widtha) + widtha * 0.7 * wetL;
+    wetL = tmpL;
+    wetR = tmpR;
+  );
+  
+  // Mix wet and dry
+  spl0 = dryL * (1 - smooth_reverb_mix) + wetL * smooth_reverb_mix;
+  spl1 = dryR * (1 - smooth_reverb_mix) + wetR * smooth_reverb_mix;
+  
+  // Update random number generator
+  L.fpd = rand(UINT32_MAX);
+  R.fpd = rand(UINT32_MAX);
+  
+) : reverb_type == 1 ? (
+  // === STAGE 4: BLOOM REVERB (Alesis Midiverb II emulation) ===
+  // Store dry signal
+  dryL = delay_out_L;
+  dryR = delay_out_R;
+  
+  // Pre-delay
+  reverb_predelay_L[reverb_predelay_write_L] = delay_out_L;
+  reverb_predelay_R[reverb_predelay_write_R] = delay_out_R;
+  
+  predelay_read_L = reverb_predelay_write_L - reverb_prelen;
+  predelay_read_L < 0 ? predelay_read_L += max_reverb_predelay_samples;
+  
+  predelay_read_R = reverb_predelay_write_R - reverb_prelen;
+  predelay_read_R < 0 ? predelay_read_R += max_reverb_predelay_samples;
+  
+  mv2_inputL = reverb_predelay_L[predelay_read_L];
+  mv2_inputR = reverb_predelay_R[predelay_read_R];
+  
+  reverb_predelay_write_L = (reverb_predelay_write_L + 1) % max_reverb_predelay_samples;
+  reverb_predelay_write_R = (reverb_predelay_write_R + 1) % max_reverb_predelay_samples;
+  
+  // High-pass filter input
+  abs(iirAL) < 1.18*10^-37 ? iirAL = 0.0;
+  iirAL = iirAL * (1.0 - highpass) + mv2_inputL * highpass;
+  mv2_inputL -= iirAL;
+  
+  abs(iirAR) < 1.18*10^-37 ? iirAR = 0.0;
+  iirAR = iirAR * (1.0 - highpass) + mv2_inputR * highpass;
+  mv2_inputR -= iirAR;
+  
+  // Increment cycle counter and process reverb
+  cycle += 1;
+  cycle == cycleEnd ? (
+    // Add feedback and apply sin() saturation
+    mv2_inputL += mv2_feedbackL;
+    mv2_inputR += mv2_feedbackR;
+    
+    mv2_inputL = sin(mv2_inputL);
+    mv2_inputR = sin(mv2_inputR);
+    
+    // === 26 CASCADED ALLPASS FILTERS ===
+    // Switch/case structure with fallthrough - stage 27 runs all filters
+    (mv2_stage == 27 || mv2_stage == 26) ? (
+      // Allpass filter A
+      mv2_allpasstemp = mv2_alpA - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayA) ? mv2_allpasstemp = mv2_delayA;
+      mv2_inputL -= mv2_aAL[mv2_allpasstemp] * 0.5;
+      mv2_aAL[mv2_alpA] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aAR[mv2_allpasstemp] * 0.5;
+      mv2_aAR[mv2_alpA] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpA -= 1; (mv2_alpA < 0 || mv2_alpA > mv2_delayA) ? mv2_alpA = mv2_delayA;
+      mv2_inputL += mv2_aAL[mv2_alpA];
+      mv2_inputR += mv2_aAR[mv2_alpA];
+      mv2_damp > 26 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgAL) * 0.5;
+        mv2_avgAL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgAR) * 0.5;
+        mv2_avgAR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 25) ? (
+      // Allpass filter B
+      mv2_allpasstemp = mv2_alpB - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayB) ? mv2_allpasstemp = mv2_delayB;
+      mv2_inputL -= mv2_aBL[mv2_allpasstemp] * 0.5;
+      mv2_aBL[mv2_alpB] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aBR[mv2_allpasstemp] * 0.5;
+      mv2_aBR[mv2_alpB] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpB -= 1; (mv2_alpB < 0 || mv2_alpB > mv2_delayB) ? mv2_alpB = mv2_delayB;
+      mv2_inputL += mv2_aBL[mv2_alpB];
+      mv2_inputR += mv2_aBR[mv2_alpB];
+      mv2_damp > 25 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgBL) * 0.5;
+        mv2_avgBL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgBR) * 0.5;
+        mv2_avgBR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 24) ? (
+      // Allpass filter C
+      mv2_allpasstemp = mv2_alpC - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayC) ? mv2_allpasstemp = mv2_delayC;
+      mv2_inputL -= mv2_aCL[mv2_allpasstemp] * 0.5;
+      mv2_aCL[mv2_alpC] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aCR[mv2_allpasstemp] * 0.5;
+      mv2_aCR[mv2_alpC] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpC -= 1; (mv2_alpC < 0 || mv2_alpC > mv2_delayC) ? mv2_alpC = mv2_delayC;
+      mv2_inputL += mv2_aCL[mv2_alpC];
+      mv2_inputR += mv2_aCR[mv2_alpC];
+      mv2_damp > 24 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgCL) * 0.5;
+        mv2_avgCL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgCR) * 0.5;
+        mv2_avgCR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 23) ? (
+      // Allpass filter D
+      mv2_allpasstemp = mv2_alpD - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayD) ? mv2_allpasstemp = mv2_delayD;
+      mv2_inputL -= mv2_aDL[mv2_allpasstemp] * 0.5;
+      mv2_aDL[mv2_alpD] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aDR[mv2_allpasstemp] * 0.5;
+      mv2_aDR[mv2_alpD] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpD -= 1; (mv2_alpD < 0 || mv2_alpD > mv2_delayD) ? mv2_alpD = mv2_delayD;
+      mv2_inputL += mv2_aDL[mv2_alpD];
+      mv2_inputR += mv2_aDR[mv2_alpD];
+      mv2_damp > 23 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgDL) * 0.5;
+        mv2_avgDL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgDR) * 0.5;
+        mv2_avgDR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 22) ? (
+      // Allpass filter E
+      mv2_allpasstemp = mv2_alpE - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayE) ? mv2_allpasstemp = mv2_delayE;
+      mv2_inputL -= mv2_aEL[mv2_allpasstemp] * 0.5;
+      mv2_aEL[mv2_alpE] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aER[mv2_allpasstemp] * 0.5;
+      mv2_aER[mv2_alpE] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpE -= 1; (mv2_alpE < 0 || mv2_alpE > mv2_delayE) ? mv2_alpE = mv2_delayE;
+      mv2_inputL += mv2_aEL[mv2_alpE];
+      mv2_inputR += mv2_aER[mv2_alpE];
+      mv2_damp > 22 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgEL) * 0.5;
+        mv2_avgEL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgER) * 0.5;
+        mv2_avgER = mv2_avgtemp;
+      );
+    );
+    
+    
+    (mv2_stage >= 21) ? (
+      // Allpass filter F
+      mv2_allpasstemp = mv2_alpF - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayF) ? mv2_allpasstemp = mv2_delayF;
+      mv2_inputL -= mv2_aFL[mv2_allpasstemp] * 0.5;
+      mv2_aFL[mv2_alpF] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aFR[mv2_allpasstemp] * 0.5;
+      mv2_aFR[mv2_alpF] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpF -= 1; (mv2_alpF < 0 || mv2_alpF > mv2_delayF) ? mv2_alpF = mv2_delayF;
+      mv2_inputL += mv2_aFL[mv2_alpF];
+      mv2_inputR += mv2_aFR[mv2_alpF];
+      mv2_damp > 21 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgFL) * 0.5;
+        mv2_avgFL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgFR) * 0.5;
+        mv2_avgFR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 20) ? (
+      // Allpass filter G
+      mv2_allpasstemp = mv2_alpG - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayG) ? mv2_allpasstemp = mv2_delayG;
+      mv2_inputL -= mv2_aGL[mv2_allpasstemp] * 0.5;
+      mv2_aGL[mv2_alpG] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aGR[mv2_allpasstemp] * 0.5;
+      mv2_aGR[mv2_alpG] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpG -= 1; (mv2_alpG < 0 || mv2_alpG > mv2_delayG) ? mv2_alpG = mv2_delayG;
+      mv2_inputL += mv2_aGL[mv2_alpG];
+      mv2_inputR += mv2_aGR[mv2_alpG];
+      mv2_damp > 20 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgGL) * 0.5;
+        mv2_avgGL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgGR) * 0.5;
+        mv2_avgGR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 19) ? (
+      // Allpass filter H
+      mv2_allpasstemp = mv2_alpH - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayH) ? mv2_allpasstemp = mv2_delayH;
+      mv2_inputL -= mv2_aHL[mv2_allpasstemp] * 0.5;
+      mv2_aHL[mv2_alpH] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aHR[mv2_allpasstemp] * 0.5;
+      mv2_aHR[mv2_alpH] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpH -= 1; (mv2_alpH < 0 || mv2_alpH > mv2_delayH) ? mv2_alpH = mv2_delayH;
+      mv2_inputL += mv2_aHL[mv2_alpH];
+      mv2_inputR += mv2_aHR[mv2_alpH];
+      mv2_damp > 19 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgHL) * 0.5;
+        mv2_avgHL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgHR) * 0.5;
+        mv2_avgHR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 18) ? (
+      // Allpass filter I
+      mv2_allpasstemp = mv2_alpI - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayI) ? mv2_allpasstemp = mv2_delayI;
+      mv2_inputL -= mv2_aIL[mv2_allpasstemp] * 0.5;
+      mv2_aIL[mv2_alpI] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aIR[mv2_allpasstemp] * 0.5;
+      mv2_aIR[mv2_alpI] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpI -= 1; (mv2_alpI < 0 || mv2_alpI > mv2_delayI) ? mv2_alpI = mv2_delayI;
+      mv2_inputL += mv2_aIL[mv2_alpI];
+      mv2_inputR += mv2_aIR[mv2_alpI];
+      mv2_damp > 18 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgIL) * 0.5;
+        mv2_avgIL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgIR) * 0.5;
+        mv2_avgIR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 17) ? (
+      // Allpass filter J
+      mv2_allpasstemp = mv2_alpJ - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayJ) ? mv2_allpasstemp = mv2_delayJ;
+      mv2_inputL -= mv2_aJL[mv2_allpasstemp] * 0.5;
+      mv2_aJL[mv2_alpJ] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aJR[mv2_allpasstemp] * 0.5;
+      mv2_aJR[mv2_alpJ] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpJ -= 1; (mv2_alpJ < 0 || mv2_alpJ > mv2_delayJ) ? mv2_alpJ = mv2_delayJ;
+      mv2_inputL += mv2_aJL[mv2_alpJ];
+      mv2_inputR += mv2_aJR[mv2_alpJ];
+      mv2_damp > 17 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgJL) * 0.5;
+        mv2_avgJL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgJR) * 0.5;
+        mv2_avgJR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 16) ? (
+      // Allpass filter K
+      mv2_allpasstemp = mv2_alpK - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayK) ? mv2_allpasstemp = mv2_delayK;
+      mv2_inputL -= mv2_aKL[mv2_allpasstemp] * 0.5;
+      mv2_aKL[mv2_alpK] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aKR[mv2_allpasstemp] * 0.5;
+      mv2_aKR[mv2_alpK] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpK -= 1; (mv2_alpK < 0 || mv2_alpK > mv2_delayK) ? mv2_alpK = mv2_delayK;
+      mv2_inputL += mv2_aKL[mv2_alpK];
+      mv2_inputR += mv2_aKR[mv2_alpK];
+      mv2_damp > 16 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgKL) * 0.5;
+        mv2_avgKL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgKR) * 0.5;
+        mv2_avgKR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 15) ? (
+      // Allpass filter L
+      mv2_allpasstemp = mv2_alpL - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayL) ? mv2_allpasstemp = mv2_delayL;
+      mv2_inputL -= mv2_aLL[mv2_allpasstemp] * 0.5;
+      mv2_aLL[mv2_alpL] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aLR[mv2_allpasstemp] * 0.5;
+      mv2_aLR[mv2_alpL] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpL -= 1; (mv2_alpL < 0 || mv2_alpL > mv2_delayL) ? mv2_alpL = mv2_delayL;
+      mv2_inputL += mv2_aLL[mv2_alpL];
+      mv2_inputR += mv2_aLR[mv2_alpL];
+      mv2_damp > 15 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgLL) * 0.5;
+        mv2_avgLL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgLR) * 0.5;
+        mv2_avgLR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 14) ? (
+      // Allpass filter M
+      mv2_allpasstemp = mv2_alpM - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayM) ? mv2_allpasstemp = mv2_delayM;
+      mv2_inputL -= mv2_aML[mv2_allpasstemp] * 0.5;
+      mv2_aML[mv2_alpM] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aMR[mv2_allpasstemp] * 0.5;
+      mv2_aMR[mv2_alpM] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpM -= 1; (mv2_alpM < 0 || mv2_alpM > mv2_delayM) ? mv2_alpM = mv2_delayM;
+      mv2_inputL += mv2_aML[mv2_alpM];
+      mv2_inputR += mv2_aMR[mv2_alpM];
+      mv2_damp > 14 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgML) * 0.5;
+        mv2_avgML = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgMR) * 0.5;
+        mv2_avgMR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 13) ? (
+      // Allpass filter N
+      mv2_allpasstemp = mv2_alpN - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayN) ? mv2_allpasstemp = mv2_delayN;
+      mv2_inputL -= mv2_aNL[mv2_allpasstemp] * 0.5;
+      mv2_aNL[mv2_alpN] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aNR[mv2_allpasstemp] * 0.5;
+      mv2_aNR[mv2_alpN] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpN -= 1; (mv2_alpN < 0 || mv2_alpN > mv2_delayN) ? mv2_alpN = mv2_delayN;
+      mv2_inputL += mv2_aNL[mv2_alpN];
+      mv2_inputR += mv2_aNR[mv2_alpN];
+      mv2_damp > 13 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgNL) * 0.5;
+        mv2_avgNL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgNR) * 0.5;
+        mv2_avgNR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 12) ? (
+      // Allpass filter O
+      mv2_allpasstemp = mv2_alpO - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayO) ? mv2_allpasstemp = mv2_delayO;
+      mv2_inputL -= mv2_aOL[mv2_allpasstemp] * 0.5;
+      mv2_aOL[mv2_alpO] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aOR[mv2_allpasstemp] * 0.5;
+      mv2_aOR[mv2_alpO] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpO -= 1; (mv2_alpO < 0 || mv2_alpO > mv2_delayO) ? mv2_alpO = mv2_delayO;
+      mv2_inputL += mv2_aOL[mv2_alpO];
+      mv2_inputR += mv2_aOR[mv2_alpO];
+      mv2_damp > 12 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgOL) * 0.5;
+        mv2_avgOL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgOR) * 0.5;
+        mv2_avgOR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 11) ? (
+      // Allpass filter P
+      mv2_allpasstemp = mv2_alpP - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayP) ? mv2_allpasstemp = mv2_delayP;
+      mv2_inputL -= mv2_aPL[mv2_allpasstemp] * 0.5;
+      mv2_aPL[mv2_alpP] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aPR[mv2_allpasstemp] * 0.5;
+      mv2_aPR[mv2_alpP] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpP -= 1; (mv2_alpP < 0 || mv2_alpP > mv2_delayP) ? mv2_alpP = mv2_delayP;
+      mv2_inputL += mv2_aPL[mv2_alpP];
+      mv2_inputR += mv2_aPR[mv2_alpP];
+      mv2_damp > 11 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgPL) * 0.5;
+        mv2_avgPL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgPR) * 0.5;
+        mv2_avgPR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 10) ? (
+      // Allpass filter Q
+      mv2_allpasstemp = mv2_alpQ - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayQ) ? mv2_allpasstemp = mv2_delayQ;
+      mv2_inputL -= mv2_aQL[mv2_allpasstemp] * 0.5;
+      mv2_aQL[mv2_alpQ] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aQR[mv2_allpasstemp] * 0.5;
+      mv2_aQR[mv2_alpQ] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpQ -= 1; (mv2_alpQ < 0 || mv2_alpQ > mv2_delayQ) ? mv2_alpQ = mv2_delayQ;
+      mv2_inputL += mv2_aQL[mv2_alpQ];
+      mv2_inputR += mv2_aQR[mv2_alpQ];
+      mv2_damp > 10 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgQL) * 0.5;
+        mv2_avgQL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgQR) * 0.5;
+        mv2_avgQR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 9) ? (
+      // Allpass filter R
+      mv2_allpasstemp = mv2_alpR - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayR) ? mv2_allpasstemp = mv2_delayR;
+      mv2_inputL -= mv2_aRL[mv2_allpasstemp] * 0.5;
+      mv2_aRL[mv2_alpR] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aRR[mv2_allpasstemp] * 0.5;
+      mv2_aRR[mv2_alpR] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpR -= 1; (mv2_alpR < 0 || mv2_alpR > mv2_delayR) ? mv2_alpR = mv2_delayR;
+      mv2_inputL += mv2_aRL[mv2_alpR];
+      mv2_inputR += mv2_aRR[mv2_alpR];
+      mv2_damp > 9 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgRL) * 0.5;
+        mv2_avgRL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgRR) * 0.5;
+        mv2_avgRR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 8) ? (
+      // Allpass filter S
+      mv2_allpasstemp = mv2_alpS - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayS) ? mv2_allpasstemp = mv2_delayS;
+      mv2_inputL -= mv2_aSL[mv2_allpasstemp] * 0.5;
+      mv2_aSL[mv2_alpS] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aSR[mv2_allpasstemp] * 0.5;
+      mv2_aSR[mv2_alpS] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpS -= 1; (mv2_alpS < 0 || mv2_alpS > mv2_delayS) ? mv2_alpS = mv2_delayS;
+      mv2_inputL += mv2_aSL[mv2_alpS];
+      mv2_inputR += mv2_aSR[mv2_alpS];
+      mv2_damp > 8 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgSL) * 0.5;
+        mv2_avgSL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgSR) * 0.5;
+        mv2_avgSR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 7) ? (
+      // Allpass filter T
+      mv2_allpasstemp = mv2_alpT - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayT) ? mv2_allpasstemp = mv2_delayT;
+      mv2_inputL -= mv2_aTL[mv2_allpasstemp] * 0.5;
+      mv2_aTL[mv2_alpT] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aTR[mv2_allpasstemp] * 0.5;
+      mv2_aTR[mv2_alpT] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpT -= 1; (mv2_alpT < 0 || mv2_alpT > mv2_delayT) ? mv2_alpT = mv2_delayT;
+      mv2_inputL += mv2_aTL[mv2_alpT];
+      mv2_inputR += mv2_aTR[mv2_alpT];
+      mv2_damp > 7 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgTL) * 0.5;
+        mv2_avgTL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgTR) * 0.5;
+        mv2_avgTR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 6) ? (
+      // Allpass filter U
+      mv2_allpasstemp = mv2_alpU - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayU) ? mv2_allpasstemp = mv2_delayU;
+      mv2_inputL -= mv2_aUL[mv2_allpasstemp] * 0.5;
+      mv2_aUL[mv2_alpU] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aUR[mv2_allpasstemp] * 0.5;
+      mv2_aUR[mv2_alpU] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpU -= 1; (mv2_alpU < 0 || mv2_alpU > mv2_delayU) ? mv2_alpU = mv2_delayU;
+      mv2_inputL += mv2_aUL[mv2_alpU];
+      mv2_inputR += mv2_aUR[mv2_alpU];
+      mv2_damp > 6 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgUL) * 0.5;
+        mv2_avgUL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgUR) * 0.5;
+        mv2_avgUR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 5) ? (
+      // Allpass filter V
+      mv2_allpasstemp = mv2_alpV - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayV) ? mv2_allpasstemp = mv2_delayV;
+      mv2_inputL -= mv2_aVL[mv2_allpasstemp] * 0.5;
+      mv2_aVL[mv2_alpV] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aVR[mv2_allpasstemp] * 0.5;
+      mv2_aVR[mv2_alpV] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpV -= 1; (mv2_alpV < 0 || mv2_alpV > mv2_delayV) ? mv2_alpV = mv2_delayV;
+      mv2_inputL += mv2_aVL[mv2_alpV];
+      mv2_inputR += mv2_aVR[mv2_alpV];
+      mv2_damp > 5 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgVL) * 0.5;
+        mv2_avgVL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgVR) * 0.5;
+        mv2_avgVR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 4) ? (
+      // Allpass filter W
+      mv2_allpasstemp = mv2_alpW - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayW) ? mv2_allpasstemp = mv2_delayW;
+      mv2_inputL -= mv2_aWL[mv2_allpasstemp] * 0.5;
+      mv2_aWL[mv2_alpW] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aWR[mv2_allpasstemp] * 0.5;
+      mv2_aWR[mv2_alpW] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpW -= 1; (mv2_alpW < 0 || mv2_alpW > mv2_delayW) ? mv2_alpW = mv2_delayW;
+      mv2_inputL += mv2_aWL[mv2_alpW];
+      mv2_inputR += mv2_aWR[mv2_alpW];
+      mv2_damp > 4 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgWL) * 0.5;
+        mv2_avgWL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgWR) * 0.5;
+        mv2_avgWR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 3) ? (
+      // Allpass filter X
+      mv2_allpasstemp = mv2_alpX - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayX) ? mv2_allpasstemp = mv2_delayX;
+      mv2_inputL -= mv2_aXL[mv2_allpasstemp] * 0.5;
+      mv2_aXL[mv2_alpX] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aXR[mv2_allpasstemp] * 0.5;
+      mv2_aXR[mv2_alpX] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpX -= 1; (mv2_alpX < 0 || mv2_alpX > mv2_delayX) ? mv2_alpX = mv2_delayX;
+      mv2_inputL += mv2_aXL[mv2_alpX];
+      mv2_inputR += mv2_aXR[mv2_alpX];
+      mv2_damp > 3 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgXL) * 0.5;
+        mv2_avgXL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgXR) * 0.5;
+        mv2_avgXR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 2) ? (
+      // Allpass filter Y
+      mv2_allpasstemp = mv2_alpY - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayY) ? mv2_allpasstemp = mv2_delayY;
+      mv2_inputL -= mv2_aYL[mv2_allpasstemp] * 0.5;
+      mv2_aYL[mv2_alpY] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aYR[mv2_allpasstemp] * 0.5;
+      mv2_aYR[mv2_alpY] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpY -= 1; (mv2_alpY < 0 || mv2_alpY > mv2_delayY) ? mv2_alpY = mv2_delayY;
+      mv2_inputL += mv2_aYL[mv2_alpY];
+      mv2_inputR += mv2_aYR[mv2_alpY];
+      mv2_damp > 2 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgYL) * 0.5;
+        mv2_avgYL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgYR) * 0.5;
+        mv2_avgYR = mv2_avgtemp;
+      );
+    );
+    
+    (mv2_stage >= 1) ? (
+      // Allpass filter Z
+      mv2_allpasstemp = mv2_alpZ - 1;
+      (mv2_allpasstemp < 0 || mv2_allpasstemp > mv2_delayZ) ? mv2_allpasstemp = mv2_delayZ;
+      mv2_inputL -= mv2_aZL[mv2_allpasstemp] * 0.5;
+      mv2_aZL[mv2_alpZ] = mv2_inputL;
+      mv2_inputL *= 0.5;
+      mv2_inputR -= mv2_aZR[mv2_allpasstemp] * 0.5;
+      mv2_aZR[mv2_alpZ] = mv2_inputR;
+      mv2_inputR *= 0.5;
+      mv2_alpZ -= 1; (mv2_alpZ < 0 || mv2_alpZ > mv2_delayZ) ? mv2_alpZ = mv2_delayZ;
+      mv2_inputL += mv2_aZL[mv2_alpZ];
+      mv2_inputR += mv2_aZR[mv2_alpZ];
+      mv2_damp > 1 ? (
+        mv2_avgtemp = mv2_inputL;
+        mv2_inputL = (mv2_inputL + mv2_avgZL) * 0.5;
+        mv2_avgZL = mv2_avgtemp;
+        mv2_avgtemp = mv2_inputR;
+        mv2_inputR = (mv2_inputR + mv2_avgZR) * 0.5;
+        mv2_avgZR = mv2_avgtemp;
+      );
+    );
+    
+    // Store feedback for next cycle
+    mv2_feedbackL = mv2_inputL * mv2_feedbacklevel;
+    mv2_feedbackR = mv2_inputR * mv2_feedbacklevel;
+    
+    // Apply gain
+    mv2_gain != 1.0 ? (
+      mv2_inputL *= mv2_gain;
+      mv2_inputR *= mv2_gain;
+    );
+    
+    // Clip to prevent NaN
+    mv2_inputL > 1.0 ? mv2_inputL = 1.0;
+    mv2_inputL < -1.0 ? mv2_inputL = -1.0;
+    mv2_inputR > 1.0 ? mv2_inputR = 1.0;
+    mv2_inputR < -1.0 ? mv2_inputR = -1.0;
+    
+    // Apply asin() desaturation
+    mv2_inputL = asin(mv2_inputL);
+    mv2_inputR = asin(mv2_inputR);
+    
+    // Oversampling interpolation (same as Verbity2)
+    cycleEnd == 4 ? (
+      mv2_lastRefL[0] = mv2_lastRefL[4];
+      mv2_lastRefL[2] = (mv2_lastRefL[0] + mv2_inputL) * 0.5;
+      mv2_lastRefL[1] = (mv2_lastRefL[0] + mv2_lastRefL[2]) * 0.5;
+      mv2_lastRefL[3] = (mv2_lastRefL[2] + mv2_inputL) * 0.5;
+      mv2_lastRefL[4] = mv2_inputL;
+      mv2_lastRefR[0] = mv2_lastRefR[4];
+      mv2_lastRefR[2] = (mv2_lastRefR[0] + mv2_inputR) * 0.5;
+      mv2_lastRefR[1] = (mv2_lastRefR[0] + mv2_lastRefR[2]) * 0.5;
+      mv2_lastRefR[3] = (mv2_lastRefR[2] + mv2_inputR) * 0.5;
+      mv2_lastRefR[4] = mv2_inputR;
+    );
+    cycleEnd == 3 ? (
+      mv2_lastRefL[0] = mv2_lastRefL[3];
+      mv2_lastRefL[2] = (mv2_lastRefL[0] + mv2_lastRefL[0] + mv2_inputL) / 3;
+      mv2_lastRefL[1] = (mv2_lastRefL[0] + mv2_inputL + mv2_inputL) / 3;
+      mv2_lastRefL[3] = mv2_inputL;
+      mv2_lastRefR[0] = mv2_lastRefR[3];
+      mv2_lastRefR[2] = (mv2_lastRefR[0] + mv2_lastRefR[0] + mv2_inputR) / 3;
+      mv2_lastRefR[1] = (mv2_lastRefR[0] + mv2_inputR + mv2_inputR) / 3;
+      mv2_lastRefR[3] = mv2_inputR;
+    );
+    cycleEnd == 2 ? (
+      mv2_lastRefL[0] = mv2_lastRefL[2];
+      mv2_lastRefL[1] = (mv2_lastRefL[0] + mv2_inputL) * 0.5;
+      mv2_lastRefL[2] = mv2_inputL;
+      mv2_lastRefR[0] = mv2_lastRefR[2];
+      mv2_lastRefR[1] = (mv2_lastRefR[0] + mv2_inputR) * 0.5;
+      mv2_lastRefR[2] = mv2_inputR;
+    );
+    cycleEnd == 1 ? (
+      mv2_lastRefL[0] = mv2_inputL;
+      mv2_lastRefR[0] = mv2_inputR;
+    );
+    cycle = 0;
+    mv2_inputL = mv2_lastRefL[cycle];
+    mv2_inputR = mv2_lastRefR[cycle];
+  ) : (
+    mv2_inputL = mv2_lastRefL[cycle];
+    mv2_inputR = mv2_lastRefR[cycle];
+  );
+  
+  // Low-pass filter output
+  abs(iirBL) < 1.18*10^-37 ? iirBL = 0.0;
+  iirBL = iirBL * (1.0 - lowpass) + mv2_inputL * lowpass;
+  wetL = iirBL;
+  
+  abs(iirBR) < 1.18*10^-37 ? iirBR = 0.0;
+  iirBR = iirBR * (1.0 - lowpass) + mv2_inputR * lowpass;
+  wetR = iirBR;
+  
+  // Stereo width adjustment
+  reverb_width != 1 ? (
+    reverb_width < 0 ? (
+      tmpL = wetL;
+      wetL = wetR;
+      wetR = tmpL;
+    );
+    tmpL = wetL * (1 - 0.3 * widtha) + widtha * 0.7 * wetR;
+    tmpR = wetR * (1 - 0.3 * widtha) + widtha * 0.7 * wetL;
+    wetL = tmpL;
+    wetR = tmpR;
+  );
+  
+  // Mix wet and dry
+  spl0 = dryL * (1 - smooth_reverb_mix) + wetL * smooth_reverb_mix;
+  spl1 = dryR * (1 - smooth_reverb_mix) + wetR * smooth_reverb_mix;
+
+) : reverb_type == 2 ? (
+  // === STAGE 4: DATTORRO REVERB (Figure-8 topology) ===
+  // Store dry signal
+  dryL = delay_out_L;
+  dryR = delay_out_R;
+  
+  // Pre-delay
+  reverb_predelay_L[reverb_predelay_write_L] = delay_out_L;
+  reverb_predelay_R[reverb_predelay_write_R] = delay_out_R;
+  
+  predelay_read_L = reverb_predelay_write_L - reverb_prelen;
+  predelay_read_L < 0 ? predelay_read_L += max_reverb_predelay_samples;
+  
+  predelay_read_R = reverb_predelay_write_R - reverb_prelen;
+  predelay_read_R < 0 ? predelay_read_R += max_reverb_predelay_samples;
+  
+  dat_inputL = reverb_predelay_L[predelay_read_L];
+  dat_inputR = reverb_predelay_R[predelay_read_R];
+  
+  reverb_predelay_write_L = (reverb_predelay_write_L + 1) % max_reverb_predelay_samples;
+  reverb_predelay_write_R = (reverb_predelay_write_R + 1) % max_reverb_predelay_samples;
+  
+  // High-pass filter input
+  abs(iirAL) < 1.18*10^-37 ? iirAL = 0.0;
+  iirAL = iirAL * (1.0 - highpass) + dat_inputL * highpass;
+  dat_inputL -= iirAL;
+  
+  abs(iirAR) < 1.18*10^-37 ? iirAR = 0.0;
+  iirAR = iirAR * (1.0 - highpass) + dat_inputR * highpass;
+  dat_inputR -= iirAR;
+  
+  // Mix to mono for input
+  dat_input_mono = (dat_inputL + dat_inputR) * 0.5;
+  
+  // === INPUT DIFFUSION NETWORK (4 series allpass filters) ===
+  // Allpass 1
+  dat_temp = dat_ap1_idx - dat_ap1_len;
+  dat_temp < 0 ? dat_temp += 210;
+  dat_buf = dat_ap1[dat_temp];
+  dat_ap1[dat_ap1_idx] = dat_input_mono + dat_buf * dat_input_diffusion;
+  dat_input_mono = dat_buf - dat_input_mono * dat_input_diffusion;
+  dat_ap1_idx = (dat_ap1_idx + 1) % 210;
+  
+  // Allpass 2
+  dat_temp = dat_ap2_idx - dat_ap2_len;
+  dat_temp < 0 ? dat_temp += 159;
+  dat_buf = dat_ap2[dat_temp];
+  dat_ap2[dat_ap2_idx] = dat_input_mono + dat_buf * dat_input_diffusion;
+  dat_input_mono = dat_buf - dat_input_mono * dat_input_diffusion;
+  dat_ap2_idx = (dat_ap2_idx + 1) % 159;
+  
+  // Allpass 3
+  dat_temp = dat_ap3_idx - dat_ap3_len;
+  dat_temp < 0 ? dat_temp += 562;
+  dat_buf = dat_ap3[dat_temp];
+  dat_ap3[dat_ap3_idx] = dat_input_mono + dat_buf * dat_input_diffusion;
+  dat_input_mono = dat_buf - dat_input_mono * dat_input_diffusion;
+  dat_ap3_idx = (dat_ap3_idx + 1) % 562;
+  
+  // Allpass 4
+  dat_temp = dat_ap4_idx - dat_ap4_len;
+  dat_temp < 0 ? dat_temp += 410;
+  dat_buf = dat_ap4[dat_temp];
+  dat_ap4[dat_ap4_idx] = dat_input_mono + dat_buf * dat_input_diffusion;
+  dat_input_mono = dat_buf - dat_input_mono * dat_input_diffusion;
+  dat_ap4_idx = (dat_ap4_idx + 1) % 410;
+  
+  // === TANK A (LEFT CHANNEL) ===
+  // Update LFO for modulation
+  dat_lfo1 += dat_lfo_rate;
+  dat_lfo1 >= 1.0 ? dat_lfo1 -= 1.0;
+  
+  // Delay 1 with modulation
+  dat_mod = sin(dat_lfo1 * 2 * $pi) * dat_mod_depth;
+  dat_read_pos = floor(dat_delayA1_idx - dat_delayA1_len * dat_size + dat_mod);
+  while (dat_read_pos < 0) ( dat_read_pos += 4500; );
+  dat_read_pos = dat_read_pos % 4500;
+  dat_tankA = dat_delayA1[dat_read_pos];
+  
+  // Apply damping (one-pole lowpass) - CORRECTED FORMULA
+  dat_dampA = dat_tankA * (1.0 - dat_damping) + dat_dampA * dat_damping;
+  abs(dat_dampA) < 1.18*10^-37 ? dat_dampA = 0.0;  // Denormal prevention
+  
+  // Decay diffusion allpass
+  dat_temp = dat_apA1_idx - floor(dat_apA1_len * dat_size);
+  while (dat_temp < 0) ( dat_temp += 1800; );
+  dat_buf = dat_apA1[dat_temp % 1800];
+  dat_apA1[dat_apA1_idx] = dat_dampA + dat_buf * dat_decay_diffusion;
+  dat_tankA = dat_buf - dat_dampA * dat_decay_diffusion;
+  dat_apA1_idx = (dat_apA1_idx + 1) % 1800;
+  
+  // Delay 2
+  dat_read_pos = dat_delayA2_idx - floor(dat_delayA2_len * dat_size);
+  while (dat_read_pos < 0) ( dat_read_pos += 3500; );
+  dat_tankA_out = dat_delayA2[dat_read_pos % 3500];
+  
+  // Write to delay 2
+  dat_delayA2[dat_delayA2_idx] = dat_tankA;
+  dat_delayA2_idx = (dat_delayA2_idx + 1) % 3500;
+  
+  // === TANK B (RIGHT CHANNEL) ===
+  // Update LFO for modulation (slightly different phase)
+  dat_lfo2 += dat_lfo_rate * 1.07;
+  dat_lfo2 >= 1.0 ? dat_lfo2 -= 1.0;
+  
+  // Delay 1 with modulation
+  dat_mod = sin(dat_lfo2 * 2 * $pi) * dat_mod_depth;
+  dat_read_pos = floor(dat_delayB1_idx - dat_delayB1_len * dat_size + dat_mod);
+  while (dat_read_pos < 0) ( dat_read_pos += 4200; );
+  dat_read_pos = dat_read_pos % 4200;
+  dat_tankB = dat_delayB1[dat_read_pos];
+  
+  // Apply damping (one-pole lowpass) - CORRECTED FORMULA
+  dat_dampB = dat_tankB * (1.0 - dat_damping) + dat_dampB * dat_damping;
+  abs(dat_dampB) < 1.18*10^-37 ? dat_dampB = 0.0;  // Denormal prevention
+  
+  // Decay diffusion allpass
+  dat_temp = dat_apB1_idx - floor(dat_apB1_len * dat_size);
+  while (dat_temp < 0) ( dat_temp += 1650; );
+  dat_buf = dat_apB1[dat_temp % 1650];
+  dat_apB1[dat_apB1_idx] = dat_dampB + dat_buf * dat_decay_diffusion;
+  dat_tankB = dat_buf - dat_dampB * dat_decay_diffusion;
+  dat_apB1_idx = (dat_apB1_idx + 1) % 1650;
+  
+  // Delay 2
+  dat_read_pos = dat_delayB2_idx - floor(dat_delayB2_len * dat_size);
+  while (dat_read_pos < 0) ( dat_read_pos += 3200; );
+  dat_tankB_out = dat_delayB2[dat_read_pos % 3200];
+  
+  // Write to delay 2
+  dat_delayB2[dat_delayB2_idx] = dat_tankB;
+  dat_delayB2_idx = (dat_delayB2_idx + 1) % 3200;
+  
+  // === CROSS-FEED (Figure-8 topology) ===
+  // Tank A receives Tank B output (cross-feed)
+  dat_delayA1[dat_delayA1_idx] = dat_input_mono + dat_tankB_out * dat_decay;
+  dat_delayA1_idx = (dat_delayA1_idx + 1) % 4500;
+  
+  // Tank B receives Tank A output (cross-feed)
+  dat_delayB1[dat_delayB1_idx] = dat_input_mono + dat_tankA_out * dat_decay;
+  dat_delayB1_idx = (dat_delayB1_idx + 1) % 4200;
+  
+  // === OUTPUT TAPS ===
+  // Multiple taps from each tank for rich stereo image
+  // Tank A contributes to left, Tank B to right
+  // Normalized to prevent gain buildup
+  wetL = (dat_tankA_out * 0.5 + dat_tankA * 0.3 + dat_tankB * 0.2);
+  wetR = (dat_tankB_out * 0.5 + dat_tankB * 0.3 + dat_tankA * 0.2);
+  
+  // Soft saturation to prevent harsh clipping (tanh-style)
+  wetL > 1.0 ? wetL = 1.0 + (wetL - 1.0) * 0.5;
+  wetL < -1.0 ? wetL = -1.0 + (wetL + 1.0) * 0.5;
+  wetR > 1.0 ? wetR = 1.0 + (wetR - 1.0) * 0.5;
+  wetR < -1.0 ? wetR = -1.0 + (wetR + 1.0) * 0.5;
+  
+  // Final hard limit at ±2.0 (safety)
+  wetL > 2.0 ? wetL = 2.0;
+  wetL < -2.0 ? wetL = -2.0;
+  wetR > 2.0 ? wetR = 2.0;
+  wetR < -2.0 ? wetR = -2.0;
+  
+  // Low-pass filter output
+  abs(iirBL) < 1.18*10^-37 ? iirBL = 0.0;
+  iirBL = iirBL * (1.0 - lowpass) + wetL * lowpass;
+  wetL = iirBL;
+  
+  abs(iirBR) < 1.18*10^-37 ? iirBR = 0.0;
+  iirBR = iirBR * (1.0 - lowpass) + wetR * lowpass;
+  wetR = iirBR;
+  
+  // Stereo width adjustment
+  reverb_width != 1 ? (
+    reverb_width < 0 ? (
+      tmpL = wetL;
+      wetL = wetR;
+      wetR = tmpL;
+    );
+    tmpL = wetL * (1 - 0.3 * widtha) + widtha * 0.7 * wetR;
+    tmpR = wetR * (1 - 0.3 * widtha) + widtha * 0.7 * wetL;
+    wetL = tmpL;
+    wetR = tmpR;
+  );
+  
+  // Mix wet and dry
+  spl0 = dryL * (1 - smooth_reverb_mix) + wetL * smooth_reverb_mix;
+  spl1 = dryR * (1 - smooth_reverb_mix) + wetR * smooth_reverb_mix;
+
+);

@@ -9,11 +9,11 @@ tags: channel strip, EQ, compressor, filter, saturation
 //===========================================
 
 // HIGHPASS SECTION (API 215L style: 12-596 Hz, 12dB/octave)
-slider1:12<12,596,1>Highpass Freq (Hz)
+slider1:12<12,596,1>-Highpass Freq (Hz)
 slider2:0<0,1,1>HP On/Off
 
 // LOWPASS SECTION (API 215L style: 643Hz-40.8kHz, 6dB/octave)
-slider3:40000<643,40800,1>Lowpass Freq (Hz)
+slider3:40000<643,40800,1>-Lowpass Freq (Hz)
 slider4:0<0,1,1>LP On/Off
 
 // EQ SECTION (from Airwindows EQ)

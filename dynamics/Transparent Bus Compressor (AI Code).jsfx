@@ -1,0 +1,161 @@
+desc: Transparent Bus Compressor
+// Clean, artifact-free compression for mix bus duty
+// Based on RMS detection with smooth envelope following
+
+slider1:0<-60,0,0.1>Threshold (dB)
+slider2:2<1,20,0.1>Ratio
+slider3:5<0.1,50,0.1>Attack (ms)
+slider4:100<10,1000,1>Release (ms)
+slider5:3<0,12,0.1>Knee (dB)
+slider6:0<0,24,0.1>Makeup Gain (dB)
+slider7:0<0,1,1{Off,On}>Auto Makeup
+slider8:10<1,50,0.1>RMS Window (ms)
+
+@init
+
+// Constants
+SILENCE_THRESHOLD = -144; // dB
+LOG2DB = 8.6858896380650365530225783783321; // 20/ln(10)
+DB2LOG = 0.11512925464970228420089957273422; // ln(10)/20
+
+// Initialize gain reduction smoothing
+gr_smooth = 1.0;
+prev_gain = 1.0;
+
+// RMS detection buffer
+rms_size = 0;
+rms_pos = 0;
+
+function db2gain(db) (
+  exp(db * DB2LOG);
+);
+
+function gain2db(gain) (
+  log(gain) * LOG2DB;
+);
+
+// Smooth min function for knee
+function smooth_min(x1, x2, k) 
+  local(h)
+(
+  h = max(k - abs(x1 - x2), 0) / k;
+  min(x1, x2) - h * h * k * 0.25;
+);
+
+@slider
+
+// Convert time constants to coefficients
+// Attack: how fast it clamps down
+att_coeff = exp(-1000 / (slider3 * srate));
+
+// Release: how fast it lets go (logarithmic curve)
+rel_coeff = exp(-1000 / (slider4 * srate));
+
+// Threshold and ratio
+thresh_db = slider1;
+thresh_gain = db2gain(thresh_db);
+ratio = slider2;
+ratio_inv = 1.0 / ratio;
+
+// Knee width
+knee_db = slider5;
+
+// Makeup gain
+makeup_db = slider6;
+makeup_gain = db2gain(makeup_db);
+
+// Auto makeup calculation
+slider7 ? (
+  // Estimate gain reduction at -20dB input
+  test_level_db = -20;
+  test_over = max(test_level_db - thresh_db, 0);
+  test_gr = test_over * (1 - ratio_inv);
+  makeup_db = test_gr * 0.5; // Conservative estimate
+  makeup_gain = db2gain(makeup_db);
+  slider6 = makeup_db;
+  sliderchange(slider6);
+);
+
+// RMS window
+rms_window_ms = slider8;
+rms_size = max(1, floor(rms_window_ms * srate * 0.001));
+rms_size = min(rms_size, 48000); // Max 1 second at 48kHz
+
+@sample
+
+// === RMS DETECTION ===
+// Circular buffer for RMS
+rms_pos >= rms_size ? rms_pos = 0;
+rms_sum = 0;
+i = 0;
+loop(rms_size,
+  rms_sum += sqr(rms_buffer[i]);
+  i += 1;
+);
+
+// Current sample squared average of both channels
+input_squared = (sqr(spl0) + sqr(spl1)) * 0.5;
+rms_buffer[rms_pos] = sqrt(input_squared);
+rms_pos += 1;
+
+// RMS level
+rms_level = sqrt(rms_sum / rms_size);
+rms_db = rms_level > 0.0000001 ? gain2db(rms_level) : SILENCE_THRESHOLD;
+
+// === GAIN REDUCTION CALCULATION ===
+// How far over threshold?
+over_db = rms_db - thresh_db;
+
+// Soft knee using smooth minimum
+over_db > 0 ? (
+  // Apply knee smoothing
+  knee_db > 0 ? (
+    knee_start = -knee_db * 0.5;
+    knee_end = knee_db * 0.5;
+    
+    over_db < knee_start ? (
+      // Below knee - no compression
+      gr_db = 0;
+    ) : over_db > knee_end ? (
+      // Above knee - full ratio
+      gr_db = over_db * (1 - ratio_inv);
+    ) : (
+      // Inside knee - smooth transition
+      knee_factor = (over_db - knee_start) / knee_db;
+      gr_db = over_db * (1 - ratio_inv) * knee_factor * knee_factor;
+    );
+  ) : (
+    // Hard knee
+    gr_db = over_db * (1 - ratio_inv);
+  );
+) : (
+  gr_db = 0;
+);
+
+// Convert to linear gain reduction
+target_gain = db2gain(-gr_db);
+
+// === ENVELOPE FOLLOWER ===
+// Smooth, artifact-free envelope following
+// Attack when target is lower (compressing more)
+// Release when target is higher (compressing less)
+target_gain < gr_smooth ? (
+  // Attack - clamp down quickly
+  gr_smooth = gr_smooth * att_coeff + target_gain * (1 - att_coeff);
+) : (
+  // Release - let go slowly with logarithmic curve
+  gr_smooth = gr_smooth * rel_coeff + target_gain * (1 - rel_coeff);
+);
+
+// Additional smoothing to prevent zipper noise
+// Simple one-pole filter on the actual applied gain
+applied_gain = prev_gain * 0.9 + gr_smooth * 0.1;
+prev_gain = applied_gain;
+
+// === APPLY COMPRESSION ===
+spl0 *= applied_gain * makeup_gain;
+spl1 *= applied_gain * makeup_gain;
+
+// === METERING ===
+// Store current GR for display
+gr_meter = gain2db(applied_gain);
