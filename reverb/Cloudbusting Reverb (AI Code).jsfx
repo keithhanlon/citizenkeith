@@ -4,7 +4,7 @@ author: citizenkeith - Claude AI
 about:
   # Cloudbusting Reverb
   
-  A professional algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, 
+  An algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, 
   per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections.
   
   ## Credits
@@ -12,8 +12,6 @@ about:
   Original CloudSeed: https://github.com/GhostNoteAudio/CloudSeedCore
   
   ## License
-  This plugin is released under the MIT License, matching the CloudSeed source.
-  
   CloudSeed original license:
   MIT License - Copyright (c) 2017 Valdemar Erlingsson
   

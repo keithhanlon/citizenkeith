@@ -56,6 +56,40 @@
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
+{\pard \ql \f0 \sa180 \li0 \fi0 An algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, 
+  per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections. Inspired by Cloudseed. This plugin is released under the MIT License. license\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-10-30T13:28	:22Z">
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="reverb">
+    <reapack name="Cloudbusting Reverb (AI Code).jsfx" type="effect" desc="Cloudbusting Reverb">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Stereo widener, BBD chorus, ping pong delay and three reverb choices, for a Robin Guthrie-inspired tone. This JSFX released under GPLv3 license\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-10-30T13:28	:22Z">
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="reverb">
+    <reapack name="Cocteau Reverb (AI Code).jsfx" type="effect" desc="Cocteau Reverb">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+
 {\pard \ql \f0 \sa180 \li0 \fi0 Diffuse delay lines that morph from simple delays to complex reverb based on diffusion control. This JSFX released under GPLv3 license\par}
 }
 ]]></description>
