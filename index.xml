@@ -106,6 +106,22 @@
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
+{\pard \ql \f0 \sa180 \li0 \fi0 Tempo-sync Tremolo. This JSFX released under GPLv3 license\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-10-30T13:28	:22Z">
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/modulation/Tempo%20Tremolo%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="modulation">
+    <reapack name="Tempo Tremolo (AI Code).jsfx" type="effect" desc="SynthiAKS Analog Modular Synthesizer">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
 {\pard \ql \f0 \sa180 \li0 \fi0 Emulation of EMS Synthi AKS Synthesizer This JSFX released under GPLv3 license\par}
 }
 ]]></description>
