@@ -116,7 +116,7 @@
     </reapack>
   </category>
   <category name="modulation">
-    <reapack name="Tempo Tremolo (AI Code).jsfx" type="effect" desc="SynthiAKS Analog Modular Synthesizer">
+    <reapack name="Tempo Tremolo (AI Code).jsfx" type="effect" desc="Tempo Tremolo">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
