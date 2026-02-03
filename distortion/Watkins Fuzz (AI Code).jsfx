@@ -1,0 +1,440 @@
+desc:Watkins Fuzz
+author: citizenkeith / Claude AI
+version: 1.0
+about: 
+  Emulation of the Watkins WEM Project V Fuzz pedal, a sophisticated 8-transistor British fuzz from the late 1960s.
+  Features asymmetric quasi-complementary clipping, inductor resonance modeling, and dynamic octave effects.
+  Famous for use by Brian Eno and Robert Fripp on classic recordings.
+  This JSFX released under GPLv3 license
+
+slider1:0.1<0,1,0.01>Attack (Fuzz Amount)
+slider2:1<0,1,0.01>Volume
+slider3:0<0,1,1{Dark,Bright}>Drive
+slider4:0<0,1,1{Smooth,Edge}>Edge
+slider5:0<0,1,0.01>Bias Trim 1
+slider6:0<0,1,0.01>Bias Trim 2
+slider7:1200<400,3000,10>Inductor Resonant Frequency (Hz)
+slider8:3.5<0.5,10,0.1>Inductor Q Factor
+slider9:0.4<0,1,0.01>Inductor Saturation
+slider10:0.3<0,1,0.01>Inductor Mix
+slider11:0.35<0,1,0.01>Octave Amount
+slider12:0<0,2,1{Subtle,Moderate,Aggressive}>Octave Mode
+slider13:1800<800,4000,10>Octave Filter Frequency (Hz)
+slider14:0.6<0,1,0.01>Octave Blend Dynamics
+slider15:0.5<0,1,0.01>Sag Amount
+slider16:0.3<0,1,0.01>Temperature Drift
+
+@init
+// Basic tanh function
+function tanh(x)
+(
+  (exp(2*x) - 1) / (exp(2*x) + 1);
+);
+
+// ============================================
+// TEMPERATURE AND SAG MODELING
+// ============================================
+
+// Power supply sag simulation
+// Battery voltage drops under load, reducing headroom and changing tone
+function power_supply_sag(signal_level, sag_amount)
+local(load, voltage_drop, supply_voltage)
+(
+  // Calculate current load based on signal level (RMS-ish)
+  load = signal_level * signal_level;
+  
+  // Fast attack, slow release for voltage sag
+  load > sag_voltage ? (
+    // Quick voltage drop when signal hits
+    sag_voltage = sag_voltage + 0.05 * (load - sag_voltage);
+  ) : (
+    // Slow recovery as battery "recharges"
+    sag_voltage = sag_voltage + 0.001 * (load - sag_voltage);
+  );
+  
+  // Voltage drop reduces available headroom
+  voltage_drop = sag_voltage * sag_amount * 0.3;
+  
+  // Supply voltage ranges from 1.0 (full) to ~0.7 (sagged)
+  supply_voltage = 1.0 - voltage_drop;
+  
+  // Clamp to reasonable range
+  max(0.7, min(1.0, supply_voltage));
+);
+
+// Temperature drift simulation
+// Transistors warm up with use, affecting gain and bias
+function temperature_drift(signal_level, drift_amount)
+local(heat, temp_coefficient, drift)
+(
+  // Heat buildup from signal (slow thermal mass)
+  heat = signal_level * signal_level;
+  
+  // Very slow thermal time constant (seconds to minutes)
+  temperature = temperature + 0.0002 * (heat - temperature);
+  
+  // Temperature affects transistor beta (gain)
+  // Typically increases slightly with temp, then decreases
+  temp_coefficient = temperature * drift_amount;
+  
+  // Small gain modulation (+/- 5%)
+  drift = 1.0 + (temp_coefficient - temp_coefficient * temp_coefficient * 2.0) * 0.05;
+  
+  // Also affects bias point slightly
+  temp_bias_shift = (temperature - 0.5) * drift_amount * 0.1;
+  
+  drift;
+);
+
+// Compression from sag
+// Lower supply voltage = earlier clipping = more compression
+function sag_compression(input, supply_voltage)
+local(compressed, threshold)
+(
+  // Threshold decreases as voltage sags
+  threshold = 0.7 * supply_voltage;
+  
+  // Soft knee compression
+  abs(input) > threshold ? (
+    compressed = input > 0 ? 
+      threshold + (input - threshold) * 0.6 :
+      -threshold + (input + threshold) * 0.6;
+  ) : (
+    compressed = input;
+  );
+  
+  compressed;
+);
+
+// Transistor gain reduction with sag
+// Lower voltage = lower gain in active region
+function sag_gain_reduction(supply_voltage)
+local(gain_factor)
+(
+  // Gain drops roughly proportionally with voltage
+  gain_factor = 0.6 + (supply_voltage - 0.7) / 0.3 * 0.4;
+  
+  max(0.6, min(1.0, gain_factor));
+);
+
+// ============================================
+
+// Asymmetric soft clipping
+function asymmetric_clip(x, pos_thresh, neg_thresh, asymmetry)
+local(output, pos_knee, neg_knee)
+(
+  pos_knee = 1.0 / (1.0 - pos_thresh);
+  neg_knee = 1.0 / (1.0 - neg_thresh);
+  
+  x > pos_thresh ? (
+    output = pos_thresh + (1.0 - pos_thresh) * 
+             tanh((x - pos_thresh) * pos_knee * asymmetry);
+  ) : x < -neg_thresh ? (
+    output = -neg_thresh - (1.0 - neg_thresh) * 
+             tanh((-x - neg_thresh) * neg_knee / asymmetry);
+  ) : (
+    output = x;
+  );
+  
+  output;
+);
+
+// Transistor saturation model
+function transistor_sat(x, gain, pos_sat, neg_sat, bias_shift)
+local(shifted, sat_pos, sat_neg)
+(
+  shifted = x + bias_shift;
+  sat_pos = pos_sat * (2.0 / (1.0 + exp(-shifted * gain / pos_sat)) - 1.0);
+  sat_neg = -neg_sat * (2.0 / (1.0 + exp(shifted * gain / neg_sat)) - 1.0);
+  shifted > 0 ? sat_pos : sat_neg;
+);
+
+// State-variable filter
+function svf_tick(input, freq, q)
+local(f, feedback, lowpass, highpass, bandpass)
+(
+  f = 2.0 * sin($pi * freq / srate);
+  feedback = 1.0 / q;
+  
+  lowpass = svf_lp + f * svf_bp;
+  highpass = input - lowpass - feedback * svf_bp;
+  bandpass = svf_bp + f * highpass;
+  
+  svf_lp = lowpass;
+  svf_bp = bandpass;
+  svf_hp = highpass;
+  
+  bandpass;
+);
+
+// RLC resonator
+function rlc_resonator(input, freq, q, damping)
+local(omega, alpha, a0, a1, a2, b0, b1, b2, output)
+(
+  omega = 2.0 * $pi * freq / srate;
+  alpha = sin(omega) / (2.0 * q);
+  
+  a0 = 1.0 + alpha;
+  a1 = -2.0 * cos(omega);
+  a2 = 1.0 - alpha;
+  b0 = alpha;
+  b1 = 0;
+  b2 = -alpha;
+  
+  output = (b0 / a0) * input + (b1 / a0) * rlc_x1 + (b2 / a0) * rlc_x2
+           - (a1 / a0) * rlc_y1 - (a2 / a0) * rlc_y2;
+  
+  rlc_x2 = rlc_x1;
+  rlc_x1 = input;
+  rlc_y2 = rlc_y1;
+  rlc_y1 = output;
+  
+  output * (1.0 - damping * 0.1);
+);
+
+// Inductor saturation
+function inductor_saturate(input, sat_amount)
+local(flux, sat_flux)
+(
+  flux = inductor_flux + input * 0.1;
+  sat_flux = tanh(flux * (1.0 + sat_amount * 10.0));
+  inductor_flux = sat_flux * 0.995;
+  inductor_output = (sat_flux - inductor_last_flux);
+  inductor_last_flux = sat_flux;
+  inductor_output;
+);
+
+// Multi-pole resonator
+function multi_resonator(input, base_freq, q)
+local(peak1, peak2, peak3)
+(
+  peak1 = svf_tick(input, base_freq, q);
+  peak2 = rlc_resonator(input, base_freq * 2.3, q * 0.6, 0.3);
+  peak3 = rlc_resonator(input, base_freq * 3.7, q * 0.4, 0.5);
+  peak1 + peak2 * 0.3 + peak3 * 0.15;
+);
+
+// Full-wave rectification - classic octave-up method
+function octave_rectify(input)
+local(rectified)
+(
+  rectified = abs(input);
+  octave_hp = octave_hp + 0.01 * (rectified - octave_hp);
+  rectified = rectified - octave_hp;
+  rectified;
+);
+
+// Frequency doubler using waveshaping
+function octave_doubler(input, intensity)
+local(squared, shaped)
+(
+  squared = input * input;
+  shaped = input >= 0 ? squared : -squared;
+  shaped * intensity;
+);
+
+// Harmonic enhancer - emphasizes even-order harmonics
+function octave_enhance(input, amount)
+local(enhanced, even_harmonics)
+(
+  even_harmonics = input * input - (input * input * input * input) * 0.3;
+  input + even_harmonics * amount;
+);
+
+// Intermodulation octave generator
+function octave_intermod(input, prev_input, mod_amount)
+local(intermod, ring_mod)
+(
+  ring_mod = input * prev_input;
+  octave_intermod_hp = octave_intermod_hp + 0.015 * (ring_mod - octave_intermod_hp);
+  intermod = ring_mod - octave_intermod_hp;
+  intermod * mod_amount;
+);
+
+// Bandpass filter for octave content
+function octave_filter(input, center_freq)
+local(bp_coeff, bp_out)
+(
+  bp_coeff = 2.0 * sin($pi * center_freq / srate);
+  
+  octave_bp_low = octave_bp_low + bp_coeff * octave_bp_band;
+  octave_bp_high = input - octave_bp_low - 0.5 * octave_bp_band;
+  octave_bp_band = octave_bp_band + bp_coeff * octave_bp_high;
+  
+  octave_bp_band;
+);
+
+// Dynamic octave blend - octave increases with signal level
+function octave_dynamic_mix(input, octave_sig, dynamics_amount, static_mix)
+local(envelope, dynamic_mix)
+(
+  abs_input = abs(input);
+  envelope = abs_input > octave_env ? 
+             octave_env + 0.1 * (abs_input - octave_env) :
+             octave_env + 0.001 * (abs_input - octave_env);
+  octave_env = envelope;
+  
+  dynamic_mix = static_mix + (envelope * dynamics_amount);
+  dynamic_mix = min(1.0, dynamic_mix);
+  
+  input * (1.0 - dynamic_mix) + octave_sig * dynamic_mix;
+);
+
+// Initialize all filter states
+svf_lp = svf_bp = svf_hp = 0;
+rlc_x1 = rlc_x2 = rlc_y1 = rlc_y2 = 0;
+inductor_flux = inductor_last_flux = inductor_output = 0;
+octave_hp = 0;
+octave_intermod_hp = 0;
+octave_bp_low = octave_bp_high = octave_bp_band = 0;
+octave_env = 0;
+prev_sample = 0;
+
+// Sag and temperature states
+sag_voltage = 0;
+temperature = 0;
+temp_bias_shift = 0;
+
+// Multi-stage gain coefficients
+gain_stage1 = 3.0;
+gain_stage2 = 4.5;
+gain_stage3 = 6.0;
+gain_stage4 = 2.5;
+
+// Filter coefficients
+fc_low = 120 / srate;
+fc_high = 3500 / srate;
+
+// Initialize additional filter states
+lp1 = hp1 = 0;
+
+@slider
+attack = slider1 * slider1;
+volume = slider2;
+drive_mode = slider3;
+edge_mode = slider4;
+
+// Bias adjustments
+trim1 = slider5 * 0.5 + 0.75;
+trim2 = slider6 * 0.5 + 0.75;
+bias_shift1 = (slider5 - 0.5) * 0.2;
+bias_shift2 = (slider6 - 0.5) * 0.15;
+
+// Inductor parameters
+inductor_freq = slider7;
+inductor_q = slider8;
+inductor_sat = slider9;
+inductor_mix = slider10;
+
+// Octave parameters
+octave_amount = slider11;
+octave_mode = slider12;
+octave_filter_freq = slider13;
+octave_dynamics = slider14;
+
+// Sag and temperature parameters
+sag_amount = slider15;
+temp_drift_amount = slider16;
+
+// Adjust gain staging
+edge_boost = edge_mode ? 1.8 : 1.0;
+drive_treble = drive_mode ? 1.5 : 0.7;
+
+// Saturation voltages
+npn_sat = 0.7;
+pnp_sat = 0.55;
+
+@sample
+// Input stage
+input = spl0 + spl1 * 0.5;
+
+// ============================================
+// APPLY SAG AND TEMPERATURE MODELING
+// ============================================
+
+// Calculate RMS-ish signal level for sag/temp
+signal_level = abs(input) > signal_level ?
+               signal_level + 0.1 * (abs(input) - signal_level) :
+               signal_level + 0.01 * (abs(input) - signal_level);
+
+// Calculate power supply voltage (sag)
+supply_voltage = power_supply_sag(signal_level, sag_amount);
+
+// Calculate temperature drift (affects gain)
+temp_gain_mod = temperature_drift(signal_level, temp_drift_amount);
+
+// Gain reduction from sag
+sag_gain_mod = sag_gain_reduction(supply_voltage);
+
+// Combined gain modulation
+total_gain_mod = temp_gain_mod * sag_gain_mod;
+
+// ============================================
+
+// Stage 1: Initial gain with asymmetric transistor behavior
+stage1 = input * gain_stage1 * trim1 * total_gain_mod;
+stage1 = transistor_sat(stage1, 4.0, 0.8 * supply_voltage, 0.7 * supply_voltage, bias_shift1 + temp_bias_shift);
+
+// Apply sag compression to stage 1
+stage1 = sag_compression(stage1, supply_voltage);
+
+// Stage 2: AC-coupled gain stage
+hp1 = hp1 + fc_low * (stage1 - hp1);
+stage2 = (stage1 - hp1) * gain_stage2 * attack * total_gain_mod;
+stage2 = asymmetric_clip(stage2, 0.6 * supply_voltage, 0.5 * supply_voltage, 2.0);
+
+// Apply sag compression
+stage2 = sag_compression(stage2, supply_voltage);
+
+// Octave generation
+octave_mode == 0 ? (
+  // SUBTLE MODE
+  octave_raw = octave_rectify(stage2);
+  octave_raw = octave_enhance(octave_raw, 0.3);
+) : octave_mode == 1 ? (
+  // MODERATE MODE
+  octave_raw = octave_doubler(stage2, 0.8);
+  octave_raw = octave_raw + octave_intermod(stage2, prev_sample, 0.4);
+  octave_raw = octave_enhance(octave_raw, 0.5);
+) : (
+  // AGGRESSIVE MODE
+  oct1 = octave_rectify(stage2);
+  oct2 = octave_doubler(stage2, 1.0);
+  oct3 = octave_intermod(stage2, prev_sample, 0.7);
+  octave_raw = oct1 * 0.4 + oct2 * 0.4 + oct3 * 0.2;
+  octave_raw = octave_enhance(octave_raw, 0.8);
+);
+
+// Filter the octave content
+octave_filtered = octave_filter(octave_raw, octave_filter_freq);
+octave_sat = tanh(octave_filtered * 2.0) * 0.7;
+
+// Dynamically blend octave with main signal
+stage2_with_octave = octave_dynamic_mix(stage2, octave_sat, octave_dynamics, octave_amount);
+
+// Store current sample for next iteration
+prev_sample = stage2;
+
+// Inductor stage
+resonant = multi_resonator(stage2_with_octave, inductor_freq, inductor_q);
+resonant_sat = inductor_saturate(resonant, inductor_sat);
+stage3 = stage2_with_octave + (resonant + resonant_sat) * inductor_mix;
+
+// Post-inductor gain and clipping
+stage3 = stage3 * gain_stage3 * total_gain_mod;
+stage3 = asymmetric_clip(stage3, 0.5 * supply_voltage, 0.4 * supply_voltage, 1.8);
+
+// Stage 4: Pre-output gain stage
+stage4 = stage3 * gain_stage4 * edge_boost * trim2 * total_gain_mod;
+
+// Drive switch tone shaping
+lp1 = lp1 + fc_high * drive_treble * (stage4 - lp1);
+stage4 = drive_mode ? stage4 : lp1;
+
+// Final output stage with sag-affected clipping
+output = asymmetric_clip(stage4 * 0.4, 0.65 * supply_voltage, 0.45 * supply_voltage, 2.5);
+output = transistor_sat(output, 2.5, npn_sat * supply_voltage, pnp_sat * supply_voltage, bias_shift2 + temp_bias_shift);
+
+// Output with volume control
+spl0 = output * volume;
+spl1 = output * volume;
