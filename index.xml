@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <index version="1" name="citizenkeith" commit="7b0f07b53e1cec14cb2415a8f8ca4c9bd32dc501">
   <category name="delay">
-      <reapack name="ReaFripp Tape Loop Delay (AI Code).jsfx" type="effect" desc="ReaFripp Tape Loop Delay">
+      <reapack name="ReaFripp Tape Loop Delay (AI Code).jsfx" type="effect" desc="ReaFripp Tape Loop Delay (AI Code)">
         <metadata>
           <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
   {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -16,7 +16,7 @@
         </version>
       </reapack>
 
-    <reapack name="Tycho Delay TMA-1 - Tape Delay (AI Code).jsfx" type="effect" desc="Tycho Delay TMA-1">
+    <reapack name="Tycho Delay TMA-1 - Tape Delay (AI Code).jsfx" type="effect" desc="Tycho Delay TMA-1 (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -33,7 +33,7 @@
         <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
-    <reapack name="Cocteau Reverb - (AI Code).jsfx" type="effect" desc="Cocteau Reverb">
+    <reapack name="Cocteau Reverb - (AI Code).jsfx" type="effect" desc="Cocteau Reverb (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -45,12 +45,12 @@
 ]]></description>
       </metadata>
       <version name="1.0" author="citizenkeith - Claude AI" time="2025-07-25T17:59:24Z">
-        <source>hhttps://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
     <category name="reverb">
-    <reapack name="Stargate Ambient Reverb (AI Code).jsfx" type="effect" desc="Stargate Ambient Reverb">
+    <reapack name="Stargate Ambient Reverb (AI Code).jsfx" type="effect" desc="Stargate Ambient Reverb (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -66,7 +66,7 @@
     </reapack>
   </category>
   <category name="reverb">
-    <reapack name="Cloudbusting Reverb (AI Code).jsfx" type="effect" desc="Cloudbusting Reverb">
+    <reapack name="Cloudbusting Reverb (AI Code).jsfx" type="effect" desc="Cloudbusting Reverb (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -82,7 +82,7 @@
     </reapack>
   </category>
   <category name="synth">
-    <reapack name="SynthiAKS - Modular Analog Synthesizer (AI Code).jsfx" type="effect" desc="SynthiAKS Analog Modular Synthesizer">
+    <reapack name="SynthiAKS - Modular Analog Synthesizer (AI Code).jsfx" type="effect" desc="SynthiAKS Analog Modular Synthesizer (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -98,7 +98,7 @@
     </reapack>
   </category>
   <category name="modulation">
-    <reapack name="Tempo Tremolo (AI Code).jsfx" type="effect" desc="Tempo Tremolo">
+    <reapack name="Tempo Tremolo (AI Code).jsfx" type="effect" desc="Tempo Tremolo (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -114,7 +114,7 @@
     </reapack>
   </category>
   <category name="tape">
-    <reapack name="TapeEmu - Professional Tape Machine Emulation (AI Code).jsfx" type="effect" desc="TapeEmu - Professional Tape Machine Emulation">
+    <reapack name="TapeEmu - Professional Tape Machine Emulation (AI Code).jsfx" type="effect" desc="TapeEmu - Professional Tape Machine Emulation (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -130,7 +130,7 @@
     </reapack>
   </category>
   <category name="midi">
-    <reapack name="Probabilistic MIDI Note Generator 0.10 beta (AI Code).jsfx" type="effect" desc="Probabilistic MIDI Note Generator 0.10 beta">
+    <reapack name="Probabilistic MIDI Note Generator (AI Code).jsfx" type="effect" desc="Probabilistic MIDI Note Generator (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -141,14 +141,13 @@ license\par}
 }
 ]]></description>
       </metadata>
-      <version name="0.20 beta" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
+      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
         <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/midi/Probabilistic%20MIDI%20Note%20Generator%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
-  
     <category name="distortion">
-    <reapack name="Watkins Fuzz (AI Code).jsfx" type="effect" desc="Watkins Fuzz">
+    <reapack name="Watkins Fuzz (AI Code).jsfx" type="effect" desc="Watkins Fuzz (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -159,13 +158,12 @@ license\par}
 ]]></description>
       </metadata>
       <version name="1.0" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
-        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx </source>
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
-  
     <category name="dynamics">
-    <reapack name=".  " type="effect" desc="Transparent Buss Compressor">
+    <reapack name="Transparent Bus Compressor (AI Code).jsfx" type="effect" desc="Transparent Buss Compressor (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -180,9 +178,8 @@ license\par}
       </version>
     </reapack>
   </category>
-  
     <category name="modulation">
-    <reapack name="Tempo Tremolo (AI Code" type="effect" desc="Tempo Tremolo">
+    <reapack name="Tempo Tremolo (AI Code).jsfx" type="effect" desc="Tempo Tremolo (AI Code)">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
@@ -193,9 +190,8 @@ license\par}
 ]]></description>
       </metadata>
       <version name="1.0" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
-        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/modulation/Tempo%20Tremolo%20(AI%20Code</source>
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/modulation/Tempo%20Tremolo%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
-  
 </index>
