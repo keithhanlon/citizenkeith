@@ -33,19 +33,19 @@
         <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
-    <reapack name="Tycho Delay TMA-2 - (AI Code).jsfx" type="effect" desc="Tycho Delay TMA-2">
+    <reapack name="Cocteau Reverb - (AI Code).jsfx" type="effect" desc="Cocteau Reverb">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Advanced stereo delay with spring reverb, filters, and modulation\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Stereo widener, BBD chorus, ping pong delay and three reverb choices, for a Robin Guthrie-inspired tone.\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 This JSFX released under GPLv3 license\par}
 }
 ]]></description>
       </metadata>
       <version name="1.0" author="citizenkeith - Claude AI" time="2025-07-25T17:59:24Z">
-        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/delay/Tycho%20Delay%20TMA-2%20(AI%20Code).jsfx</source>
+        <source>hhttps://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -56,13 +56,12 @@
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 An algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, 
-  per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections. Inspired by Cloudseed. This plugin is released under the MIT License. license\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Diffuse delay lines that morph from simple delays to complex reverb based on diffusion control\par}
 }
 ]]></description>
       </metadata>
-      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-10-30T13:28	:22Z">
-        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
+      <version name="1.1" author="citizenkeith - Claudie AI" time="2025-10-30T13:28	:22Z">
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Stargate%20Ambient%20Reverb%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -73,29 +72,12 @@
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Stereo widener, BBD chorus, ping pong delay and three reverb choices, for a Robin Guthrie-inspired tone. This JSFX released under GPLv3 license\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 An algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections. This JSFX released under GPLv3 license\par}
 }
 ]]></description>
       </metadata>
       <version name="1.0" author="citizenkeith - Claudie AI" time="2025-10-30T13:28	:22Z">
-        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
-      </version>
-    </reapack>
-  </category>
-  <category name="reverb">
-    <reapack name="Cocteau Reverb (AI Code).jsfx" type="effect" desc="Cocteau Reverb">
-      <metadata>
-        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
-{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
-\widowctrl\hyphauto
-
-
-{\pard \ql \f0 \sa180 \li0 \fi0 Diffuse delay lines that morph from simple delays to complex reverb based on diffusion control. This JSFX released under GPLv3 license\par}
-}
-]]></description>
-      </metadata>
-      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-10-30T13:28	:22Z">
-        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Stargate%20Ambient%20Reverb%20(AI%20Code).jsfx</source>
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -142,7 +124,7 @@
 }
 ]]></description>
       </metadata>
-      <version name="1.5" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
+      <version name="1.7" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
         <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
@@ -164,4 +146,56 @@ license\par}
       </version>
     </reapack>
   </category>
+  
+    <category name="distortion">
+    <reapack name="Watkins Fuzz (AI Code).jsfx" type="effect" desc="Watkins Fuzz">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Emulation of the Watkins WEM Project V Fuzz pedal \par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx </source>
+      </version>
+    </reapack>
+  </category>
+  
+    <category name="dynamics">
+    <reapack name=".  " type="effect" desc="Transparent Buss Compressor">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Clean, artifact-free compression for mix bus duty. \par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/dynamics/Transparent%20Bus%20Compressor%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  
+    <category name="modulation">
+    <reapack name="Tempo Tremolo (AI Code" type="effect" desc="Tempo Tremolo">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Tremolo that can be synced to project tempo. \par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
+        <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/modulation/Tempo%20Tremolo%20(AI%20Code</source>
+      </version>
+    </reapack>
+  </category>
+  
 </index>
