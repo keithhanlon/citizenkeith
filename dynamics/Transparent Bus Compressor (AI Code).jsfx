@@ -1,6 +1,6 @@
 desc: Transparent Bus Compressor
 author: citizenkeith - Claude AI
-version 1.0
+version 1.5
 about:Clean, artifact-free compression for mix bus duty
 // Based on RMS detection with smooth envelope following
 // Released under GPLv3 License
@@ -28,6 +28,15 @@ prev_gain = 1.0;
 // RMS detection buffer
 rms_size = 0;
 rms_pos = 0;
+
+// Metering
+gr_peak = 0;
+gr_peak_hold = 0;
+peak_hold_time = 0;
+in_peak_l = 0;
+in_peak_r = 0;
+out_peak_l = 0;
+out_peak_r = 0;
 
 function db2gain(db) (
   exp(db * DB2LOG);
@@ -85,6 +94,10 @@ rms_size = max(1, floor(rms_window_ms * srate * 0.001));
 rms_size = min(rms_size, 48000); // Max 1 second at 48kHz
 
 @sample
+
+// === INPUT METERING ===
+in_peak_l = max(in_peak_l * 0.9995, abs(spl0));
+in_peak_r = max(in_peak_r * 0.9995, abs(spl1));
 
 // === RMS DETECTION ===
 // Circular buffer for RMS
@@ -155,10 +168,188 @@ target_gain < gr_smooth ? (
 applied_gain = prev_gain * 0.9 + gr_smooth * 0.1;
 prev_gain = applied_gain;
 
+// === GAIN REDUCTION METERING ===
+gr_current = gain2db(applied_gain);
+gr_peak = max(gr_peak * 0.9995, -gr_current); // Negative because GR is reduction
+
+// Peak hold with 2 second decay
+peak_hold_time > 0 ? (
+  peak_hold_time -= 1;
+) : (
+  gr_peak_hold *= 0.99; // Slow decay after hold
+);
+
+gr_peak > gr_peak_hold ? (
+  gr_peak_hold = gr_peak;
+  peak_hold_time = srate * 2; // 2 second hold
+);
+
 // === APPLY COMPRESSION ===
 spl0 *= applied_gain * makeup_gain;
 spl1 *= applied_gain * makeup_gain;
 
-// === METERING ===
-// Store current GR for display
-gr_meter = gain2db(applied_gain);
+// === OUTPUT METERING ===
+out_peak_l = max(out_peak_l * 0.9995, abs(spl0));
+out_peak_r = max(out_peak_r * 0.9995, abs(spl1));
+
+@gfx 500 220
+
+// Colors
+gfx_clear = 0;
+bg_r = 0.15; bg_g = 0.15; bg_b = 0.15;
+meter_bg_r = 0.1; meter_bg_g = 0.1; meter_bg_b = 0.1;
+gr_color_r = 0.3; gr_color_g = 0.8; gr_color_b = 0.4;
+peak_color_r = 1.0; peak_color_g = 0.5; peak_color_b = 0.0;
+text_r = 0.9; text_g = 0.9; text_b = 0.9;
+grid_r = 0.3; grid_g = 0.3; grid_b = 0.3;
+
+// Background
+gfx_r = bg_r; gfx_g = bg_g; gfx_b = bg_b;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+// Calculate responsive dimensions
+margin = max(10, gfx_w * 0.025);
+title_size = max(14, min(18, gfx_h * 0.08));
+label_size = max(9, min(12, gfx_h * 0.05));
+value_size = max(11, min(14, gfx_h * 0.065));
+
+// Title
+gfx_r = text_r; gfx_g = text_g; gfx_b = text_b;
+gfx_x = margin;
+gfx_y = margin;
+gfx_setfont(1, "Arial", title_size);
+gfx_drawstr("Gain Reduction");
+
+// Meter dimensions - responsive
+meter_x = margin * 2;
+meter_y = margin * 3 + title_size;
+meter_w = gfx_w - (margin * 4);
+meter_h = max(40, min(80, gfx_h * 0.3));
+
+// Meter background
+gfx_r = meter_bg_r; gfx_g = meter_bg_g; gfx_b = meter_bg_b;
+gfx_rect(meter_x, meter_y, meter_w, meter_h);
+
+// Grid lines and labels - smart spacing
+gfx_setfont(1, "Arial", label_size);
+
+// dB marks - only show if there's enough space
+db_values = 10000; // Memory location
+db_values[0] = 0;
+db_values[1] = -3;
+db_values[2] = -6;
+db_values[3] = -9;
+db_values[4] = -12;
+db_values[5] = -15;
+db_values[6] = -18;
+db_values[7] = -24;
+
+// Calculate minimum spacing needed (about 35 pixels per label)
+min_spacing = 35;
+max_labels = floor(meter_w / min_spacing);
+
+// Determine which labels to show based on width
+meter_w < 200 ? (
+  // Very narrow - only show 0, -12, -24
+  show_labels = 10001;
+  show_labels[0] = 0;
+  show_labels[1] = -12;
+  show_labels[2] = -24;
+  num_labels = 3;
+) : meter_w < 350 ? (
+  // Narrow - show 0, -6, -12, -18, -24
+  show_labels = 10001;
+  show_labels[0] = 0;
+  show_labels[1] = -6;
+  show_labels[2] = -12;
+  show_labels[3] = -18;
+  show_labels[4] = -24;
+  num_labels = 5;
+) : (
+  // Wide enough - show all
+  show_labels = 10001;
+  show_labels[0] = 0;
+  show_labels[1] = -3;
+  show_labels[2] = -6;
+  show_labels[3] = -9;
+  show_labels[4] = -12;
+  show_labels[5] = -15;
+  show_labels[6] = -18;
+  show_labels[7] = -24;
+  num_labels = 8;
+);
+
+// Draw grid lines and labels
+i = 0;
+loop(num_labels,
+  db_val = show_labels[i];
+  x_pos = meter_x + ((-db_val / 24) * meter_w);
+  
+  // Grid line
+  gfx_r = grid_r; gfx_g = grid_g; gfx_b = grid_b;
+  gfx_line(x_pos, meter_y, x_pos, meter_y + meter_h);
+  
+  // Label - center it properly
+  gfx_r = text_r; gfx_g = text_g; gfx_b = text_b;
+  label_str = sprintf(#, "%d", db_val);
+  gfx_measurestr(label_str, str_w, str_h);
+  gfx_x = x_pos - (str_w * 0.5);
+  gfx_y = meter_y + meter_h + 5;
+  gfx_drawstr(label_str);
+  
+  i += 1;
+);
+
+// GR meter fill
+gr_display = min(24, gr_peak); // Cap at -24dB
+gr_width = (gr_display / 24) * meter_w;
+
+gfx_r = gr_color_r; gfx_g = gr_color_g; gfx_b = gr_color_b;
+gfx_rect(meter_x, meter_y, gr_width, meter_h);
+
+// Peak hold line
+gr_peak_display = min(24, gr_peak_hold);
+peak_x = meter_x + ((gr_peak_display / 24) * meter_w);
+gfx_r = peak_color_r; gfx_g = peak_color_g; gfx_b = peak_color_b;
+gfx_rect(peak_x - 2, meter_y, 4, meter_h);
+
+// Numeric readouts - responsive positioning
+gfx_setfont(1, "Arial", value_size);
+readout_y = meter_y + meter_h + label_size + 20;
+
+// GR readout
+gfx_r = text_r; gfx_g = text_g; gfx_b = text_b;
+gfx_x = margin * 2;
+gfx_y = readout_y;
+gfx_drawstr("GR: ");
+gfx_drawnumber(-gr_peak, 1);
+gfx_drawstr(" dB");
+
+// Peak hold readout - position based on window width
+gfx_x = margin * 2 + (gfx_w * 0.3);
+gfx_y = readout_y;
+gfx_drawstr("Peak: ");
+gfx_drawnumber(-gr_peak_hold, 1);
+gfx_drawstr(" dB");
+
+// Input/Output levels
+io_y = readout_y + value_size + 10;
+
+// Input
+gfx_setfont(1, "Arial", label_size);
+gfx_x = margin * 2;
+gfx_y = io_y;
+gfx_drawstr("IN: ");
+in_db = gain2db(max(in_peak_l, in_peak_r));
+in_db = max(-60, min(0, in_db));
+gfx_drawnumber(in_db, 1);
+gfx_drawstr(" dB");
+
+// Output
+gfx_x = margin * 2 + (gfx_w * 0.3);
+gfx_y = io_y;
+gfx_drawstr("OUT: ");
+out_db = gain2db(max(out_peak_l, out_peak_r));
+out_db = max(-60, min(0, out_db));
+gfx_drawnumber(out_db, 1);
+gfx_drawstr(" dB");
