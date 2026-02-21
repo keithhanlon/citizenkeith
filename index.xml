@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <index version="1" name="citizenkeith" commit="7b0f07b53e1cec14cb2415a8f8ca4c9bd32dc501">
+  <category name="channel strip">
+      <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
+        <metadata>
+          <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+  {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+  \widowctrl\hyphauto
+
+  {\pard \ql \f0 \sa180 \li0 \fi0  Channel strip with transformer-style harmonic coloration, Neve style shelf,
+Trident style HPF, plus a VCA compressor, expander and gate This JSFX released under GPLv3 license\par}
+  }
+  ]]></description>
+        </metadata>
+        <version name="1.1" author="citizenkeith" time="2025-07-25T17:33:22Z">
+          <source>https://raw.githubusercontent.com/keithhanlon/citizenkeith/refs/heads/main/channel%20strip/Fidelio%20Channel%20Strip/Fidelio%20Channel%20Strip.jsfx</source>
+        </version>
+      </reapack>
 
   <category name="delay">
       <reapack name="Garden Hose Delay (AI Code).jsfx" type="effect" desc="Garden Hose Delay (AI Code)">
