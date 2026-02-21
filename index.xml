@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<index version="1" name="citizenkeith" commit="3d9e3081a375735465bb5fcd34fe34f67e8c8f8b">
+  <category name="channel strip/Fidelio Channel Strip">
+    <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Channel strip with transformer-style harmonic coloration, Neve style shelf,\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.1" author="citizenkeith and Claude AI" time="2026-02-21T19:19:41Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/3d9e3081a375735465bb5fcd34fe34f67e8c8f8b/channel%20strip/Fidelio%20Channel%20Strip/Fidelio%20Channel%20Strip.jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="delay">
+    <reapack name="Garden Hose Delay (AI Code).jsfx" type="effect" desc="Garden Hose Delay">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Garden Hose Delay - Time Cube Emulator\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 An emulation of the Cooper Time Cube, a classic electromechanical delay unit from the 1970s that created its characteristic doubling effect by sending audio through a coiled garden hose as a transmission line.\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith and Claude AI" time="2026-02-21T19:19:41Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/3d9e3081a375735465bb5fcd34fe34f67e8c8f8b/delay/Garden%20Hose%20Delay%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+    <reapack name="ReaFripp Tape Loop Delay (AI Code).jsfx" type="effect" desc="ReaFripp Tape Loop Delay">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Frippertronics-inspired loop plugin with Revox 77 inspired GUI This JSFX released under GPLv3 license\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith - Claude AI" time="2025-07-26T16:41:38Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/250c81cf22bfe84766e870b22759daeab20c7a1a/delay/ReaFripp%20Tape%20Loop%20Delay%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+    <reapack name="Tycho Delay TMA-1 - Tape Delay (AI Code).jsfx" type="effect" desc="Tycho Delay TMA-1">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Good quality tape-style delay with optimized memory layout and ping pong\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Based on work done by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault https://forum.cockos.com/showthread.php?t=170874\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Memory Layout Optimized by Claude AI\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Ping Pong functionality added (based on Stillwell approach)\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 This JSFX released under GPLv3 license\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.5" author="Instigated by citizenkeith" time="2025-07-25T17:59:24Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/a346f787d71efe3c7d4f6113c97b289707fe7055/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="1.7" author="citizenkeith - Claude AI" time="2025-09-02T15:56:14Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/e6cf8691c93780649b88bc808606f89c9123a24f/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="1.8" author="citizenkeith - Claude AI" time="2025-09-02T21:40:48Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/b1f641bb7d884fc3b937f83bd6f12c3f5644eccd/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="distortion">
+    <reapack name="Watkins Fuzz (AI Code).jsfx" type="effect" desc="Watkins Fuzz">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Emulation of the Watkins WEM Project V Fuzz pedal, a sophisticated 8-transistor British fuzz from the late 1960s. Features asymmetric quasi-complementary clipping, inductor resonance modeling, and dynamic octave effects. Famous for use by Brian Eno and Robert Fripp on classic recordings. This JSFX released under GPLv3 license\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith / Claude AI" time="2026-02-03T16:46:31Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/dc00a3cfd052dc962319ad31370fada7590827f5/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="reverb">
+    <reapack name="Cloudbusting Reverb (AI Code).jsfx" type="effect" desc="Cloudbusting Reverb">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Cloudbusting Reverb\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 An algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Credits\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Based on the CloudSeed reverb algorithm by Valdemar Erlingsson (Ghost Note Audio). Original CloudSeed: https://github.com/GhostNoteAudio/CloudSeedCore\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 License\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 CloudSeed original license: MIT License - Copyright (c) 2017 Valdemar Erlingsson\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Cloudbusting Reverb JSFX port: MIT License - Copyright (c) 2026 citizenkeith\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so.\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith - Claude AI" time="2026-01-30T17:03:48Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/e5c97f8fa97345b6f071a70f20471a7464d8740e/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+    <reapack name="Cocteau Verb (AI Code).jsfx" type="effect" desc="Cocteau Verb">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Stereo widener, BBD chorus, ping pong delay and three reverb choices, for a Robin Guthrie-inspired tone.\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith and Claude AI" time="2026-01-30T17:03:48Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/e5c97f8fa97345b6f071a70f20471a7464d8740e/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+    <reapack name="Stargate Ambient Reverb (AI Code).jsfx" type="effect" desc="Stargate Ambient Reverb">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Diffuse delay lines that morph from simple delays to complex reverb based on diffusion control This JSFX released under GPLv3 license Optimized for lower memory usage\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith / Claude AI" time="2025-10-29T18:50:44Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/e2e8cda50e48962e8871a83caf5a631dd6c2a4fb/reverb/Stargate%20Ambient%20Reverb%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="1.1" author="citizenkeith / Claude AI" time="2025-10-30T17:25:32Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/efaa6eb519d9db13f19ab5d2d131b71f34bbb0c8/reverb/Stargate%20Ambient%20Reverb%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="synth">
+    <reapack name="SynthiAKS - Modular Analog Synthesizer (AI Code).jsfx" type="effect" desc="SynthiAKS Analog Modular Synthesizer">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Emulation of EMS Synthi AKS Synthesizer This JSFX released under GPLv3 license\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/7294f5754205f5e3f1de4dd140f5531f5396de1b/synth/SynthiAKS%20-%20Modular%20Analog%20Synthesizer%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="tape">
+    <reapack name="TapeEmu - Professional Tape Machine Emulation (AI Code).jsfx" type="effect" desc="TapeEmu - Professional Tape Machine Emulation">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Tape emulation that includes tape machine choices This JSFX released under GPLv3 license\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.5" author="citizenkeith - Claude AI" time="2025-07-25T21:38:57Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/2ac38afd17d7b3807edaff06cf80e95efe89fc5a/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="1.6" author="citizenkeith - Claude AI" time="2025-07-25T22:43:20Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/95ebca7f93cbce476d55162f9c66995a3dce2efb/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="1.7" author="citizenkeith - Claude AI" time="2025-07-26T19:33:45Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/cb80e3e52facb8e7a57c13ae6c940cad97854b31/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+</index>
