@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <index version="1" name="citizenkeith" commit="7b0f07b53e1cec14cb2415a8f8ca4c9bd32dc501">
   <category name="channel strip">
-      <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip (AI Code)">
+      <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
         <metadata>
           <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
   {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
