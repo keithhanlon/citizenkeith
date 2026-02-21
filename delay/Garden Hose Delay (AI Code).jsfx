@@ -1,0 +1,261 @@
+desc: Garden Hose Delay
+version: 1.0
+author: citizenkeith and Claude AI
+about:
+  # Garden Hose Delay - Time Cube Emulator
+  
+  An emulation of the Cooper Time Cube, a classic electromechanical delay unit from
+  the 1970s that created its characteristic doubling effect by sending audio through a 
+  coiled garden hose as a transmission line.
+
+slider1:14<7,28,0.1>Echo A Delay (ms)
+slider2:0.75<0,1,0.01>Echo A Level
+slider3:28<14,56,0.1>Echo B Delay (ms)
+slider4:0.75<0,1,0.01>Echo B Level
+slider5:0.20<0,1,0.01>Wet Mix
+slider6:0<0,1,1{Normal,Inverted}>Polarity
+slider7:100<80,120,1>High Pass Freq (Hz)
+slider8:10000<8000,12000,100>Low Pass Freq (Hz)
+slider9:0.5<0,1,0.01>Character
+slider10:0<0,1,1{Mono,Stereo}>Stereo Width
+
+@init
+buf_size = 3 * 192000;
+
+buf_L = 0;
+buf_R = buf_size;
+buf_pos = 0;
+
+// Biquad state variables - left channel
+hp_x1_L = hp_x2_L = hp_y1_L = hp_y2_L = 0;
+lp_x1_L = lp_x2_L = lp_y1_L = lp_y2_L = 0;
+pk_x1_L = pk_x2_L = pk_y1_L = pk_y2_L = 0;
+
+// Biquad state variables - right channel
+hp_x1_R = hp_x2_R = hp_y1_R = hp_y2_R = 0;
+lp_x1_R = lp_x2_R = lp_y1_R = lp_y2_R = 0;
+pk_x1_R = pk_x2_R = pk_y1_R = pk_y2_R = 0;
+
+// Modulation oscillators
+lfo_phase_L = 0;
+lfo_phase_R = 0.25;
+drift_L = 0;
+drift_R = 0;
+drift_target_L = 0;
+drift_target_R = 0;
+drift_counter = 0;
+
+// Saturation function with asymmetry
+function soft_saturate(x, drive, asym) (
+  x *= (1 + drive * 4);
+  x += x * x * asym * 0.1;
+  sat = x / sqrt(1 + x * x);
+  sat / (1 + drive * 0.5);
+);
+
+@slider
+// Echo A and B conversions
+echoA_samples = (slider1 / 1000) * srate;
+echoB_samples = (slider3 / 1000) * srate;
+echoA_level = slider2;
+echoB_level = slider4;
+wet = slider5;
+dry = 1.0 - wet;
+polarity = slider6 == 1 ? -1 : 1;
+
+// Fixed modulation parameters (hidden from UI)
+mod_depth = 0.3 * 0.5;  // Fixed at 0.3
+mod_depth_samples = (mod_depth / 1000) * srate;
+
+// LFO frequency
+lfo_freq = 0.2;
+lfo_inc = lfo_freq / srate;
+
+// Fixed saturation parameters (hidden from UI)
+drive_amount = 0.2;  // Fixed at 0.2
+asymmetry = 0.3;
+
+// High pass filter coefficients
+hp_freq = slider7;
+hp_w0 = 2 * $pi * hp_freq / srate;
+hp_alpha = sin(hp_w0) / (2 * 0.7071);
+hp_b0 =  (1 + cos(hp_w0)) / 2;
+hp_b1 = -(1 + cos(hp_w0));
+hp_b2 =  (1 + cos(hp_w0)) / 2;
+hp_a0 =   1 + hp_alpha;
+hp_a1 =  -2 * cos(hp_w0);
+hp_a2 =   1 - hp_alpha;
+hp_b0 /= hp_a0;
+hp_b1 /= hp_a0;
+hp_b2 /= hp_a0;
+hp_a1 /= hp_a0;
+hp_a2 /= hp_a0;
+
+// Low pass filter coefficients
+lp_freq = slider8;
+lp_w0 = 2 * $pi * lp_freq / srate;
+lp_alpha = sin(lp_w0) / (2 * 0.7071);
+lp_b0 =  (1 - cos(lp_w0)) / 2;
+lp_b1 =   1 - cos(lp_w0);
+lp_b2 =  (1 - cos(lp_w0)) / 2;
+lp_a0 =   1 + lp_alpha;
+lp_a1 =  -2 * cos(lp_w0);
+lp_a2 =   1 - lp_alpha;
+lp_b0 /= lp_a0;
+lp_b1 /= lp_a0;
+lp_b2 /= lp_a0;
+lp_a1 /= lp_a0;
+lp_a2 /= lp_a0;
+
+// Presence peak filter coefficients
+// Fixed presence frequency at 2000 Hz
+pk_freq = 2000;
+pk_gain_db = slider9 * 9;  // Character slider still controls gain
+pk_A = 10^(pk_gain_db / 40);
+pk_w0 = 2 * $pi * pk_freq / srate;
+pk_alpha = sin(pk_w0) / (2 * 1.5);
+pk_b0 =   1 + pk_alpha * pk_A;
+pk_b1 =  -2 * cos(pk_w0);
+pk_b2 =   1 - pk_alpha * pk_A;
+pk_a0 =   1 + pk_alpha / pk_A;
+pk_a1 =  -2 * cos(pk_w0);
+pk_a2 =   1 - pk_alpha / pk_A;
+pk_b0 /= pk_a0;
+pk_b1 /= pk_a0;
+pk_b2 /= pk_a0;
+pk_a1 /= pk_a0;
+pk_a2 /= pk_a0;
+
+@sample
+// Write to buffers
+buf_L[buf_pos] = spl0;
+buf_R[buf_pos] = spl1;
+
+// Update LFO phases
+lfo_phase_L += lfo_inc;
+lfo_phase_L >= 1 ? lfo_phase_L -= 1;
+
+slider10 == 1 ? (
+  lfo_phase_R += lfo_inc;
+  lfo_phase_R >= 1 ? lfo_phase_R -= 1;
+) : (
+  lfo_phase_R = lfo_phase_L;
+);
+
+// Generate LFO modulation
+lfo_L = sin(lfo_phase_L * 2 * $pi);
+lfo_R = sin(lfo_phase_R * 2 * $pi);
+
+// Update random drift
+drift_counter += 1;
+drift_counter >= srate * 0.5 ? (
+  drift_counter = 0;
+  drift_target_L = (rand() * 2 - 1);
+  slider10 == 1 ? (
+    drift_target_R = (rand() * 2 - 1);
+  ) : (
+    drift_target_R = drift_target_L;
+  );
+);
+
+drift_slew = 0.0001;
+drift_L += (drift_target_L - drift_L) * drift_slew;
+drift_R += (drift_target_R - drift_R) * drift_slew;
+
+// Combine LFO and drift
+mod_L = (lfo_L * 0.4 + drift_L * 0.6) * mod_depth_samples;
+mod_R = (lfo_R * 0.4 + drift_R * 0.6) * mod_depth_samples;
+
+// Calculate modulated read positions for Echo A
+readA_L = buf_pos - echoA_samples - mod_L;
+readA_L < 0 ? readA_L += buf_size;
+readA_L >= buf_size ? readA_L -= buf_size;
+
+readA_R = buf_pos - echoA_samples - mod_R;
+readA_R < 0 ? readA_R += buf_size;
+readA_R >= buf_size ? readA_R -= buf_size;
+
+// Calculate modulated read positions for Echo B
+readB_L = buf_pos - echoB_samples - mod_L;
+readB_L < 0 ? readB_L += buf_size;
+readB_L >= buf_size ? readB_L -= buf_size;
+
+readB_R = buf_pos - echoB_samples - mod_R;
+readB_R < 0 ? readB_R += buf_size;
+readB_R >= buf_size ? readB_R -= buf_size;
+
+// Linear interpolation for Echo A - left
+fracA_L = readA_L - floor(readA_L);
+idxAa_L = floor(readA_L);
+idxAb_L = idxAa_L + 1;
+idxAb_L >= buf_size ? idxAb_L -= buf_size;
+delayedA_L = buf_L[idxAa_L] * (1 - fracA_L) + buf_L[idxAb_L] * fracA_L;
+
+// Linear interpolation for Echo A - right
+fracA_R = readA_R - floor(readA_R);
+idxAa_R = floor(readA_R);
+idxAb_R = idxAa_R + 1;
+idxAb_R >= buf_size ? idxAb_R -= buf_size;
+delayedA_R = buf_R[idxAa_R] * (1 - fracA_R) + buf_R[idxAb_R] * fracA_R;
+
+// Linear interpolation for Echo B - left
+fracB_L = readB_L - floor(readB_L);
+idxBa_L = floor(readB_L);
+idxBb_L = idxBa_L + 1;
+idxBb_L >= buf_size ? idxBb_L -= buf_size;
+delayedB_L = buf_L[idxBa_L] * (1 - fracB_L) + buf_L[idxBb_L] * fracB_L;
+
+// Linear interpolation for Echo B - right
+fracB_R = readB_R - floor(readB_R);
+idxBa_R = floor(readB_R);
+idxBb_R = idxBa_R + 1;
+idxBb_R >= buf_size ? idxBb_R -= buf_size;
+delayedB_R = buf_R[idxBa_R] * (1 - fracB_R) + buf_R[idxBb_R] * fracB_R;
+
+// Sum Echo A and Echo B
+wet_L = delayedA_L * echoA_level + delayedB_L * echoB_level;
+wet_R = delayedA_R * echoA_level + delayedB_R * echoB_level;
+
+// Apply transmission line filtering - left channel
+hp_out_L = hp_b0*wet_L + hp_b1*hp_x1_L + hp_b2*hp_x2_L
+         - hp_a1*hp_y1_L - hp_a2*hp_y2_L;
+hp_x2_L = hp_x1_L; hp_x1_L = wet_L;
+hp_y2_L = hp_y1_L; hp_y1_L = hp_out_L;
+
+lp_out_L = lp_b0*hp_out_L + lp_b1*lp_x1_L + lp_b2*lp_x2_L
+         - lp_a1*lp_y1_L - lp_a2*lp_y2_L;
+lp_x2_L = lp_x1_L; lp_x1_L = hp_out_L;
+lp_y2_L = lp_y1_L; lp_y1_L = lp_out_L;
+
+pk_out_L = pk_b0*lp_out_L + pk_b1*pk_x1_L + pk_b2*pk_x2_L
+         - pk_a1*pk_y1_L - pk_a2*pk_y2_L;
+pk_x2_L = pk_x1_L; pk_x1_L = lp_out_L;
+pk_y2_L = pk_y1_L; pk_y1_L = pk_out_L;
+
+// Apply transmission line filtering - right channel
+hp_out_R = hp_b0*wet_R + hp_b1*hp_x1_R + hp_b2*hp_x2_R
+         - hp_a1*hp_y1_R - hp_a2*hp_y2_R;
+hp_x2_R = hp_x1_R; hp_x1_R = wet_R;
+hp_y2_R = hp_y1_R; hp_y1_R = hp_out_R;
+
+lp_out_R = lp_b0*hp_out_R + lp_b1*lp_x1_R + lp_b2*lp_x2_R
+         - lp_a1*lp_y1_R - lp_a2*lp_y2_R;
+lp_x2_R = lp_x1_R; lp_x1_R = hp_out_R;
+lp_y2_R = lp_y1_R; lp_y1_R = lp_out_R;
+
+pk_out_R = pk_b0*lp_out_R + pk_b1*pk_x1_R + pk_b2*pk_x2_R
+         - pk_a1*pk_y1_R - pk_a2*pk_y2_R;
+pk_x2_R = pk_x1_R; pk_x1_R = lp_out_R;
+pk_y2_R = pk_y1_R; pk_y1_R = pk_out_R;
+
+// Apply saturation to filtered signals
+sat_L = soft_saturate(pk_out_L, drive_amount, asymmetry);
+sat_R = soft_saturate(pk_out_R, drive_amount, asymmetry);
+
+// Apply polarity and mix
+spl0 = spl0 * dry + sat_L * polarity * wet;
+spl1 = spl1 * dry + sat_R * polarity * wet;
+
+// Advance buffer position
+buf_pos += 1;
+buf_pos >= buf_size ? buf_pos = 0;

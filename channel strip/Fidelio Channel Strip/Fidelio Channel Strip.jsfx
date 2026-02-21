@@ -1,0 +1,1292 @@
+desc:Fidelio Channel Strip
+version:1.1
+author:citizenkeith and Claude AI
+about: Channel strip with transformer-style harmonic coloration, Neve style shelf,
+Trident style HPF, plus a VCA compressor, expander and gate
+// Released under GPLv3 License
+// Utilizes Geraintluff's UI library
+
+options:no_meter
+
+// Import Geraintluff's UI library
+import fidelio-ui-lib.jsfx-inc
+
+// ============================================================
+// SLIDERS
+// ============================================================
+
+// --- Input Section ---
+slider1:0<-30,30,0.1>-Input Gain (dB)
+slider2:0<0,1,1{Off,On}>-Polarity Flip
+slider3:0<0,1,1{Off,On}>-Transformer Saturation
+slider17:0.3<0,1,0.01>-Saturation Drive
+
+// --- HPF Section ---
+slider4:0<0,1,1{Off,On}>-HPF Enable
+
+// --- EQ Band 1 (Low-Mid) ---
+slider5:0<-15,15,0.1>-LM Gain (dB)
+slider6:500<200,2000,1>-LM Frequency (Hz)
+
+// --- EQ Band 2 (High-Mid) ---
+slider7:0<-15,15,0.1>-HM Gain (dB)
+slider8:3000<1000,10000,1>-HM Frequency (Hz)
+
+// --- High Shelf ---
+slider9:0<-16,16,0.1>-High Shelf Gain (dB)
+
+// --- Dynamics Section ---
+slider10:0<-60,0,0.1>-Threshold (dB)
+slider11:1<1,20,0.1>-Ratio
+slider12:10<0.1,100,0.1>-Attack (ms)
+slider13:100<10,1000,1>-Release (ms)
+slider14:-60<-60,0,0.1>-Gate Range (dB)
+slider15:0<0,2,1{Compress,Expand,Gate}>-Dynamics Mode
+slider18:100<0,500,1>-Gate Hold (ms)
+
+// --- Output Section ---
+slider16:0<-30,30,0.1>-Output Gain (dB)
+slider19:0<0,300,1>-Low End Mono Freq (Hz)
+slider20:100<0,200,1>-Stereo Width
+slider21:0<0,1,1{Stereo,Mono}>-Mono
+
+// ============================================================
+// INIT
+// ============================================================
+
+@init
+
+// --- Constants ---
+log2db = 8.6858896380650365530225783783321;
+db2log = 0.11512925464970228420089957273422;
+
+// --- Input / output gain ---
+input_gain_lin  = 1.0;
+output_gain_lin = 1.0;
+
+// --- Polarity ---
+polarity = 1.0;
+
+// --- Saturation ---
+sat_drive = 0.0;
+
+// --- DC blocking ---
+dc_R  = 0.99965;
+dc_xL = 0; dc_yL = 0;
+dc_xR = 0; dc_yR = 0;
+
+// --- LF emphasis ---
+lf_coeff = 0.0;
+lf_zL = 0; lf_zR = 0;
+
+// --- HPF ---
+hpf_b0 = 1; hpf_b1 = 0; hpf_b2 = 0;
+hpf_a1 = 0; hpf_a2 = 0;
+hpf_x1L = 0; hpf_x2L = 0; hpf_y1L = 0; hpf_y2L = 0;
+hpf_x1R = 0; hpf_x2R = 0; hpf_y1R = 0; hpf_y2R = 0;
+hpf_fc = 50.0;
+hpf_Q  = 0.80;
+
+// --- EQ Band 1 ---
+eq1_b0 = 1; eq1_b1 = 0; eq1_b2 = 0;
+eq1_a1 = 0; eq1_a2 = 0;
+eq1_active = 0;
+eq1_x1L = 0; eq1_x2L = 0; eq1_y1L = 0; eq1_y2L = 0;
+eq1_x1R = 0; eq1_x2R = 0; eq1_y1R = 0; eq1_y2R = 0;
+
+// --- EQ Band 2 ---
+eq2_b0 = 1; eq2_b1 = 0; eq2_b2 = 0;
+eq2_a1 = 0; eq2_a2 = 0;
+eq2_active = 0;
+eq2_x1L = 0; eq2_x2L = 0; eq2_y1L = 0; eq2_y2L = 0;
+eq2_x1R = 0; eq2_x2R = 0; eq2_y1R = 0; eq2_y2R = 0;
+
+eq_base_Q = 0.7;
+
+// --- High Shelf ---
+hs_b0 = 1; hs_b1 = 0; hs_b2 = 0;
+hs_a1 = 0; hs_a2 = 0;
+hs_active = 0;
+hs_x1L = 0; hs_x2L = 0; hs_y1L = 0; hs_y2L = 0;
+hs_x1R = 0; hs_x2R = 0; hs_y1R = 0; hs_y2R = 0;
+hs_fc = 12000.0;
+hs_S  = 0.75;
+
+// --- Presence bump ---
+pb_b0 = 1; pb_b1 = 0; pb_b2 = 0;
+pb_a1 = 0; pb_a2 = 0;
+pb_x1L = 0; pb_x2L = 0; pb_y1L = 0; pb_y2L = 0;
+pb_x1R = 0; pb_x2R = 0; pb_y1R = 0; pb_y2R = 0;
+pb_fc  = 10500.0;
+pb_Q   = 1.8;
+pb_max = 1.5;
+
+// --- Shelf saturation ---
+hf_coeff = 0.0;
+hf_zL = 0; hf_zR = 0;
+shelf_sat_drive = 0.6;
+
+// --- LF Mono Summing ---
+lfm_tmpl  = 0;
+lfm_tmpr  = 0;
+lfm_a0    = 0;
+lfm_b1    = 0;
+
+// --- Dynamics ---
+// Envelope follower state — tracks signal level directly
+dyn_env = 0.0;
+
+// Gain reduction in dB — computed each sample from envelope
+dyn_gr_db     = 0.0;
+dyn_gr_smooth = 0.0;
+
+// Display value
+gr_display = 0.0;
+
+// Soft knee half-width
+dyn_knee_db = 3.0;
+
+// Time constants — initialized to safe defaults here,
+// recalculated properly in @sample using live srate
+dyn_attack_coeff  = 0.9999;
+dyn_release_coeff = 0.9999;
+
+// Gate hold state
+dyn_hold_samples  = 0;   // hold duration in samples (calculated from ms)
+dyn_hold_counter  = 0;   // countdown timer — gate stays open while > 0
+in_meter_peak  = -60.0;
+out_meter_peak = -60.0;
+dyn_ratio        = 1.0;
+in_meter_peak       = -60.0;
+out_meter_peak      = -60.0;
+in_peak_hold_timer  = 0;
+out_peak_hold_timer = 0;
+peak_hold_samples   = 1.5 * srate;
+peak_fall_db        = 10.0 / srate;
+dyn_gate_range   = -60.0;
+dyn_mode         = 0;
+
+
+// ============================================================
+// GFX HELPER FUNCTIONS
+// (must be defined in @init, not @gfx)
+// ============================================================
+
+function draw_vmeter(mx, my, mw, mh, mlevel, mfloor)
+local(norm, fill_h, seg_h, seg_y, seg_norm, t)
+(
+  // Black background
+  gfx_r = 0.06; gfx_g = 0.06; gfx_b = 0.08; gfx_a = 1;
+  gfx_rect(mx, my, mw, mh);
+  norm   = max(0, min(1, (mlevel - mfloor) / (-mfloor)));
+  fill_h = floor(norm * mh);
+  fill_h > 0 ? (
+    // Draw in 1px horizontal segments, color interpolated by position
+    seg_y = my + mh - fill_h;
+    loop(fill_h,
+      seg_norm = 1.0 - (seg_y - my) / mh;  // 0=bottom, 1=top of fill
+      seg_norm < 0.6 ? (
+        // Green zone
+        gfx_r = 0.15; gfx_g = 0.80; gfx_b = 0.25;
+      ) : seg_norm < 0.8 ? (
+        // Green -> Yellow transition
+        t = (seg_norm - 0.6) / 0.2;
+        gfx_r = 0.15 + t * 0.75; gfx_g = 0.80; gfx_b = 0.25 - t * 0.25;
+      ) : seg_norm < 0.93 ? (
+        // Yellow -> Orange
+        t = (seg_norm - 0.8) / 0.13;
+        gfx_r = 0.90; gfx_g = 0.80 - t * 0.35; gfx_b = 0.0;
+      ) : (
+        // Orange -> Red
+        t = (seg_norm - 0.93) / 0.07;
+        gfx_r = 0.95; gfx_g = 0.45 - t * 0.35; gfx_b = 0.0;
+      );
+      gfx_a = 1;
+      gfx_rect(mx, seg_y, mw, 1);
+      seg_y += 1;
+    );
+  );
+  // Border
+  gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.32; gfx_a = 1;
+  gfx_rect(mx,      my,      mw, 1);
+  gfx_rect(mx,      my + mh, mw, 1);
+  gfx_rect(mx,      my,      1,  mh);
+  gfx_rect(mx + mw, my,      1,  mh + 1);
+);
+
+function draw_section_border(bx, by, bw, bh)
+(
+  gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.32; gfx_a = 1;
+  gfx_rect(bx,      by,      bw, 1);
+  gfx_rect(bx,      by + bh, bw, 1);
+  gfx_rect(bx,      by,      1,  bh);
+  gfx_rect(bx + bw, by,      1,  bh + 1);
+);
+
+function draw_hline(lx, ly, lw)
+(
+  gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.32; gfx_a = 1;
+  gfx_rect(lx, ly, lw, 1);
+);
+
+function draw_label_at(lx, ly)
+local(lw, lh)
+(
+  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#lbl, lw, lh);
+  gfx_x = lx - lw/2;
+  gfx_y = ly;
+  gfx_drawstr(#lbl);
+);
+
+function draw_value_at(vx, vy)
+local(vw, vh)
+(
+  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#val, vw, vh);
+  gfx_x = vx - vw/2;
+  gfx_y = vy;
+  gfx_drawstr(#val);
+);
+
+// ============================================================
+// INACTIVE KNOB — tron style, muted colors, no interaction
+// cx,cy: center. r: radius. val,vmin,vmax: for pointer angle
+// ============================================================
+
+function draw_knob_inactive(cx, cy, r, val, vmin, vmax)
+local(norm, angle, start_angle, end_angle, px, py, i, a, inner_r, track_r)
+(
+  // Angles: tron style sweeps from ~-225 deg to +45 deg (270 deg sweep)
+  // 0=bottom-left, full=bottom-right, matching control_dial orientation
+  start_angle = $pi * 0.75;   // 135 deg from positive x-axis = bottom-left
+  end_angle   = $pi * 2.25;   // 405 deg = bottom-right (270 deg sweep)
+  norm        = max(0, min(1, (val - vmin) / (vmax - vmin)));
+  angle       = start_angle + norm * (end_angle - start_angle);
+
+  // Outer face circle — dark gray
+  gfx_r = 0.18; gfx_g = 0.18; gfx_b = 0.20; gfx_a = 1;
+  gfx_circle(cx, cy, r - 2, 1, 1);
+
+  // Arc track background (full sweep) — very dim
+  track_r = r - 5;
+  i = 0;
+  loop(270,
+    a = start_angle + i * $pi / 180;
+    gfx_r = 0.22; gfx_g = 0.22; gfx_b = 0.24; gfx_a = 1;
+    gfx_circle(cx + cos(a) * track_r, cy + sin(a) * track_r, 1.2, 1, 1);
+    i += 1;
+  );
+
+  // Arc fill (0 to current value) — muted blue-gray
+  i = 0;
+  loop(floor(norm * 270),
+    a = start_angle + i * $pi / 180;
+    gfx_r = 0.28; gfx_g = 0.32; gfx_b = 0.38; gfx_a = 1;
+    gfx_circle(cx + cos(a) * track_r, cy + sin(a) * track_r, 1.2, 1, 1);
+    i += 1;
+  );
+
+  // Pointer dot — dim white
+  inner_r = r * 0.45;
+  px = cx + cos(angle) * inner_r;
+  py = cy + sin(angle) * inner_r;
+  gfx_r = 0.40; gfx_g = 0.40; gfx_b = 0.44; gfx_a = 1;
+  gfx_circle(px, py, 2.5, 1, 1);
+);
+
+
+// ============================================================
+// DOUBLE-CLICK RESET HELPER
+// Call once per frame before drawing knobs.
+// Sets dbl_click_cx/cy and dbl_click_fired flag.
+// ============================================================
+
+function check_dbl_click()
+local(mx, my, now, dt)
+(
+  mx  = mouse_x;
+  my  = mouse_y;
+  now = time_precise();
+
+  // Detect fresh left click (rising edge)
+  (mouse_cap & 1) && !(mouse_cap_last & 1) ? (
+    dt = now - dbl_click_time;
+    // Within 400ms and within 8px of last click = double-click
+    (dt < 0.4) && (dt > 0.05) && (abs(mx - dbl_click_x) < 8) && (abs(my - dbl_click_y) < 8) ? (
+      dbl_click_fired = 1;
+      dbl_click_cx    = mx;
+      dbl_click_cy    = my;
+    ) : (
+      dbl_click_fired = 0;
+    );
+    dbl_click_time = now;
+    dbl_click_x    = mx;
+    dbl_click_y    = my;
+  ) : (
+    dbl_click_fired = 0;
+  );
+);
+
+// Returns 1 if a double-click landed inside rect (x,y,w,h)
+function dbl_click_in_rect(rx, ry, rw, rh)
+(
+  dbl_click_fired &&
+  (dbl_click_cx >= rx) && (dbl_click_cx < rx + rw) &&
+  (dbl_click_cy >= ry) && (dbl_click_cy < ry + rh)
+);
+
+// ============================================================
+// COEFFICIENT UPDATE FUNCTION
+// Called from @slider and directly from @gfx after knob changes
+// ============================================================
+
+function update_coefficients()
+(
+// Input / output gain
+input_gain_lin  = exp(slider1  * db2log);
+output_gain_lin = exp(slider16 * db2log);
+
+// Stereo width
+sw_sides_gain = slider20 / 100.0;
+
+// LF Mono crossover (1-pole)
+lfm_fc    = min(max(slider19, 1.0), srate);
+lfm_x     = exp(-2.0 * $pi * lfm_fc / srate);
+lfm_a0    = 1.0 - lfm_x;
+lfm_b1    = -lfm_x;
+lfm_width = 0.0;
+
+// Polarity
+polarity = (slider2 == 1) ? -1.0 : 1.0;
+
+// Saturation drive
+sat_drive = slider17 * 4.0;
+
+// Filter coefficients
+lf_coeff = exp(-2.0 * $pi * 200.0  / srate);
+hf_coeff = exp(-2.0 * $pi * 3000.0 / srate);
+
+// Dynamics time constants
+// Recalculated here AND guarded in @sample for safety
+dyn_attack_coeff  = exp(-1.0 / (max(0.1, slider12) * srate / 1000.0));
+dyn_release_coeff = exp(-1.0 / (max(10.0, slider13) * srate / 1000.0));
+dyn_hold_samples  = slider18 * srate / 1000.0;
+
+// Cache dynamics parameters
+dyn_threshold_db = slider10;
+dyn_ratio        = slider11;
+dyn_gate_range   = slider14;
+dyn_mode         = slider15;
+dyn_hold_samples = slider18 * srate / 1000.0;
+
+// --- HPF ---
+hpf_w0    = 2.0 * $pi * hpf_fc / srate;
+hpf_cosw0 = cos(hpf_w0);
+hpf_sinw0 = sin(hpf_w0);
+hpf_alpha = hpf_sinw0 / (2.0 * hpf_Q);
+hpf_a0r   = 1.0 + hpf_alpha;
+hpf_b0    =  (1.0 + hpf_cosw0) / 2.0 / hpf_a0r;
+hpf_b1    = -(1.0 + hpf_cosw0)       / hpf_a0r;
+hpf_b2    =  (1.0 + hpf_cosw0) / 2.0 / hpf_a0r;
+hpf_a1    = (-2.0 * hpf_cosw0)       / hpf_a0r;
+hpf_a2    =  (1.0 - hpf_alpha)       / hpf_a0r;
+
+// --- EQ Band 1 ---
+eq1_gain_db = slider5;
+eq1_fc      = slider6;
+(abs(eq1_gain_db) < 0.01) ? (
+  eq1_active = 0;
+) : (
+  eq1_active = 1;
+  eq1_A      = exp(eq1_gain_db * db2log * 0.5);
+  eq1_Q      = max(0.3, min(eq_base_Q / max(0.1, abs(eq1_gain_db) / 15.0), 4.0));
+  eq1_w0     = 2.0 * $pi * eq1_fc / srate;
+  eq1_cosw0  = cos(eq1_w0);
+  eq1_alpha  = sin(eq1_w0) / (2.0 * eq1_Q);
+  eq1_a0r    = 1.0 + eq1_alpha / eq1_A;
+  eq1_b0     = (1.0 + eq1_alpha * eq1_A) / eq1_a0r;
+  eq1_b1     = (-2.0 * eq1_cosw0)        / eq1_a0r;
+  eq1_b2     = (1.0 - eq1_alpha * eq1_A) / eq1_a0r;
+  eq1_a1     = (-2.0 * eq1_cosw0)        / eq1_a0r;
+  eq1_a2     = (1.0 - eq1_alpha / eq1_A) / eq1_a0r;
+);
+
+// --- EQ Band 2 ---
+eq2_gain_db = slider7;
+eq2_fc      = slider8;
+(abs(eq2_gain_db) < 0.01) ? (
+  eq2_active = 0;
+) : (
+  eq2_active = 1;
+  eq2_A      = exp(eq2_gain_db * db2log * 0.5);
+  eq2_Q      = max(0.3, min(eq_base_Q / max(0.1, abs(eq2_gain_db) / 15.0), 4.0));
+  eq2_w0     = 2.0 * $pi * eq2_fc / srate;
+  eq2_cosw0  = cos(eq2_w0);
+  eq2_alpha  = sin(eq2_w0) / (2.0 * eq2_Q);
+  eq2_a0r    = 1.0 + eq2_alpha / eq2_A;
+  eq2_b0     = (1.0 + eq2_alpha * eq2_A) / eq2_a0r;
+  eq2_b1     = (-2.0 * eq2_cosw0)        / eq2_a0r;
+  eq2_b2     = (1.0 - eq2_alpha * eq2_A) / eq2_a0r;
+  eq2_a1     = (-2.0 * eq2_cosw0)        / eq2_a0r;
+  eq2_a2     = (1.0 - eq2_alpha / eq2_A) / eq2_a0r;
+);
+
+// --- High Shelf ---
+hs_gain_db = slider9;
+(abs(hs_gain_db) < 0.01) ? (
+  hs_active = 0;
+) : (
+  hs_active = 1;
+  hs_A      = exp(hs_gain_db * db2log * 0.5);
+  hs_w0     = 2.0 * $pi * hs_fc / srate;
+  hs_cosw0  = cos(hs_w0);
+  hs_sinw0  = sin(hs_w0);
+  hs_alpha  = hs_sinw0 / 2.0 * sqrt((hs_A + 1/hs_A) * (1/hs_S - 1) + 2.0);
+  hs_sqA    = sqrt(hs_A);
+  hs_a0r    = (hs_A+1) - (hs_A-1)*hs_cosw0 + 2.0*hs_sqA*hs_alpha;
+  hs_b0     = (hs_A*((hs_A+1) + (hs_A-1)*hs_cosw0 + 2.0*hs_sqA*hs_alpha)) / hs_a0r;
+  hs_b1     = (-2.0*hs_A*((hs_A-1) + (hs_A+1)*hs_cosw0))                  / hs_a0r;
+  hs_b2     = (hs_A*((hs_A+1) + (hs_A-1)*hs_cosw0 - 2.0*hs_sqA*hs_alpha)) / hs_a0r;
+  hs_a1     = (2.0*((hs_A-1) - (hs_A+1)*hs_cosw0))                        / hs_a0r;
+  hs_a2     = ((hs_A+1) - (hs_A-1)*hs_cosw0 - 2.0*hs_sqA*hs_alpha)        / hs_a0r;
+
+  pb_gain_db = pb_max * (hs_gain_db / 16.0);
+  pb_A       = exp(pb_gain_db * db2log * 0.5);
+  pb_w0      = 2.0 * $pi * pb_fc / srate;
+  pb_cosw0   = cos(pb_w0);
+  pb_alpha   = sin(pb_w0) / (2.0 * pb_Q);
+  pb_a0r     = 1.0 + pb_alpha / pb_A;
+  pb_b0      = (1.0 + pb_alpha * pb_A) / pb_a0r;
+  pb_b1      = (-2.0 * pb_cosw0)       / pb_a0r;
+  pb_b2      = (1.0 - pb_alpha * pb_A) / pb_a0r;
+  pb_a1      = (-2.0 * pb_cosw0)       / pb_a0r;
+  pb_a2      = (1.0 - pb_alpha / pb_A) / pb_a0r;
+);
+);
+
+// ============================================================
+// CUSTOM 3-WAY SWITCH
+// Matches control_switch style. Call each frame.
+// x,y,w,h: bounding box. val: current value (0/1/2)
+// l0,l1,l2: label strings. returns new value.
+// ============================================================
+
+function draw_3way(x, y, w, h, val, l0, l1, l2)
+local(seg_w, puck_x, puck_pad, mx, my, mcap, hit, new_val,
+      r0,g0,b0, r1,g1,b1, i, lx, tw, th)
+(
+  seg_w    = w / 3;
+  puck_pad = 2;
+
+  // Background
+  gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.14; gfx_a = 1;
+  gfx_rect(x, y, w, h);
+
+  // Puck
+  puck_x = x + val * seg_w + puck_pad;
+  gfx_r = 0.42; gfx_g = 0.42; gfx_b = 0.48; gfx_a = 1;
+  gfx_rect(puck_x, y + puck_pad, seg_w - puck_pad*2, h - puck_pad*2);
+
+  // Segment dividers
+  gfx_r = 0.22; gfx_g = 0.22; gfx_b = 0.26; gfx_a = 1;
+  gfx_rect(x + seg_w,     y + 2, 1, h - 4);
+  gfx_rect(x + seg_w * 2, y + 2, 1, h - 4);
+
+  // Labels
+  gfx_setfont(1, "Arial", 9);
+  gfx_measurestr(l0, tw, th);
+  gfx_x = x + seg_w*0 + (seg_w - tw)/2; gfx_y = y + (h - th)/2;
+  val == 0 ? (gfx_r=1.0;gfx_g=1.0;gfx_b=1.0) : (gfx_r=0.45;gfx_g=0.45;gfx_b=0.50);
+  gfx_a = 1; gfx_drawstr(l0);
+
+  gfx_measurestr(l1, tw, th);
+  gfx_x = x + seg_w*1 + (seg_w - tw)/2; gfx_y = y + (h - th)/2;
+  val == 1 ? (gfx_r=1.0;gfx_g=1.0;gfx_b=1.0) : (gfx_r=0.45;gfx_g=0.45;gfx_b=0.50);
+  gfx_drawstr(l1);
+
+  gfx_measurestr(l2, tw, th);
+  gfx_x = x + seg_w*2 + (seg_w - tw)/2; gfx_y = y + (h - th)/2;
+  val == 2 ? (gfx_r=1.0;gfx_g=1.0;gfx_b=1.0) : (gfx_r=0.45;gfx_g=0.45;gfx_b=0.50);
+  gfx_drawstr(l2);
+
+  // Border
+  gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.32; gfx_a = 1;
+  gfx_rect(x,     y,     w, 1);
+  gfx_rect(x,     y+h-1, w, 1);
+  gfx_rect(x,     y,     1, h);
+  gfx_rect(x+w-1, y,     1, h);
+
+  // Mouse hit detection — rising edge only (not while dragging)
+  mx = mouse_x; my = mouse_y; mcap = mouse_cap;
+  new_val = val;
+  (mcap & 1) && !(mouse_cap_last & 1) && (mx >= x) && (mx < x+w) && (my >= y) && (my < y+h) ? (
+    hit = floor((mx - x) / seg_w);
+    new_val = max(0, min(2, hit));
+  );
+  new_val;
+);
+
+// --- UI ---
+freemem = ui_setup(0);
+mouse_cap_last = 0;  // track previous frame mouse state
+
+// ============================================================
+// SLIDER
+// ============================================================
+
+@slider
+
+update_coefficients();
+
+// ============================================================
+// SAMPLE
+// ============================================================
+
+@sample
+
+// ---- Input Gain ----
+spl0 *= input_gain_lin;
+spl1 *= input_gain_lin;
+
+// ---- Polarity ----
+spl0 *= polarity;
+spl1 *= polarity;
+
+// ---- Input level meter (post input gain and polarity) ----
+in_meter_coeff = exp(-1.0 / (0.3 * srate));
+out_meter_coeff = exp(-1.0 / (0.3 * srate));
+in_peak = max(abs(spl0), abs(spl1));
+in_meter_env = (in_peak > in_meter_env) ? in_peak : in_meter_coeff * in_meter_env;
+in_meter_db  = (in_meter_env > 0.000001) ? log(in_meter_env) * log2db : -120.0;
+in_meter_peak = max(in_meter_peak, in_meter_db);
+
+// ---- Transformer Saturation ----
+(slider3 == 1) ? (
+
+  tmp   = spl0;
+  spl0  = spl0 - dc_xL + dc_R * dc_yL;
+  dc_xL = tmp; dc_yL = spl0;
+
+  tmp   = spl1;
+  spl1  = spl1 - dc_xR + dc_R * dc_yR;
+  dc_xR = tmp; dc_yR = spl1;
+
+  lf_zL = lf_coeff * lf_zL + (1.0 - lf_coeff) * spl0;
+  lf_zR = lf_coeff * lf_zR + (1.0 - lf_coeff) * spl1;
+
+  drive_L = sat_drive * (0.7 * abs(lf_zL) + 0.3 * abs(spl0)) + 1.0;
+  drive_R = sat_drive * (0.7 * abs(lf_zR) + 0.3 * abs(spl1)) + 1.0;
+  drive_L = min(drive_L, 5.0);
+  drive_R = min(drive_R, 5.0);
+
+  xL   = spl0 * drive_L;
+  spl0 = (xL * (27.0 + xL*xL) / (27.0 + 9.0*xL*xL)) / drive_L;
+
+  xR   = spl1 * drive_R;
+  spl1 = (xR * (27.0 + xR*xR) / (27.0 + 9.0*xR*xR)) / drive_R;
+
+);
+
+// ---- HPF ----
+(slider4 == 1) ? (
+
+  hpf_inL  = spl0;
+  hpf_outL = hpf_b0*hpf_inL + hpf_b1*hpf_x1L + hpf_b2*hpf_x2L
+             - hpf_a1*hpf_y1L - hpf_a2*hpf_y2L;
+  hpf_x2L  = hpf_x1L; hpf_x1L = hpf_inL;
+  hpf_y2L  = hpf_y1L; hpf_y1L = hpf_outL;
+  spl0     = hpf_outL;
+
+  hpf_inR  = spl1;
+  hpf_outR = hpf_b0*hpf_inR + hpf_b1*hpf_x1R + hpf_b2*hpf_x2R
+             - hpf_a1*hpf_y1R - hpf_a2*hpf_y2R;
+  hpf_x2R  = hpf_x1R; hpf_x1R = hpf_inR;
+  hpf_y2R  = hpf_y1R; hpf_y1R = hpf_outR;
+  spl1     = hpf_outR;
+
+);
+
+// ---- EQ Band 1 ----
+(eq1_active == 1) ? (
+
+  eq1_inL  = spl0;
+  eq1_outL = eq1_b0*eq1_inL + eq1_b1*eq1_x1L + eq1_b2*eq1_x2L
+             - eq1_a1*eq1_y1L - eq1_a2*eq1_y2L;
+  eq1_x2L  = eq1_x1L; eq1_x1L = eq1_inL;
+  eq1_y2L  = eq1_y1L; eq1_y1L = eq1_outL;
+  spl0     = eq1_outL;
+
+  eq1_inR  = spl1;
+  eq1_outR = eq1_b0*eq1_inR + eq1_b1*eq1_x1R + eq1_b2*eq1_x2R
+             - eq1_a1*eq1_y1R - eq1_a2*eq1_y2R;
+  eq1_x2R  = eq1_x1R; eq1_x1R = eq1_inR;
+  eq1_y2R  = eq1_y1R; eq1_y1R = eq1_outR;
+  spl1     = eq1_outR;
+
+);
+
+// ---- EQ Band 2 ----
+(eq2_active == 1) ? (
+
+  eq2_inL  = spl0;
+  eq2_outL = eq2_b0*eq2_inL + eq2_b1*eq2_x1L + eq2_b2*eq2_x2L
+             - eq2_a1*eq2_y1L - eq2_a2*eq2_y2L;
+  eq2_x2L  = eq2_x1L; eq2_x1L = eq2_inL;
+  eq2_y2L  = eq2_y1L; eq2_y1L = eq2_outL;
+  spl0     = eq2_outL;
+
+  eq2_inR  = spl1;
+  eq2_outR = eq2_b0*eq2_inR + eq2_b1*eq2_x1R + eq2_b2*eq2_x2R
+             - eq2_a1*eq2_y1R - eq2_a2*eq2_y2R;
+  eq2_x2R  = eq2_x1R; eq2_x1R = eq2_inR;
+  eq2_y2R  = eq2_y1R; eq2_y1R = eq2_outR;
+  spl1     = eq2_outR;
+
+);
+
+// ---- High Shelf + Presence Bump ----
+(hs_active == 1) ? (
+
+  hs_inL  = spl0;
+  hs_outL = hs_b0*hs_inL + hs_b1*hs_x1L + hs_b2*hs_x2L
+            - hs_a1*hs_y1L - hs_a2*hs_y2L;
+  hs_x2L  = hs_x1L; hs_x1L = hs_inL;
+  hs_y2L  = hs_y1L; hs_y1L = hs_outL;
+  spl0    = hs_outL;
+
+  hs_inR  = spl1;
+  hs_outR = hs_b0*hs_inR + hs_b1*hs_x1R + hs_b2*hs_x2R
+            - hs_a1*hs_y1R - hs_a2*hs_y2R;
+  hs_x2R  = hs_x1R; hs_x1R = hs_inR;
+  hs_y2R  = hs_y1R; hs_y1R = hs_outR;
+  spl1    = hs_outR;
+
+  pb_inL  = spl0;
+  pb_outL = pb_b0*pb_inL + pb_b1*pb_x1L + pb_b2*pb_x2L
+            - pb_a1*pb_y1L - pb_a2*pb_y2L;
+  pb_x2L  = pb_x1L; pb_x1L = pb_inL;
+  pb_y2L  = pb_y1L; pb_y1L = pb_outL;
+  spl0    = pb_outL;
+
+  pb_inR  = spl1;
+  pb_outR = pb_b0*pb_inR + pb_b1*pb_x1R + pb_b2*pb_x2R
+            - pb_a1*pb_y1R - pb_a2*pb_y2R;
+  pb_x2R  = pb_x1R; pb_x1R = pb_inR;
+  pb_y2R  = pb_y1R; pb_y1R = pb_outR;
+  spl1    = pb_outR;
+
+  hf_zL = hf_coeff * hf_zL + (1.0 - hf_coeff) * spl0;
+  hf_zR = hf_coeff * hf_zR + (1.0 - hf_coeff) * spl1;
+
+  shelf_drive = shelf_sat_drive * abs(hs_gain_db) / 16.0 + 1.0;
+  shelf_drive = min(shelf_drive, 3.0);
+
+  xL   = spl0 * shelf_drive;
+  spl0 = (xL * (27.0 + xL*xL) / (27.0 + 9.0*xL*xL)) / shelf_drive;
+
+  xR   = spl1 * shelf_drive;
+  spl1 = (xR * (27.0 + xR*xR) / (27.0 + 9.0*xR*xR)) / shelf_drive;
+
+);
+
+// ---- Dynamics ----
+
+// Recalculate time constants here using live srate
+// This guarantees correct values even on first sample after load
+dyn_attack_coeff  = exp(-1.0 / (max(0.1, slider12) * srate / 1000.0));
+dyn_release_coeff = exp(-1.0 / (max(10.0, slider13) * srate / 1000.0));
+dyn_hold_samples  = slider18 * srate / 1000.0;
+
+// 1. Linked stereo peak detector
+// Follows the louder of the two channels
+dyn_in_peak = max(abs(spl0), abs(spl1));
+
+// Instantaneous attack — envelope snaps immediately to any peak that exceeds it
+// Smooth release only — this matches true hardware VCA peak detection behavior
+// and ensures the gain computer sees actual peak levels rather than smoothed averages
+(dyn_in_peak >= dyn_env) ? (
+  dyn_env = dyn_in_peak;
+) : (
+  dyn_env = dyn_release_coeff * dyn_env;
+);
+
+// 2. Convert envelope to dB
+dyn_level_db = (dyn_env > 0.000001) ? (log(dyn_env) * log2db) : -120.0;
+
+// 3. Gain computer — static gain reduction in dB for current level
+dyn_gr_db = 0.0;
+
+// Compress / Limit
+(dyn_mode == 0) ? (
+
+  dyn_over = dyn_level_db - dyn_threshold_db;
+
+  (dyn_over > dyn_knee_db) ? (
+    // Above knee — full ratio
+    dyn_gr_db = dyn_over * (1.0 - 1.0/dyn_ratio);
+  ) : (dyn_over > -dyn_knee_db) ? (
+    // Within soft knee — interpolate
+    dyn_knee_t = (dyn_over + dyn_knee_db) / (2.0 * dyn_knee_db);
+    dyn_gr_db  = dyn_over * (1.0 - 1.0/dyn_ratio) * dyn_knee_t * dyn_knee_t;
+  );
+
+// Expand
+) : (dyn_mode == 1) ? (
+
+  dyn_under = dyn_threshold_db - dyn_level_db;
+
+  (dyn_under > dyn_knee_db) ? (
+    dyn_gr_db = dyn_under * (1.0 - 1.0/dyn_ratio);
+  ) : (dyn_under > -dyn_knee_db) ? (
+    dyn_knee_t = (dyn_under + dyn_knee_db) / (2.0 * dyn_knee_db);
+    dyn_gr_db  = dyn_under * (1.0 - 1.0/dyn_ratio) * dyn_knee_t * dyn_knee_t;
+  );
+
+// Gate
+) : (dyn_mode == 2) ? (
+
+  dyn_under = dyn_threshold_db - dyn_level_db;
+
+  // Signal is above threshold — gate open, reset hold counter
+  (dyn_under <= -dyn_knee_db) ? (
+    dyn_hold_counter = dyn_hold_samples;
+    dyn_gr_db = 0.0;
+
+  // Signal is below threshold
+  ) : (
+    // Hold phase — keep gate open for hold duration after signal drops
+    (dyn_hold_counter > 0) ? (
+      dyn_hold_counter -= 1;
+      dyn_gr_db = 0.0;
+    // Hold expired — apply gate attenuation
+    ) : (
+      (dyn_under > dyn_knee_db) ? (
+        dyn_gr_db = -dyn_gate_range;
+      ) : (
+        dyn_knee_t = (dyn_under + dyn_knee_db) / (2.0 * dyn_knee_db);
+        dyn_gr_db  = -dyn_gate_range * dyn_knee_t * dyn_knee_t;
+      );
+    );
+  );
+
+);
+
+// 4. Apply smoothing to gain reduction signal
+// Gate mode: opens instantaneously (snap to zero), closes at release speed
+// Compress/Expand: attack smooths onset, release smooths recovery
+(dyn_mode == 2) ? (
+  (dyn_gr_db == 0.0) ? (
+    // Gate open — snap immediately, no smoothing on opening
+    dyn_gr_smooth = 0.0;
+  ) : (
+    // Gate closing — release speed only
+    dyn_gr_smooth = dyn_release_coeff * dyn_gr_smooth + (1.0 - dyn_release_coeff) * dyn_gr_db;
+  );
+) : (
+  (dyn_gr_db > dyn_gr_smooth) ? (
+    dyn_gr_smooth = dyn_attack_coeff  * dyn_gr_smooth + (1.0 - dyn_attack_coeff)  * dyn_gr_db;
+  ) : (
+    dyn_gr_smooth = dyn_release_coeff * dyn_gr_smooth + (1.0 - dyn_release_coeff) * dyn_gr_db;
+  );
+);
+
+dyn_gr_lin = exp(-dyn_gr_smooth * db2log);
+spl0 *= dyn_gr_lin;
+spl1 *= dyn_gr_lin;
+
+// Capture for GR meter
+gr_display = -dyn_gr_smooth;
+
+// ---- Output level meter (post output gain, pre write) ----
+out_peak = max(abs(spl0 * output_gain_lin), abs(spl1 * output_gain_lin));
+out_meter_env = (out_peak > out_meter_env) ? out_peak : out_meter_coeff * out_meter_env;
+out_meter_db  = (out_meter_env > 0.000001) ? log(out_meter_env) * log2db : -120.0;
+out_meter_peak = max(out_meter_peak, out_meter_db);
+
+// ---- LF Mono Summing (1-pole) ----
+lfm_lowL = (lfm_tmpl = lfm_a0*spl0 - lfm_b1*lfm_tmpl);
+lfm_lowR = (lfm_tmpr = lfm_a0*spl1 - lfm_b1*lfm_tmpr);
+lfm_highL = spl0 - lfm_lowL;
+lfm_highR = spl1 - lfm_lowR;
+lfm_monoLP   = (lfm_lowL + lfm_lowR) * 0.5;
+lfm_stereoLP = (lfm_lowL - lfm_lowR);
+lfm_outL = lfm_monoLP + lfm_stereoLP * lfm_width * 0.5;
+lfm_outR = lfm_monoLP - lfm_stereoLP * lfm_width * 0.5;
+spl0 = lfm_outL + lfm_highL;
+spl1 = lfm_outR + lfm_highR;
+
+// ---- Output level meter (post width, pre output gain) ----
+out_peak = max(abs(spl0 * output_gain_lin), abs(spl1 * output_gain_lin));
+out_meter_env = (out_peak > out_meter_env) ? out_peak : out_meter_coeff * out_meter_env;
+out_meter_db  = (out_meter_env > 0.000001) ? log(out_meter_env) * log2db : -120.0;
+out_meter_db > out_meter_peak ? (
+  out_meter_peak      = out_meter_db;
+  out_peak_hold_timer = peak_hold_samples;
+) : out_peak_hold_timer > 0 ? (
+  out_peak_hold_timer -= 1;
+) : (
+  out_meter_peak = max(-60.0, out_meter_peak - peak_fall_db);
+);
+
+// ---- Stereo Width ----
+sw_mid  = (spl0 + spl1) * 0.5;
+sw_side = (spl0 - spl1) * 0.5;
+sw_side *= sw_sides_gain;
+spl0 = sw_mid + sw_side;
+spl1 = sw_mid - sw_side;
+
+// ---- Mono Switch ----
+slider21 == 1 ? (
+  spl0 = (spl0 + spl1) * 0.5;
+  spl1 = spl0;
+);
+
+// ---- Output Gain ----
+spl0 *= output_gain_lin;
+spl1 *= output_gain_lin;
+
+// ============================================================
+// GFX
+// ============================================================
+
+@gfx 700 800
+
+// ============================================================
+// UI SETUP
+// ============================================================
+
+control_start("main", "tron");
+
+ui_screen() == "main" ? (
+
+// Background fill
+gfx_r = 0.235; gfx_g = 0.235; gfx_b = 0.255; gfx_a = 1;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+// Double-click detection — must run once per frame before knobs
+check_dbl_click();
+
+// ============================================================
+// SECTION DIMENSIONS
+// ============================================================
+
+col_split = 350;
+
+in_x  = 4;             in_y  = 4;                     in_w  = col_split - 8; in_h  = 302;
+eq_x  = 4;             eq_y  = in_y + in_h + 4;       eq_w  = col_split - 8; eq_h  = 800 - eq_y - 4;
+dyn_x = col_split + 4; dyn_y = 4;                     dyn_w = 700 - dyn_x - 4; dyn_h = 486;
+out_x = col_split + 4; out_y = dyn_y + dyn_h + 4;     out_w = dyn_w;         out_h = 800 - out_y - 4;
+
+in_hdr = 22; eq_hdr = 22; dyn_hdr = 22; out_hdr = 22;
+meter_w = 18;
+
+// ============================================================
+// SECTION BACKGROUNDS + BORDERS + HEADERS
+// ============================================================
+
+gfx_r = 0.16; gfx_g = 0.16; gfx_b = 0.18; gfx_a = 1;
+gfx_rect(in_x,  in_y,  in_w,  in_h);
+gfx_rect(eq_x,  eq_y,  eq_w,  eq_h);
+gfx_rect(dyn_x, dyn_y, dyn_w, dyn_h);
+gfx_rect(out_x, out_y, out_w, out_h);
+
+draw_section_border(in_x,  in_y,  in_w,  in_h);
+draw_section_border(eq_x,  eq_y,  eq_w,  eq_h);
+draw_section_border(dyn_x, dyn_y, dyn_w, dyn_h);
+draw_section_border(out_x, out_y, out_w, out_h);
+
+// Header bars
+gfx_r = 1.0000; gfx_g = 0.8275; gfx_b = 0.0000; gfx_a = 1; gfx_rect(in_x,  in_y,  in_w,  in_hdr);
+gfx_r = 0.3255; gfx_g = 0.6745; gfx_b = 0.8941; gfx_a = 1; gfx_rect(eq_x,  eq_y,  eq_w,  eq_hdr);
+gfx_r = 1.0000; gfx_g = 0.2980; gfx_b = 0.2980; gfx_a = 1; gfx_rect(dyn_x, dyn_y, dyn_w, dyn_hdr);
+gfx_r = 0.2471; gfx_g = 0.7137; gfx_b = 0.2471; gfx_a = 1; gfx_rect(out_x, out_y, out_w, out_hdr);
+
+// Header text
+gfx_r = 0.08; gfx_g = 0.08; gfx_b = 0.08; gfx_a = 1;
+gfx_setfont(1, "Arial", 11);
+
+gfx_x = in_x  + 8; gfx_y = in_y  + 5; gfx_drawstr("INPUT");
+gfx_x = eq_x  + 8; gfx_y = eq_y  + 5; gfx_drawstr("EQ");
+gfx_x = dyn_x + 8; gfx_y = dyn_y + 5; gfx_drawstr("DYNAMICS");
+gfx_x = out_x + 8; gfx_y = out_y + 5; gfx_drawstr("OUTPUT");
+
+// ============================================================
+// INPUT SECTION
+// ============================================================
+
+in_meter_x = in_x + in_w - meter_w - 16;
+in_meter_h = 160;
+in_meter_y = in_y + in_hdr + (in_h - in_hdr - in_meter_h) / 2;
+
+// Gain knob (70px)
+in_gain_cx = in_x + 80;
+in_gain_cy = in_y + in_hdr + 88;
+ui_push_rect(in_gain_cx - 35, in_gain_cy - 35, 70, 70);
+slider1 = control_dial(slider1, -30, 30, 0);
+slider_automate(slider1);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(in_gain_cx-35, in_gain_cy-35, 70, 70) ? (slider1=0; slider_automate(slider1); update_coefficients(););
+strcpy(#lbl, "GAIN");  draw_label_at(in_gain_cx, in_gain_cy - 49);
+sprintf(#val, "%+.1f dB", slider1);  draw_value_at(in_gain_cx, in_gain_cy + 39);
+
+// Polarity switch
+ui_push_rect(in_x + 178, in_y + in_hdr + 79, 44, 18);
+slider2 = control_switch(slider2);
+slider_automate(slider2);
+update_coefficients();
+ui_pop();
+gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+gfx_setfont(1, "Arial", 10);
+gfx_x = in_x + 178; gfx_y = in_y + in_hdr + 65;
+gfx_drawstr("POLARITY");
+// Indicator dot
+slider2 == 1 ? (gfx_r=1.0;gfx_g=0.15;gfx_b=0.15) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
+gfx_a = 1; gfx_circle(in_x + 200, in_y + in_hdr + 109, 3, 1, 1);
+
+// Saturation drive knob (70px) — inactive when SAT OFF
+in_sat_cx = in_x + 80;
+in_sat_cy = in_y + in_hdr + 218;
+slider3 == 1 ? (
+  ui_push_rect(in_sat_cx - 35, in_sat_cy - 35, 70, 70);
+  slider17 = control_dial(slider17, 0, 1, 0);
+  slider_automate(slider17);
+  update_coefficients();
+  ui_pop();
+  dbl_click_in_rect(in_sat_cx-35, in_sat_cy-35, 70, 70) ? (slider17=0.3; slider_automate(slider17); update_coefficients(););
+  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+) : (
+  draw_knob_inactive(in_sat_cx, in_sat_cy, 35, slider17, 0, 1);
+  gfx_r = 0.38; gfx_g = 0.38; gfx_b = 0.40; gfx_a = 1;
+);
+strcpy(#lbl, "SATURATION");  draw_label_at(in_sat_cx, in_sat_cy - 49);
+sprintf(#val, "%.2f", slider17);  draw_value_at(in_sat_cx, in_sat_cy + 39);
+
+// Sat On switch
+ui_push_rect(in_x + 178, in_y + in_hdr + 209, 44, 18);
+slider3 = control_switch(slider3);
+slider_automate(slider3);
+update_coefficients();
+ui_pop();
+gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+gfx_setfont(1, "Arial", 10);
+gfx_x = in_x + 178; gfx_y = in_y + in_hdr + 195;
+gfx_drawstr("SAT ON");
+// Indicator dot
+slider3 == 1 ? (gfx_r=1.0;gfx_g=0.15;gfx_b=0.15) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
+gfx_a = 1; gfx_circle(in_x + 200, in_y + in_hdr + 239, 3, 1, 1);
+
+// Input meter
+draw_vmeter(in_meter_x, in_meter_y, meter_w, in_meter_h, in_meter_db, -60);
+gfx_r = 0.55; gfx_g = 0.55; gfx_b = 0.58; gfx_a = 1;
+gfx_setfont(1, "Arial", 10);
+sprintf(#val, "%.0f", max(-60, in_meter_peak));
+gfx_setfont(1, "Arial", 10);
+gfx_measurestr(#val, vw, vh);
+gfx_x = in_meter_x + meter_w/2 - vw/2; gfx_y = in_meter_y + in_meter_h + 4;
+gfx_drawstr(#val);
+// Click to reset
+(mouse_cap & 1) && (mouse_x >= in_meter_x) && (mouse_x < in_meter_x + meter_w) && (mouse_y >= in_meter_y + in_meter_h + 4) && (mouse_y < in_meter_y + in_meter_h + 16) ? (
+  in_meter_peak = -60.0;
+);
+
+// ============================================================
+// EQ SECTION
+// ============================================================
+
+eq_cy0 = eq_y + eq_hdr + 20;
+eq_cx_l = eq_x + 107;  // freq col
+eq_cx_r = eq_x + 227;  // gain col
+
+// HIGH SHELF (centered, 44px knob)
+hs_cy = eq_cy0 + 55;
+ui_push_rect(eq_x + eq_w/2 - 22, hs_cy - 22, 44, 44);
+slider9 = control_dial(slider9, -16, 16, 0);
+slider_automate(slider9);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(eq_x+eq_w/2-22, hs_cy-22, 44, 44) ? (slider9=0; slider_automate(slider9); update_coefficients(););
+strcpy(#lbl, "HIGH SHELF 16k");  draw_label_at(eq_x + eq_w/2, hs_cy - 36);
+sprintf(#val, "%+.1f dB", slider9);  draw_value_at(eq_x + eq_w/2, hs_cy + 26);
+
+draw_hline(eq_x + 47, eq_cy0 + 113, 240);
+
+// HI-MID (50px freq, 70px gain)
+hm_cy = eq_cy0 + 175;
+ui_push_rect(eq_cx_l - 22, hm_cy - 22, 44, 44);
+slider8 = control_dial(slider8, 1000, 10000, log(10));
+slider_automate(slider8);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(eq_cx_l-22, hm_cy-22, 44, 44) ? (slider8=3000; slider_automate(slider8); update_coefficients(););
+strcpy(#lbl, "HI FREQ");  draw_label_at(eq_cx_l, hm_cy - 36);
+sprintf(#val, "%.0f Hz", slider8);  draw_value_at(eq_cx_l, hm_cy + 26);
+
+ui_push_rect(eq_cx_r - 35, hm_cy - 35, 70, 70);
+slider7 = control_dial(slider7, -15, 15, 0);
+slider_automate(slider7);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(eq_cx_r-35, hm_cy-35, 70, 70) ? (slider7=0; slider_automate(slider7); update_coefficients(););
+strcpy(#lbl, "HIGH");  draw_label_at(eq_cx_r, hm_cy - 49);
+sprintf(#val, "%+.1f dB", slider7);  draw_value_at(eq_cx_r, hm_cy + 39);
+
+// LO-MID (50px freq, 70px gain)
+lm_cy = eq_cy0 + 315;
+ui_push_rect(eq_cx_l - 22, lm_cy - 22, 44, 44);
+slider6 = control_dial(slider6, 200, 2000, log(10));
+slider_automate(slider6);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(eq_cx_l-22, lm_cy-22, 44, 44) ? (slider6=500; slider_automate(slider6); update_coefficients(););
+strcpy(#lbl, "LO FREQ");  draw_label_at(eq_cx_l, lm_cy - 36);
+sprintf(#val, "%.0f Hz", slider6);  draw_value_at(eq_cx_l, lm_cy + 26);
+
+ui_push_rect(eq_cx_r - 35, lm_cy - 35, 70, 70);
+slider5 = control_dial(slider5, -15, 15, 0);
+slider_automate(slider5);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(eq_cx_r-35, lm_cy-35, 70, 70) ? (slider5=0; slider_automate(slider5); update_coefficients(););
+strcpy(#lbl, "LOW");  draw_label_at(eq_cx_r, lm_cy - 49);
+sprintf(#val, "%+.1f dB", slider5);  draw_value_at(eq_cx_r, lm_cy + 39);
+
+// HPF switch
+hpf_by = eq_y + eq_h - 52;
+ui_push_rect(eq_x + eq_w/2 - 22, hpf_by, 44, 18);
+slider4 = control_switch(slider4);
+slider_automate(slider4);
+update_coefficients();
+ui_pop();
+gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+gfx_setfont(1, "Arial", 10);
+gfx_x = eq_x + eq_w/2 - 22; gfx_y = hpf_by - 14;
+gfx_drawstr("HPF 50Hz");
+// Indicator dot
+slider4 == 1 ? (gfx_r=1.0;gfx_g=0.15;gfx_b=0.15) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
+gfx_a = 1; gfx_circle(eq_x + eq_w/2, hpf_by + 32, 3, 1, 1);
+
+// ============================================================
+// DYNAMICS SECTION
+// ============================================================
+
+gr_meter_x = dyn_x + dyn_w - meter_w - 16;
+gr_meter_h  = 200;
+gr_meter_y  = dyn_y + dyn_hdr + (320 - gr_meter_h) / 2;  // centered above gate divider
+
+// Mode selector
+mode_y  = dyn_y + dyn_hdr + 12;
+mode_h  = 24;
+mode_w  = 82;
+mode_g  = 4;
+mode_x0 = dyn_x + 16;
+
+// Mode selector — custom 3-way switch
+sw_w = dyn_w - meter_w - 24;
+sw_x = dyn_x + 8;
+slider15 = draw_3way(sw_x, mode_y, sw_w, mode_h, slider15, "COMPRESS", "EXPAND", "GATE");
+slider15 != dyn_mode ? (
+  dyn_mode = slider15;
+  slider_automate(slider15);
+  update_coefficients();
+);
+
+// Knob positions
+dyn_row1_y = dyn_y + dyn_hdr + 88;
+dyn_row2_y = dyn_y + dyn_hdr + 228;
+dyn_row3_y = dyn_y + dyn_hdr + 381;
+dyn_col1_x = dyn_x + 88;
+dyn_col2_x = dyn_x + 228;
+
+// Threshold
+ui_push_rect(dyn_col1_x - 35, dyn_row1_y - 35, 70, 70);
+slider10 = control_dial(slider10, -60, 0, 0);
+slider_automate(slider10);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(dyn_col1_x-35, dyn_row1_y-35, 70, 70) ? (slider10=0; slider_automate(slider10); update_coefficients(););
+strcpy(#lbl, "THRESHOLD");  draw_label_at(dyn_col1_x, dyn_row1_y - 49);
+sprintf(#val, "%.1f dB", slider10);  draw_value_at(dyn_col1_x, dyn_row1_y + 39);
+
+// Ratio
+ui_push_rect(dyn_col2_x - 35, dyn_row1_y - 35, 70, 70);
+slider11 = control_dial(slider11, 1, 20, 0);
+slider_automate(slider11);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(dyn_col2_x-35, dyn_row1_y-35, 70, 70) ? (slider11=1; slider_automate(slider11); update_coefficients(););
+strcpy(#lbl, "RATIO");  draw_label_at(dyn_col2_x, dyn_row1_y - 49);
+sprintf(#val, "%.1f:1", slider11);  draw_value_at(dyn_col2_x, dyn_row1_y + 39);
+
+// Attack
+ui_push_rect(dyn_col1_x - 35, dyn_row2_y - 35, 70, 70);
+slider12 = control_dial(slider12, 0.1, 100, log(1000));
+slider_automate(slider12);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(dyn_col1_x-35, dyn_row2_y-35, 70, 70) ? (slider12=10; slider_automate(slider12); update_coefficients(););
+strcpy(#lbl, "ATTACK");  draw_label_at(dyn_col1_x, dyn_row2_y - 49);
+sprintf(#val, "%.1f ms", slider12);  draw_value_at(dyn_col1_x, dyn_row2_y + 39);
+
+// Release
+ui_push_rect(dyn_col2_x - 35, dyn_row2_y - 35, 70, 70);
+slider13 = control_dial(slider13, 10, 1000, log(100));
+slider_automate(slider13);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(dyn_col2_x-35, dyn_row2_y-35, 70, 70) ? (slider13=100; slider_automate(slider13); update_coefficients(););
+strcpy(#lbl, "RELEASE");  draw_label_at(dyn_col2_x, dyn_row2_y - 49);
+sprintf(#val, "%.0f ms", slider13);  draw_value_at(dyn_col2_x, dyn_row2_y + 39);
+
+// Divider between compress and gate controls
+draw_hline(dyn_x + 38, dyn_y + dyn_hdr + 320, 240);
+
+// Gate Range + Gate Hold — active only in Gate mode
+dyn_mode == 2 ? (
+  // Gate mode: fully interactive
+  ui_push_rect(dyn_col1_x - 22, dyn_row3_y - 22, 44, 44);
+  slider14 = control_dial(slider14, -60, 0, 0);
+  slider_automate(slider14);
+  update_coefficients();
+  ui_pop();
+  dbl_click_in_rect(dyn_col1_x-22, dyn_row3_y-22, 44, 44) ? (slider14=-60; slider_automate(slider14); update_coefficients(););
+  ui_push_rect(dyn_col2_x - 22, dyn_row3_y - 22, 44, 44);
+  slider18 = control_dial(slider18, 0, 500, 0);
+  slider_automate(slider18);
+  update_coefficients();
+  ui_pop();
+  dbl_click_in_rect(dyn_col2_x-22, dyn_row3_y-22, 44, 44) ? (slider18=100; slider_automate(slider18); update_coefficients(););
+  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+) : (
+  // Non-gate mode: draw static knob position, no interaction
+  draw_knob_inactive(dyn_col1_x, dyn_row3_y, 22, slider14, -60, 0);
+  draw_knob_inactive(dyn_col2_x, dyn_row3_y, 22, slider18, 0, 500);
+  gfx_r = 0.38; gfx_g = 0.38; gfx_b = 0.40; gfx_a = 1;
+);
+strcpy(#lbl, "GATE RANGE");  draw_label_at(dyn_col1_x, dyn_row3_y - 36);
+sprintf(#val, "%.1f dB", slider14);  draw_value_at(dyn_col1_x, dyn_row3_y + 26);
+strcpy(#lbl, "GATE HOLD");  draw_label_at(dyn_col2_x, dyn_row3_y - 36);
+sprintf(#val, "%.0f ms", slider18);  draw_value_at(dyn_col2_x, dyn_row3_y + 26);
+
+// GR meter
+// GR meter — fills top-down, green->yellow->red
+gfx_r = 0.06; gfx_g = 0.06; gfx_b = 0.08; gfx_a = 1;
+gfx_rect(gr_meter_x, gr_meter_y, meter_w, gr_meter_h);
+gr_norm = min(1.0, max(0.0, -gr_display / 30.0));
+gr_fill_h = floor(gr_norm * gr_meter_h);
+gr_fill_h > 0 ? (
+  gfx_r = min(1.0, gr_norm * 2.0);
+  gfx_g = min(1.0, 2.0 - gr_norm * 2.0);
+  gfx_b = 0.05; gfx_a = 1;
+  gfx_rect(gr_meter_x, gr_meter_y, meter_w, gr_fill_h);
+);
+gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.32; gfx_a = 1;
+gfx_rect(gr_meter_x,            gr_meter_y,            meter_w, 1);
+gfx_rect(gr_meter_x,            gr_meter_y + gr_meter_h, meter_w, 1);
+gfx_rect(gr_meter_x,            gr_meter_y,            1, gr_meter_h);
+gfx_rect(gr_meter_x + meter_w,  gr_meter_y,            1, gr_meter_h + 1);
+gfx_r = 0.55; gfx_g = 0.55; gfx_b = 0.58; gfx_a = 1;
+gfx_setfont(1, "Arial", 10);
+gfx_x = gr_meter_x + 3; gfx_y = gr_meter_y + gr_meter_h + 4;
+gfx_drawstr("GR");
+gfx_setfont(1, "Arial", 10);
+sprintf(#val, "%.1f", gr_display);
+gfx_measurestr(#val, vw, vh);
+gfx_x = gr_meter_x + meter_w/2 - vw/2; gfx_y = gr_meter_y + gr_meter_h + 16;
+gfx_drawstr(#val);
+
+// ============================================================
+// OUTPUT SECTION
+// ============================================================
+
+out_meter_x = out_x + out_w - meter_w - 16;
+out_meter_h = 160;
+out_meter_y = out_y + out_hdr + (out_h - out_hdr - out_meter_h) / 2;
+
+out_avail_w = out_w - meter_w - 24;
+out_col1_x  = out_x + out_avail_w * 0.28;
+out_col2_x  = out_x + out_avail_w * 0.72;
+out_row1_y  = out_y + out_hdr + 80;
+out_row2_y  = out_y + out_hdr + 210;
+out_r2c1_x  = out_x + out_avail_w * 0.28;
+out_r2c3_x  = out_x + out_avail_w * 0.72;
+
+// LF Mono freq knob
+out_lem_cx = out_col1_x;
+out_lem_cy = out_row1_y;
+ui_push_rect(out_lem_cx - 22, out_lem_cy - 22, 44, 44);
+slider19 = control_dial(slider19, 0, 300, 0);
+slider_automate(slider19);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(out_lem_cx-22, out_lem_cy-22, 44, 44) ? (slider19=0; slider_automate(slider19); update_coefficients(););
+strcpy(#lbl, "LF MONO");  draw_label_at(out_lem_cx, out_lem_cy - 36);
+sprintf(#val, "%.0f Hz", slider19);  draw_value_at(out_lem_cx, out_lem_cy + 26);
+
+// Output gain knob
+out_knob_cx = out_col2_x;
+out_knob_cy = out_row1_y;
+ui_push_rect(out_knob_cx - 35, out_knob_cy - 35, 70, 70);
+slider16 = control_dial(slider16, -30, 30, 0);
+slider_automate(slider16);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(out_knob_cx-35, out_knob_cy-35, 70, 70) ? (slider16=0; slider_automate(slider16); update_coefficients(););
+strcpy(#lbl, "OUTPUT");  draw_label_at(out_knob_cx, out_knob_cy - 49);
+sprintf(#val, "%+.1f dB", slider16);  draw_value_at(out_knob_cx, out_knob_cy + 39);
+
+// Stereo Width knob
+ui_push_rect(out_r2c1_x - 22, out_row2_y - 22, 44, 44);
+slider20 = control_dial(slider20, 0, 200, 0);
+slider_automate(slider20);
+update_coefficients();
+ui_pop();
+dbl_click_in_rect(out_r2c1_x-22, out_row2_y-22, 44, 44) ? (slider20=100; slider_automate(slider20); update_coefficients(););
+strcpy(#lbl, "STEREO WIDTH");  draw_label_at(out_r2c1_x, out_row2_y - 36);
+sprintf(#val, "%.0f%%", slider20);  draw_value_at(out_r2c1_x, out_row2_y + 26);
+
+// Stereo/Mono switch
+out_mono_x = out_r2c3_x - 22;
+out_mono_y = out_row2_y - 9;
+ui_push_rect(out_mono_x, out_mono_y, 44, 18);
+slider21 = control_switch(slider21);
+slider_automate(slider21);
+update_coefficients();
+ui_pop();
+gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+gfx_setfont(1, "Arial", 10);
+strcpy(#mono_lbl, slider21 == 0 ? "STEREO" : "MONO");
+gfx_measurestr(#mono_lbl, mono_lw, mono_lh);
+gfx_x = out_r2c3_x - mono_lw/2; gfx_y = out_mono_y - 14;
+gfx_drawstr(#mono_lbl);
+// Indicator dot
+slider21 == 1 ? (gfx_r=1.0;gfx_g=0.15;gfx_b=0.15) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
+gfx_a = 1; gfx_circle(out_r2c3_x, out_mono_y + 32, 3, 1, 1);
+
+draw_vmeter(out_meter_x, out_meter_y, meter_w, out_meter_h, out_meter_db, -60);
+gfx_r = 0.55; gfx_g = 0.55; gfx_b = 0.58; gfx_a = 1;
+gfx_setfont(1, "Arial", 10);
+sprintf(#val, "%.0f", max(-60, out_meter_peak));
+gfx_setfont(1, "Arial", 10);
+gfx_measurestr(#val, vw, vh);
+gfx_x = out_meter_x + meter_w/2 - vw/2; gfx_y = out_meter_y + out_meter_h + 4;
+gfx_drawstr(#val);
+// Click to reset
+(mouse_cap & 1) && (mouse_x >= out_meter_x) && (mouse_x < out_meter_x + meter_w) && (mouse_y >= out_meter_y + out_meter_h + 4) && (mouse_y < out_meter_y + out_meter_h + 16) ? (
+  out_meter_peak = -60.0;
+);
+
+// ============================================================
+// PLUGIN NAME
+// ============================================================
+gfx_r = 0.38; gfx_g = 0.38; gfx_b = 0.42; gfx_a = 1;
+gfx_setfont(1, "Arial", 10);
+gfx_x = gfx_w/2 - 45; gfx_y = gfx_h - 13;
+gfx_drawstr("Fidelio Channel Strip");
+
+mouse_cap_last = mouse_cap;
+
+) : ui_system();
