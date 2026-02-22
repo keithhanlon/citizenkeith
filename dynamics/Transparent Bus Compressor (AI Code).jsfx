@@ -1,6 +1,6 @@
 desc: Transparent Bus Compressor
 author: citizenkeith - Claude AI
-version 1.5
+version: 1.5
 about:Clean, artifact-free compression for mix bus duty
 // Based on RMS detection with smooth envelope following
 // Released under GPLv3 License

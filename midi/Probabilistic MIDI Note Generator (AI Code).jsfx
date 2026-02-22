@@ -1,6 +1,6 @@
 desc:Probabilistic MIDI Note Generator
 author: citizenkeith - Claude AI
-version 1.0
+version: 1.0
 
 slider1:60<0,127,1>Root Note (C4 = 60)
 slider2:0<0,11,1{Major,Natural Minor,Harmonic Minor,Melodic Minor,Dorian,Phrygian,Lydian,Mixolydian,Locrian,Pentatonic Major,Pentatonic Minor,Blues}>Scale Type
