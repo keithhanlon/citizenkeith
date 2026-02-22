@@ -1,0 +1,556 @@
+desc:ReaChoir - Harmonized Delay
+author:citizenkeith
+version:1.0.0
+changelog:Initial release - Port of igorski's Rechoir VST to JSFX
+about:
+  # ReaChoir - Harmonized Delay
+  
+  Tempo-synced delay with pitch-shifted harmonized echoes.
+  
+  Port of igorski's Rechoir VST (https://github.com/igorski/rechoir)
+  
+  Features:
+  - Tempo-synced delay (quantized to 16th notes)
+  - Pitch shifting (±1 octave)
+  - 7 musical scales for harmonization
+  - Square wave LFOs (tempo-synced modulation)
+  - Independent stereo modulation (Odd/Even channels)
+  - Freeze mode with reverb
+  - Lowpass filter with resonance
+  - Bit reduction/decimator
+  
+  Original VST by igorski
+  JSFX port by citizenkeith
+
+// Port of igorski's Rechoir VST to JSFX
+// Tempo-synced delay with pitch-shifted harmonized echoes
+// Phase 6: Final polished version
+
+// === DELAY SECTION ===
+slider1:delay_time=0.25<0,1,0.01>Delay Time (measure %)
+slider2:feedback=0.5<0,0.99,0.01>Feedback
+slider3:mix=0.5<0,1,0.01>Mix
+slider4:freeze=0<0,1,1{Off,On}>Freeze
+
+// === PITCH SECTION ===
+slider6:pitch_shift=0.5<0,1,0.01>Shift (12 o'clock = neutral)
+slider7:scale=0<0,7,1{Off,Neutral,Major,Mixolydian,Augmented,Dorian,Minor,Diminished}>Scale
+
+// === CHOIR SECTION (LFO) ===
+slider9:lfo_enable=0<0,1,1{Off,On}>Mod Enable
+slider10:lfo_odd=0.5<0,1,0.01>Odd Speed
+slider11:lfo_even=0.5<0,1,0.01>Even Speed
+slider12:lfo_sync=0<0,1,1{Off,On}>Sync
+
+// === DECIMATOR SECTION ===
+slider14:decimator=0<0,1,0.01>Grit
+
+// === FILTER SECTION ===
+slider16:filter_cutoff=1.0<0,1,0.01>Cutoff (full right = off)
+slider17:filter_res=0.5<0,1,0.01>Resonance
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+
+PI = 3.141592653589793;
+TWO_PI = 6.283185307179586;
+MAX_DELAY_MS = 8000;
+MAX_DELAY = floor(MAX_DELAY_MS * srate / 1000);
+
+FILTER_MIN_FREQ = 30.0;
+FILTER_MAX_FREQ = 20000.0;
+FILTER_MIN_RESONANCE = 0.1;
+FILTER_MAX_RESONANCE = 0.7071067811865476;
+
+FIXED_GAIN = 0.015;
+SCALE_ROOM = 0.28;
+OFFSET_ROOM = 0.7;
+SCALE_DAMP = 0.4;
+
+// === DELAY BUFFERS ===
+delay_l = 0;
+delay_r = MAX_DELAY;
+delay_write_pos = 0;
+
+freeze_buffer_l = delay_r + MAX_DELAY;
+freeze_buffer_r = freeze_buffer_l + MAX_DELAY;
+freeze_len = 0;
+freeze_pos = 0;
+freeze_active = 0;
+
+// === PITCH SHIFT (Variable Speed) ===
+ps_mem_base = freeze_buffer_r + MAX_DELAY;
+
+PS_BUFFER_SIZE = 8192;
+ps_buffer_l = ps_mem_base;
+ps_buffer_r = ps_buffer_l + PS_BUFFER_SIZE;
+ps_buf_write = 0;
+
+PS_WINDOW_SIZE = 1024;
+ps_window = ps_buffer_r + PS_BUFFER_SIZE;
+
+// Hann window for crossfading
+i = 0;
+loop(PS_WINDOW_SIZE,
+  ps_window[i] = 0.5 * (1.0 - cos(TWO_PI * i / PS_WINDOW_SIZE));
+  i += 1;
+);
+
+ps_read_l = PS_WINDOW_SIZE * 1.5;
+ps_read_r = PS_WINDOW_SIZE * 1.5;
+
+pitch_ratio = 1.0;
+pitch_ratio_current = 1.0;
+pitch_ratio_target = 1.0;
+pitch_smooth_coeff = 0.02;
+
+// === SCALE SYSTEM ===
+// Each scale has 2 notes (semitones from root)
+scale_notes_base = ps_window + PS_WINDOW_SIZE;
+
+// Scale intervals (from original global.h)
+scale_notes_base[0] = 2; scale_notes_base[1] = 7;     // Neutral
+scale_notes_base[2] = 4; scale_notes_base[3] = 11;    // Major
+scale_notes_base[4] = 4; scale_notes_base[5] = 10;    // Mixolydian
+scale_notes_base[6] = 4; scale_notes_base[7] = 8;     // Augmented
+scale_notes_base[8] = 3; scale_notes_base[9] = 9;     // Dorian
+scale_notes_base[10] = 3; scale_notes_base[11] = 10;  // Minor
+scale_notes_base[12] = 3; scale_notes_base[13] = 6;   // Diminished
+
+// === LFO SYSTEM (Square Wave) ===
+lfo_odd_phase = 0;
+lfo_even_phase = 0;
+lfo_odd_state = 0;
+lfo_even_state = 0;
+lfo_odd_freq = 1.0;
+lfo_even_freq = 1.0;
+
+pitch_ratio_l = 1.0;
+pitch_ratio_r = 1.0;
+
+// === REVERB (for freeze mode) ===
+reverb_base = scale_notes_base + 14;
+comb_size_1 = floor(1116 * srate / 44100);
+comb_size_2 = floor(1188 * srate / 44100);
+comb_size_3 = floor(1356 * srate / 44100);
+comb_size_4 = floor(1422 * srate / 44100);
+
+comb_buf_1 = reverb_base;
+comb_buf_2 = comb_buf_1 + comb_size_1;
+comb_buf_3 = comb_buf_2 + comb_size_2;
+comb_buf_4 = comb_buf_3 + comb_size_3;
+
+comb_idx_1 = 0; comb_idx_2 = 0; comb_idx_3 = 0; comb_idx_4 = 0;
+comb_filter_1 = 0; comb_filter_2 = 0; comb_filter_3 = 0; comb_filter_4 = 0;
+
+reverb_room_size = 0.5;
+reverb_damp = 0.5;
+
+function init_reverb() (
+  i = 0; loop(comb_size_1, comb_buf_1[i] = 0; i += 1;);
+  i = 0; loop(comb_size_2, comb_buf_2[i] = 0; i += 1;);
+  i = 0; loop(comb_size_3, comb_buf_3[i] = 0; i += 1;);
+  i = 0; loop(comb_size_4, comb_buf_4[i] = 0; i += 1;);
+  
+  reverb_feedback = (reverb_room_size * SCALE_ROOM) + OFFSET_ROOM;
+  reverb_damp1 = reverb_damp * SCALE_DAMP;
+  reverb_damp2 = 1.0 - reverb_damp1;
+);
+
+function process_comb(input, buffer, buffer_size, idx, filter_store, feedback, damp1, damp2) 
+  local(output, new_filter) (
+  output = buffer[idx];
+  new_filter = (output * damp2) + (filter_store * damp1);
+  buffer[idx] = input + (new_filter * feedback);
+  idx += 1;
+  idx >= buffer_size ? idx = 0;
+  output;
+);
+
+init_reverb();
+
+// === FILTER ===
+delay_samples_target = 0;
+delay_samples_current = 0;
+delay_smooth_coeff = 0.001;
+
+filter_a1 = 0; filter_a2 = 0; filter_a3 = 0;
+filter_b1 = 0; filter_b2 = 0;
+filter_in1_l = 0; filter_in2_l = 0;
+filter_out1_l = 0; filter_out2_l = 0;
+filter_in1_r = 0; filter_in2_r = 0;
+filter_out1_r = 0; filter_out2_r = 0;
+
+// === DECIMATOR ===
+decimator_bits = 16;
+decimator_m = 1 << (decimator_bits - 1);
+decimator_rate = 0;
+decimator_acc_l = 0;
+decimator_acc_r = 0;
+
+// === TEMPO ===
+tempo = 120;
+ts_num = 4;
+ts_denom = 4;
+
+function calc_tempo_values() (
+  full_measure_duration = (60.0 / tempo) * ts_denom;
+  full_measure_samples = floor(full_measure_duration * srate);
+);
+
+function update_filter_coefficients(cutoff_hz, resonance) local(c) (
+  c = 1.0 / tan(PI * cutoff_hz / srate);
+  filter_a1 = 1.0 / (1.0 + resonance * c + c * c);
+  filter_a2 = 2.0 * filter_a1;
+  filter_a3 = filter_a1;
+  filter_b1 = 2.0 * (1.0 - c * c) * filter_a1;
+  filter_b2 = (1.0 - resonance * c + c * c) * filter_a1;
+);
+
+function process_filter(input, in1, in2, out1, out2) local(output) (
+  output = filter_a1 * input + filter_a2 * in1 + filter_a3 * in2 - 
+           filter_b1 * out1 - filter_b2 * out2;
+  output;
+);
+
+// LFO speed to frequency conversion
+function lfo_speed_to_freq(speed_param) local(beat_duration, subdivision_samples, freq) (
+  beat_duration = 60.0 / tempo;
+  
+  speed_param < 0.25 ? (
+    measures = 4.0 - (speed_param * 4.0) * 3.0;
+    subdivision_samples = measures * ts_num * beat_duration * srate;
+  ) : speed_param < 0.5 ? (
+    ratio = (speed_param - 0.25) * 4.0;
+    beats = 4.0 - ratio * 3.0;
+    subdivision_samples = beats * beat_duration * srate;
+  ) : speed_param < 0.75 ? (
+    ratio = (speed_param - 0.5) * 4.0;
+    fraction = 1.0 - ratio * 0.5;
+    subdivision_samples = fraction * beat_duration * srate;
+  ) : (
+    ratio = (speed_param - 0.75) * 4.0;
+    fraction = 0.5 - ratio * 0.25;
+    subdivision_samples = fraction * beat_duration * srate;
+  );
+  
+  freq = srate / (subdivision_samples * 2);
+  freq;
+);
+
+// Semitones to pitch ratio
+function semitones_to_ratio(semitones) (
+  2 ^ (semitones / 12.0);
+);
+
+calc_tempo_values();
+
+@slider
+
+calc_tempo_values();
+
+// === DELAY TIME ===
+delay_max_ms = full_measure_duration * 1000.0;
+delay_max_ms > MAX_DELAY_MS ? delay_max_ms = MAX_DELAY_MS;
+delay_time_ms = delay_time * delay_max_ms;
+delay_samples_unrounded = floor((delay_time_ms / 1000.0) * srate);
+
+// Quantize to 16th notes
+subdivision = 16;
+sixteenth_samples = full_measure_samples / subdivision;
+delay_samples_target = floor(delay_samples_unrounded / sixteenth_samples + 0.5) * sixteenth_samples;
+delay_samples_target = max(1, min(delay_samples_target, MAX_DELAY - 1));
+delay_samples_current == 0 ? delay_samples_current = delay_samples_target;
+
+// === PITCH ===
+// Map slider: 0 = -12 semitones, 0.5 = 0 semitones, 1.0 = +12 semitones
+pitch_shift >= 0.5 ? (
+  pitch_ratio_target = 1.0 + (pitch_shift - 0.5) * 2.0;
+) : (
+  pitch_ratio_target = 0.5 + pitch_shift;
+);
+
+pitch_ratio = pitch_ratio_target;
+
+// === LFO ===
+lfo_odd_freq = lfo_speed_to_freq(lfo_odd);
+lfo_even_freq = lfo_speed_to_freq(lfo_even);
+
+lfo_sync ? (
+  lfo_even_freq = lfo_odd_freq;
+);
+
+// === FILTER ===
+filter_cutoff_hz = FILTER_MIN_FREQ + (filter_cutoff * (FILTER_MAX_FREQ - FILTER_MIN_FREQ));
+filter_resonance_val = FILTER_MIN_RESONANCE + ((1.0 - filter_res) * (FILTER_MAX_RESONANCE - FILTER_MIN_RESONANCE));
+filter_enabled = filter_cutoff < 1.0;
+update_filter_coefficients(filter_cutoff_hz, filter_resonance_val);
+
+// === DECIMATOR ===
+decimator_rate = decimator > 0.99 ? 0.49 : (1.0 - decimator) * 0.5;
+decimator_bits = floor(16 - (decimator * 15));
+decimator_bits = max(1, min(decimator_bits, 16));
+decimator_m = 1 << (decimator_bits - 1);
+
+// === FREEZE ===
+freeze != freeze_active ? (
+  freeze == 1 ? (
+    freeze_len = floor(delay_samples_current);
+    freeze_len = min(freeze_len, MAX_DELAY - 1);
+    
+    freeze_read_start = delay_write_pos - freeze_len;
+    freeze_read_start < 0 ? freeze_read_start += MAX_DELAY;
+    
+    samples_to_end = MAX_DELAY - freeze_read_start;
+    samples_to_end >= freeze_len ? (
+      memcpy(freeze_buffer_l, delay_l + freeze_read_start, freeze_len);
+      memcpy(freeze_buffer_r, delay_r + freeze_read_start, freeze_len);
+    ) : (
+      memcpy(freeze_buffer_l, delay_l + freeze_read_start, samples_to_end);
+      memcpy(freeze_buffer_r, delay_r + freeze_read_start, samples_to_end);
+      memcpy(freeze_buffer_l + samples_to_end, delay_l, freeze_len - samples_to_end);
+      memcpy(freeze_buffer_r + samples_to_end, delay_r, freeze_len - samples_to_end);
+    );
+    
+    freeze_pos = 0;
+    init_reverb();
+  );
+  freeze_active = freeze;
+);
+
+@block
+tempo = max(1, tempo);
+ts_num = max(1, ts_num);
+ts_denom = max(1, ts_denom);
+
+@sample
+
+// Smooth changes
+delay_samples_current += (delay_samples_target - delay_samples_current) * delay_smooth_coeff;
+pitch_ratio_current += (pitch_ratio - pitch_ratio_current) * pitch_smooth_coeff;
+
+in_l = spl0;
+in_r = spl1;
+
+// === LFO PROCESSING ===
+lfo_enable ? (
+  // Update square wave LFO phases
+  lfo_odd_phase += lfo_odd_freq / srate;
+  lfo_even_phase += lfo_even_freq / srate;
+  
+  // Toggle states on zero crossing
+  lfo_odd_phase >= 1.0 ? (
+    lfo_odd_phase -= 1.0;
+    lfo_odd_state = 1 - lfo_odd_state;
+  );
+  
+  lfo_even_phase >= 1.0 ? (
+    lfo_even_phase -= 1.0;
+    lfo_even_state = 1 - lfo_even_state;
+  );
+  
+  // Calculate pitch ratios based on scale
+  scale > 0 ? (
+    // SCALE MODE: Use scale intervals
+    scale_idx = (scale - 1) * 2;
+    note0_semitones = scale_notes_base[scale_idx];
+    note1_semitones = scale_notes_base[scale_idx + 1];
+    
+    pitch_ratio_l = lfo_odd_state == 0 ? 
+      semitones_to_ratio(note0_semitones) : 
+      semitones_to_ratio(note1_semitones);
+    
+    pitch_ratio_r = lfo_even_state == 0 ? 
+      semitones_to_ratio(note0_semitones) : 
+      semitones_to_ratio(note1_semitones);
+  ) : (
+    // NO SCALE: Modulate between 1.0 and pitch shift
+    pitch_ratio_l = lfo_odd_state == 0 ? 1.0 : pitch_ratio_current;
+    pitch_ratio_r = lfo_even_state == 0 ? 1.0 : pitch_ratio_current;
+  );
+) : (
+  // LFO disabled - static pitch
+  pitch_ratio_l = pitch_ratio_current;
+  pitch_ratio_r = pitch_ratio_current;
+);
+
+// === DELAY PROCESSING ===
+freeze == 1 ? (
+  // FREEZE MODE with reverb
+  freeze_i = floor(freeze_pos);
+  freeze_frac = freeze_pos - freeze_i;
+  freeze_i2 = (freeze_i + 1) % freeze_len;
+  
+  delayed_l = freeze_buffer_l[freeze_i] * (1 - freeze_frac) + freeze_buffer_l[freeze_i2] * freeze_frac;
+  delayed_r = freeze_buffer_r[freeze_i] * (1 - freeze_frac) + freeze_buffer_r[freeze_i2] * freeze_frac;
+  
+  freeze_pos += 1.0;
+  freeze_pos >= freeze_len ? freeze_pos -= freeze_len;
+  
+  // Reverb processing
+  reverb_input = (delayed_l + delayed_r) * 0.5 * FIXED_GAIN;
+  
+  comb_out = 0;
+  comb_out += process_comb(reverb_input, comb_buf_1, comb_size_1, comb_idx_1, comb_filter_1, reverb_feedback, reverb_damp1, reverb_damp2);
+  comb_filter_1 = (comb_buf_1[comb_idx_1] * reverb_damp2) + (comb_filter_1 * reverb_damp1);
+  comb_idx_1 += 1; comb_idx_1 >= comb_size_1 ? comb_idx_1 = 0;
+  
+  comb_out += process_comb(reverb_input, comb_buf_2, comb_size_2, comb_idx_2, comb_filter_2, reverb_feedback, reverb_damp1, reverb_damp2);
+  comb_filter_2 = (comb_buf_2[comb_idx_2] * reverb_damp2) + (comb_filter_2 * reverb_damp1);
+  comb_idx_2 += 1; comb_idx_2 >= comb_size_2 ? comb_idx_2 = 0;
+  
+  comb_out += process_comb(reverb_input, comb_buf_3, comb_size_3, comb_idx_3, comb_filter_3, reverb_feedback, reverb_damp1, reverb_damp2);
+  comb_filter_3 = (comb_buf_3[comb_idx_3] * reverb_damp2) + (comb_filter_3 * reverb_damp1);
+  comb_idx_3 += 1; comb_idx_3 >= comb_size_3 ? comb_idx_3 = 0;
+  
+  comb_out += process_comb(reverb_input, comb_buf_4, comb_size_4, comb_idx_4, comb_filter_4, reverb_feedback, reverb_damp1, reverb_damp2);
+  comb_filter_4 = (comb_buf_4[comb_idx_4] * reverb_damp2) + (comb_filter_4 * reverb_damp1);
+  comb_idx_4 += 1; comb_idx_4 >= comb_size_4 ? comb_idx_4 = 0;
+  
+  delayed_l = delayed_l * 0.5 + comb_out * 0.5;
+  delayed_r = delayed_r * 0.5 + comb_out * 0.5;
+  
+) : (
+  // NORMAL MODE - read from delay
+  read_pos = delay_write_pos - delay_samples_current;
+  read_pos < 0 ? read_pos += MAX_DELAY;
+  
+  read_i = floor(read_pos);
+  read_frac = read_pos - read_i;
+  read_i2 = (read_i + 1) % MAX_DELAY;
+  
+  delayed_l = delay_l[read_i] * (1 - read_frac) + delay_l[read_i2] * read_frac;
+  delayed_r = delay_r[read_i] * (1 - read_frac) + delay_r[read_i2] * read_frac;
+  
+  // === PITCH SHIFT (Variable Speed with Crossfading) ===
+  // LEFT CHANNEL
+  abs(pitch_ratio_l - 1.0) > 0.01 ? (
+    ps_buffer_l[ps_buf_write] = delayed_l;
+    
+    read_i = floor(ps_read_l) % PS_BUFFER_SIZE;
+    read_frac = ps_read_l - floor(ps_read_l);
+    read_i2 = (read_i + 1) % PS_BUFFER_SIZE;
+    sample_l = ps_buffer_l[read_i] * (1 - read_frac) + ps_buffer_l[read_i2] * read_frac;
+    
+    distance_l = ps_read_l - ps_buf_write;
+    distance_l < 0 ? distance_l += PS_BUFFER_SIZE;
+    
+    // Crossfade when resetting
+    distance_l > PS_WINDOW_SIZE * 3 ? (
+      new_read_l = ps_buf_write + PS_WINDOW_SIZE * 1.5;
+      new_read_l >= PS_BUFFER_SIZE ? new_read_l -= PS_BUFFER_SIZE;
+      
+      new_i = floor(new_read_l) % PS_BUFFER_SIZE;
+      new_frac = new_read_l - floor(new_read_l);
+      new_i2 = (new_i + 1) % PS_BUFFER_SIZE;
+      new_sample_l = ps_buffer_l[new_i] * (1 - new_frac) + ps_buffer_l[new_i2] * new_frac;
+      
+      fade_pos = distance_l - PS_WINDOW_SIZE * 3;
+      fade_amt = min(1.0, fade_pos / PS_WINDOW_SIZE);
+      
+      window_idx = floor(fade_amt * (PS_WINDOW_SIZE - 1));
+      window_fade = ps_window[window_idx];
+      
+      sample_l = sample_l * (1 - window_fade) + new_sample_l * window_fade;
+      
+      fade_amt >= 0.99 ? (
+        ps_read_l = new_read_l;
+      );
+    );
+    
+    delayed_l = sample_l;
+    ps_read_l += pitch_ratio_l;
+    ps_read_l >= PS_BUFFER_SIZE ? ps_read_l -= PS_BUFFER_SIZE;
+  );
+  
+  // RIGHT CHANNEL
+  abs(pitch_ratio_r - 1.0) > 0.01 ? (
+    ps_buffer_r[ps_buf_write] = delayed_r;
+    
+    read_i = floor(ps_read_r) % PS_BUFFER_SIZE;
+    read_frac = ps_read_r - floor(ps_read_r);
+    read_i2 = (read_i + 1) % PS_BUFFER_SIZE;
+    sample_r = ps_buffer_r[read_i] * (1 - read_frac) + ps_buffer_r[read_i2] * read_frac;
+    
+    distance_r = ps_read_r - ps_buf_write;
+    distance_r < 0 ? distance_r += PS_BUFFER_SIZE;
+    
+    distance_r > PS_WINDOW_SIZE * 3 ? (
+      new_read_r = ps_buf_write + PS_WINDOW_SIZE * 1.5;
+      new_read_r >= PS_BUFFER_SIZE ? new_read_r -= PS_BUFFER_SIZE;
+      
+      new_i = floor(new_read_r) % PS_BUFFER_SIZE;
+      new_frac = new_read_r - floor(new_read_r);
+      new_i2 = (new_i + 1) % PS_BUFFER_SIZE;
+      new_sample_r = ps_buffer_r[new_i] * (1 - new_frac) + ps_buffer_r[new_i2] * new_frac;
+      
+      fade_pos = distance_r - PS_WINDOW_SIZE * 3;
+      fade_amt = min(1.0, fade_pos / PS_WINDOW_SIZE);
+      
+      window_idx = floor(fade_amt * (PS_WINDOW_SIZE - 1));
+      window_fade = ps_window[window_idx];
+      
+      sample_r = sample_r * (1 - window_fade) + new_sample_r * window_fade;
+      
+      fade_amt >= 0.99 ? (
+        ps_read_r = new_read_r;
+      );
+    );
+    
+    delayed_r = sample_r;
+    ps_read_r += pitch_ratio_r;
+    ps_read_r >= PS_BUFFER_SIZE ? ps_read_r -= PS_BUFFER_SIZE;
+  );
+  
+  ps_buf_write += 1;
+  ps_buf_write >= PS_BUFFER_SIZE ? ps_buf_write = 0;
+);
+
+// === DECIMATOR ===
+decimator > 0.01 ? (
+  decimator_acc_l += decimator_rate;
+  decimator_acc_l >= 1.0 ? (
+    decimator_acc_l -= 1.0;
+    delayed_l = decimator_m * floor(delayed_l / decimator_m + 0.5);
+  );
+  
+  decimator_acc_r += decimator_rate;
+  decimator_acc_r >= 1.0 ? (
+    decimator_acc_r -= 1.0;
+    delayed_r = decimator_m * floor(delayed_r / decimator_m + 0.5);
+  );
+);
+
+// === FILTER ===
+filter_enabled ? (
+  output_l = process_filter(delayed_l, filter_in1_l, filter_in2_l, filter_out1_l, filter_out2_l);
+  filter_in2_l = filter_in1_l;
+  filter_in1_l = delayed_l;
+  filter_out2_l = filter_out1_l;
+  filter_out1_l = output_l;
+  delayed_l = output_l;
+  
+  output_r = process_filter(delayed_r, filter_in1_r, filter_in2_r, filter_out1_r, filter_out2_r);
+  filter_in2_r = filter_in1_r;
+  filter_in1_r = delayed_r;
+  filter_out2_r = filter_out1_r;
+  filter_out1_r = output_r;
+  delayed_r = output_r;
+);
+
+// === WRITE TO DELAY ===
+freeze == 0 ? (
+  delay_l[delay_write_pos] = in_l + delayed_l * feedback;
+  delay_r[delay_write_pos] = in_r + delayed_r * feedback;
+  
+  delay_write_pos += 1;
+  delay_write_pos >= MAX_DELAY ? delay_write_pos = 0;
+);
+
+// === OUTPUT ===
+spl0 = in_l * (1 - mix) + delayed_l * mix;
+spl1 = in_r * (1 - mix) + delayed_r * mix;
