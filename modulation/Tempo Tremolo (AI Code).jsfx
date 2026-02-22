@@ -1,8 +1,6 @@
 desc: Tempo Tremolo
 author: citizenkeith
 version: 1.0
-changelog: Initial release
-provides: tempo_tremolo.jsfx
 
 slider1:sync=1<0,1,1{Off,On}>Tempo Sync
 slider2:rate_hz=4<0.1,20,0.01>Rate (Hz)
