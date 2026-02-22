@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="citizenkeith" commit="df38092f9cb5db151f542b38643ec84ce63b617a">
+<index version="1" name="citizenkeith" commit="f2d6af9976e799bcdf5b04c30f564923c80df461">
   <category name="channel strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -107,6 +107,13 @@
     <reapack name="Probabilistic MIDI Note Generator (AI Code).jsfx" type="effect" desc="Probabilistic MIDI Note Generator">
       <version name="1.0" author="citizenkeith - Claude AI" time="2026-02-22T00:14:55Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/df38092f9cb5db151f542b38643ec84ce63b617a/midi/Probabilistic%20MIDI%20Note%20Generator%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="modulation">
+    <reapack name="Tempo Tremolo (AI Code).jsfx" type="effect" desc="Tempo Tremolo">
+      <version name="1.0" author="citizenkeith" time="2026-02-22T00:16:40Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/5f929e2fea899cd328c6e36fa7c9239007c8d6b0/modulation/Tempo%20Tremolo%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
