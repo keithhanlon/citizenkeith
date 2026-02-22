@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="citizenkeith" commit="3d9e3081a375735465bb5fcd34fe34f67e8c8f8b">
-  <category name="channel strip/Fidelio Channel Strip">
+<index version="1" name="citizenkeith" commit="df38092f9cb5db151f542b38643ec84ce63b617a">
+  <category name="channel strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
@@ -11,8 +11,8 @@
 }
 ]]></description>
       </metadata>
-      <version name="1.1" author="citizenkeith and Claude AI" time="2026-02-21T19:19:41Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/3d9e3081a375735465bb5fcd34fe34f67e8c8f8b/channel%20strip/Fidelio%20Channel%20Strip/Fidelio%20Channel%20Strip.jsfx</source>
+      <version name="1.1" author="citizenkeith and Claude AI" time="2026-02-22T00:12:24Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/a077a56b9f03059b34136d3f383e7db9411c0edc/channel%20strip/Fidelio%20Channel%20Strip.jsfx</source>
       </version>
     </reapack>
   </category>
@@ -84,6 +84,29 @@
       </metadata>
       <version name="1.0" author="citizenkeith / Claude AI" time="2026-02-03T16:46:31Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/dc00a3cfd052dc962319ad31370fada7590827f5/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="dynamics">
+    <reapack name="Transparent Bus Compressor (AI Code).jsfx" type="effect" desc="Transparent Bus Compressor">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Clean, artifact-free compression for mix bus duty\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.5" author="citizenkeith - Claude AI" time="2026-02-22T00:14:55Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/df38092f9cb5db151f542b38643ec84ce63b617a/dynamics/Transparent%20Bus%20Compressor%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="midi">
+    <reapack name="Probabilistic MIDI Note Generator (AI Code).jsfx" type="effect" desc="Probabilistic MIDI Note Generator">
+      <version name="1.0" author="citizenkeith - Claude AI" time="2026-02-22T00:14:55Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/df38092f9cb5db151f542b38643ec84ce63b617a/midi/Probabilistic%20MIDI%20Note%20Generator%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
