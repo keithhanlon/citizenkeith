@@ -5,6 +5,8 @@ about: Channel strip with transformer-style harmonic coloration, Neve style shel
 Trident style HPF, plus a VCA compressor, expander and gate
 // Released under GPLv3 License
 // Utilizes Geraintluff's UI library
+// @provides
+//   fidelio-ui-lib.jsfx-inc
 
 options:no_meter
 
