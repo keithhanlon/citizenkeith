@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="citizenkeith" commit="1561db3c2cd47ec4e2c29d055791c0ee95268ea1">
+<index version="1" name="citizenkeith" commit="1df68abd9c51af352ce3be8dac4b8fb1adc17095">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -33,6 +33,33 @@
         <source>https://github.com/keithhanlon/citizenkeith/raw/3d9e3081a375735465bb5fcd34fe34f67e8c8f8b/delay/Garden%20Hose%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
+    <reapack name="ReaChoir Delay - Harmonized Delay.jsfx" type="effect" desc="ReaChoir - Harmonized Delay">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 ReaChoir - Harmonized Delay\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Tempo-synced delay with pitch-shifted harmonized echoes.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Port of igorski's Rechoir VST (https://github.com/igorski/rechoir)\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Features:\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Tempo-synced delay (quantized to 16th notes)\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Pitch shifting (\u177 ?1 octave)\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab 7 musical scales for harmonization\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Square wave LFOs (tempo-synced modulation)\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Independent stereo modulation (Odd/Even channels)\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Freeze mode with reverb\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Lowpass filter with resonance\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Bit reduction/decimator\sa180\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Original VST by igorski JSFX port by citizenkeith\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0.0" author="citizenkeith" time="2026-02-22T01:41:59Z">
+        <changelog><![CDATA[Initial release - Port of igorski's Rechoir VST to JSFX]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/1df68abd9c51af352ce3be8dac4b8fb1adc17095/delay/ReaChoir%20Delay%20-%20Harmonized%20Delay.jsfx</source>
+      </version>
+    </reapack>
     <reapack name="ReaFripp Tape Loop Delay (AI Code).jsfx" type="effect" desc="ReaFripp Tape Loop Delay">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
@@ -53,11 +80,7 @@
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Good quality tape-style delay with optimized memory layout and ping pong\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Based on work done by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault https://forum.cockos.com/showthread.php?t=170874\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Memory Layout Optimized by Claude AI\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Ping Pong functionality added (based on Stillwell approach)\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 This JSFX released under GPLv3 license\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Good quality tape-style delay with optimized memory layout and ping pong. Based on work by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault. Memory layout optimized by Claude AI. Ping pong functionality added (Stillwell approach). Released under GPLv3 license.\par}
 }
 ]]></description>
       </metadata>
