@@ -14,8 +14,6 @@ changelog:
   + Conditional dimming of Noise and Head Bump knobs when presets active
   + Input/Output LED meters
   + 5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape
-@provides
-  TapeEmu - Professional Tape Machine Emulation (AI Code).jsfx
 @license GPL v3
 options: no_meter
 
