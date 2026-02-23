@@ -1084,14 +1084,29 @@ mode_w  = 82;
 mode_g  = 4;
 mode_x0 = dyn_x + 16;
 
-// Mode selector — custom 3-way switch
-sw_w = dyn_w - meter_w - 24;
+// Mode selector — UI library tab-style switch
+sw_w = (dyn_w - meter_w - 24) / 3;
 sw_x = dyn_x + 8;
-slider15 = draw_3way(sw_x, mode_y, sw_w, mode_h, slider15, "COMPRESS", "EXPAND", "GATE");
-slider15 != dyn_mode ? (
-  dyn_mode = slider15;
-  slider_automate(slider15);
-  update_coefficients();
+
+i = 0;
+loop(3,
+  ui_push_rect(sw_x + i * sw_w, mode_y, sw_w, mode_h);
+    i == slider15 ? (
+      control_background_inset();
+    ) : control_background_enabled("none");
+    ui_color(255, 255, 255);
+    ui_align(0.5, 0.5);
+    ui_fontsize(9);
+    i == 0 ? ui_text("COMPRESS") : i == 1 ? ui_text("EXPAND") : ui_text("GATE");
+    i == slider15 ? control_finish_inset() : control_finish_enabled("none");
+    ui_click() ? (
+      slider15 = i;
+      dyn_mode = i;
+      slider_automate(slider15);
+      update_coefficients();
+    );
+  ui_pop();
+  i += 1;
 );
 
 // Knob positions
