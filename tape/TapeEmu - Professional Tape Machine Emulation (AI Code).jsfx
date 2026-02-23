@@ -16,7 +16,6 @@ changelog:
   + 5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape
 @provides
   TapeEmu - Professional Tape Machine Emulation (AI Code).jsfx
-  [nomain] ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc
 @license GPL v3
 options: no_meter
 
