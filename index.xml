@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" name="citizenkeith" commit="1df68abd9c51af352ce3be8dac4b8fb1adc17095">
+<index version="1" commit="1df68abd9c51af352ce3be8dac4b8fb1adc17095">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
