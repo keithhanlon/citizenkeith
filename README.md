@@ -36,6 +36,110 @@ Quick links:
 - [TapeEmu - Professional Tape Machine Emulation](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tapeemu---professional-tape-machine-emulation)
 - [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
 
+#Channel Strips
+Fidelio Channel Strip
+![Fidelio Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/FidelioChannelStrip.png?raw=true)
+Fidelio is a full-featured channel strip plugin combining transformer-style harmonic saturation, a Neve-inspired high shelf EQ, a Trident-style high-pass filter, two parametric mid bands, and a dynamics section with compressor, expander, and gate modes. Designed for tracking and mixing, it adds analog character while providing precise surgical control.
+Version 1.2 introduces a redesigned Compress/Expand/Gate selector using tab-style switching.
+
+###Controls:
+
+**Input Gain** (-30 to +30 dB)
+1. Trims the input level before any processing
+
+**Polarity**
+
+1. Flips the polarity of the signal 180 degrees
+2. Useful for phase alignment between microphones
+
+**Saturation Drive** (0.00 to 1.00)
+
+1. Controls the amount of transformer-style harmonic saturation
+2. Inactive when SAT ON is disabled
+
+**SAT ON**
+
+1. Enables or disables the transformer saturation circuit
+2. Adds even-order harmonics and subtle compression for analog warmth
+
+**HPF 50Hz**
+
+1. Enables a 2-pole Butterworth high-pass filter at 50 Hz
+2. Removes low-frequency rumble and proximity effect buildup
+
+**High Shelf 16k** (-16 to +16 dB)
+
+1. Neve-inspired high shelf filter centered at 16 kHz
+2. Includes a linked presence bump at 10.5 kHz for air and detail
+
+**HI FREQ** (1000 to 10000 Hz)
+
+1. Sets the center frequency of the high-mid parametric band
+
+**HIGH** (-15 to +15 dB)
+
+1. Gain control for the high-mid parametric band
+
+**LO FREQ** (200 to 2000 Hz)
+
+1. Sets the center frequency of the low-mid parametric band
+
+**LOW** (-15 to +15 dB)
+
+1. Gain control for the low-mid parametric band
+
+**Mode Selector** (COMPRESS / EXPAND / GATE)
+
+1. Selects the dynamics processing mode
+2. Gate Range and Gate Hold knobs are only active in Gate mode
+
+**Threshold** (-60 to 0 dB)
+
+1. Sets the level at which dynamics processing begins
+
+**Ratio** (1:1 to 20:1)
+
+1. Sets the compression or expansion ratio
+2. Double-click to reset to 1:1
+
+**Attack** (0.1 to 100 ms)
+
+1. Controls how quickly the dynamics processor responds to signals above threshold
+
+**Release** (10 to 1000 ms)
+
+1. Controls how quickly gain returns to normal after the signal drops below threshold
+
+**Gate Range** (-60 to 0 dB)
+
+1. Sets the maximum attenuation applied when the gate is closed
+2. Active in Gate mode only
+
+**Gate Hold** (0 to 500 ms)
+
+1. Sets how long the gate stays open after the signal drops below threshold
+2. Prevents chatter on signals with natural decay
+3. Active in Gate mode only 
+
+**LF Mono** (0 to 300 Hz)
+
+1. Sums low frequencies to mono below the set frequency
+2. Useful for keeping bass centered in the stereo image
+
+**Output** (-30 to +30 dB)
+
+1. Master output level control
+
+**Stereo Width** (0 to 200%)
+
+1. Controls stereo image width using mid/side processing
+2. 100% = normal width, below 100% = narrower, above 100% = wider
+
+**STEREO / MONO**
+
+1. Sums both channels to mono when engaged
+2. Useful for mono compatibility checking
+
 # Delays
 ## ReaFripp Tape Loop Delay
 ![ReaFripp Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/ReaFripp.png?raw=true)
