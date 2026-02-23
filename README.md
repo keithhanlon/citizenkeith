@@ -4,8 +4,24 @@ These are JSFX plugins for Cockos REAPER.
 
 These effects were written with the help of Claude AI. What started out as a simple learning exercise turned into madness! I'm using these in my own projects and very happy with the results.
 
-### Install via Reapack: 
-https://raw.githubusercontent.com/keithhanlon/citizenkeith/master/index.xml
+## Installation
+
+### Via ReaPack (Recommended)
+1. Install ReaPack if you haven't already
+2. Add this repository: https://raw.githubusercontent.com/keithhanlon/citizenkeith/master/index.xml
+3. Install plugins - all dependencies installed automatically
+
+### Manual Installation
+Many plugins require the shared UI library:
+
+1. Download `citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc`
+2. Download the plugin(s) you want
+3. Place all files in your REAPER Effects folder (same directory)
+
+## Plugins that require citizenkeith-ui-lib.jsfx-inc:
+
+- **Fidelio Channel Strip** - Complete channel strip with EQ, compression, gate
+- **TapeEmu** - Professional tape machine emulation
 
 ### Learn How To Install JS plugins:
 https://reaper.blog/2015/06/quick-tip-how-to-install-js-plugins/

@@ -1,16 +1,15 @@
 desc:Fidelio Channel Strip
-version:1.1
+version:1.2
 author:citizenkeith and Claude AI
 about:Channel strip with transformer-style harmonic coloration, Neve style shelf,
   Trident style HPF, plus a VCA compressor, expander and gate
 // @provides
-//   fidelio-ui-lib.jsfx-inc
+//   citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc
 // @license GPL v3
-
 options:no_meter
 
-// Import Geraintluff's UI library
-import fidelio-ui-lib.jsfx-inc
+// Import UI library
+import citizenkeith-ui-lib.jsfx-inc
 
 // ============================================================
 // SLIDERS

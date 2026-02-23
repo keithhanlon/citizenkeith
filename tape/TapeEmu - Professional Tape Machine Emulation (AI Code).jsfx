@@ -1,17 +1,34 @@
 desc: TapeEmu - Professional Tape Machine Emulation
-version: 1.7
+version: 2.0
 author: citizenkeith - Claude AI
 about: Tape emulation that includes tape machine choices
-      This JSFX released under GPLv3 license
+// Linux users can download the Trebuchet MS font at https://font.download/font/trebuchet-ms-2
+changelog:
+  # TapeEmu 2.0
+  + Complete GUI overhaul with machine selector buttons
+  + Added double-click to reset knobs to default values
+  + Fixed head bump implementation (low shelf @ 90Hz)
+  + Fixed Ampex ATR102 gain staging (was 1.7dB hot)
+  + Added machine-specific high-frequency rolloff
+  + Unity gain by default (0% input, 0dB output)
+  + Conditional dimming of Noise and Head Bump knobs when presets active
+  + Input/Output LED meters
+  + 5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape
+// @provides
+//   citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc
+// @license GPL v3
+options: no_meter
 
-// Hidden sliders using proper JSFX technique (- prefix hides from default UI)
-slider1:68<0,178,1>-Input/Saturation (%)
-slider2:-10<-50,0,1>-Output (dB)
-slider3:-93<-105,-60,1>-Noise (dB)
-slider4:-18<-18,12,0.1>-Head Bump (dB)
+// Import UI library
+import citizenkeith-ui-lib.jsfx-inc
+
+slider1:0<0,178,1>-Input/Saturation (%)
+slider2:0<-50,0,1>-Output (dB)
+slider3:-105<-105,-60,1>-Noise (dB)
+slider4:0<0,18,0.1>-Head Bump (dB)
 slider5:0<0,100,1>-Tape Age (%)
 slider6:100<0,200,1>-Stereo Width (%)
-slider7:0<0,4,1{Studer A800,Ampex ATR102,Sony APR5000,Otari MTR90,Basic Tape}>-Tape Machine
+slider7:4<0,4,1{Studer A800,Ampex ATR102,Sony APR5000,Otari MTR90,Basic Tape}>-Tape Machine
 slider8:0<0,100,1>-Wow & Flutter (%)
 
 in_pin:left input
@@ -20,12 +37,6 @@ out_pin:left output
 out_pin:right output
 
 @init
-// Mouse interaction variables
-slider_to_edit = 0;
-last_mouse_cap = 0;
-drag_start_y = 0;
-last_mouse_y = 0;
-
 // Tape age and wow/flutter variables
 age_dropout_counter = 0;
 dropout_counter = 0;
@@ -34,690 +45,658 @@ age_noise_seed = 12345;
 // Wow and flutter variables
 wow_phase = 0;
 flutter_phase = 0;
-// Simple delay buffer for wow/flutter
-wf_buffer_l = 131072; // After right channel buffer
-wf_buffer_r = 131072 + 1024;
+wf_buffer_l = 0;
+wf_buffer_r = 1024;
 wf_write_pos = 0;
-wf_buffer_size = 512;
+wf_buffer_size = 1024;
 
-//head bump
-fftsize=1024;
-bucketsize = (srate * 0.5 ) / fftsize;
-bufpos=bi1=0;
-bi2=fftsize*2;
-halfsize=fftsize*0.5;
-bands = 1;
-gain = exp(slider4 * log(10) / 40);
-shift = 0;
-  
-//compression
-gain = seekgain = 0;
-c = 8.65617025;
-dc = exp(-30 * log(10));
-gain = seekGain = 0;
-t = 0;
-b = -exp(-62.83185307 / srate );
-a = 1.0 + b;
+// Head bump filter variables
+hb_b0 = hb_b1 = hb_b2 = 0;
+hb_a1 = hb_a2 = 0;
+hb_x1_l = hb_x2_l = hb_y1_l = hb_y2_l = 0;
+hb_x1_r = hb_x2_r = hb_y1_r = hb_y2_r = 0;
+
+// High-frequency rolloff filter variables
+hf_b0 = hf_b1 = hf_b2 = 0;
+hf_a1 = hf_a2 = 0;
+hf_x1_l = hf_x2_l = hf_y1_l = hf_y2_l = 0;
+hf_x1_r = hf_x2_r = hf_y1_r = hf_y2_r = 0;
 
 // Tape machine preset variables
-preset_head_bump = -18;
-preset_hf_rolloff = 50;
+preset_head_bump = 0;
 preset_sat_character = 1.0;
-preset_wow_flutter = 25;
-preset_noise_floor = -93;
+preset_noise_floor = -105;
+preset_output_compensation = 1.0;
+preset_hf_rolloff_freq = 20000;
+preset_hf_rolloff_amount = 0;
+
+// UI setup
+ext_noinit = 1;
+freemem = ui_setup(0);
+
+// Peak meters
+input_peak_l = input_peak_r = 0;
+output_peak_l = output_peak_r = 0;
+meter_decay = exp(-1/(0.3*srate)); // 300ms decay
 
 // Function to load tape machine presets
 function load_tape_preset(preset_num) (
   preset_num == 0 ? ( // Studer A800
-    preset_head_bump = -15;
-    preset_hf_rolloff = 60;
+    preset_head_bump = 6;
     preset_sat_character = 0.8;
-    preset_wow_flutter = 25;
     preset_noise_floor = -95;
+    preset_output_compensation = 1.0;
+    preset_hf_rolloff_freq = 15000;
+    preset_hf_rolloff_amount = -3;
   ) : preset_num == 1 ? ( // Ampex ATR102
-    preset_head_bump = -12;
-    preset_hf_rolloff = 45;
+    preset_head_bump = 8;
     preset_sat_character = 1.2;
-    preset_wow_flutter = 35;
     preset_noise_floor = -90;
+    preset_output_compensation = 0.823;
+    preset_hf_rolloff_freq = 12000;
+    preset_hf_rolloff_amount = -4;
   ) : preset_num == 2 ? ( // Sony APR5000
-    preset_head_bump = -20;
-    preset_hf_rolloff = 30;
+    preset_head_bump = 4;
     preset_sat_character = 0.6;
-    preset_wow_flutter = 15;
     preset_noise_floor = -98;
+    preset_output_compensation = 1.0;
+    preset_hf_rolloff_freq = 18000;
+    preset_hf_rolloff_amount = -1.5;
   ) : preset_num == 3 ? ( // Otari MTR90
-    preset_head_bump = -16;
-    preset_hf_rolloff = 55;
+    preset_head_bump = 5;
     preset_sat_character = 0.9;
-    preset_wow_flutter = 20;
     preset_noise_floor = -96;
+    preset_output_compensation = 1.0;
+    preset_hf_rolloff_freq = 14000;
+    preset_hf_rolloff_amount = -2.5;
   ) : ( // Basic Tape
     preset_head_bump = slider4;
-    preset_hf_rolloff = 50;
     preset_sat_character = 1.0;
-    preset_wow_flutter = 25;
     preset_noise_floor = slider3;
+    preset_output_compensation = 1.0;
+    preset_hf_rolloff_freq = 20000;
+    preset_hf_rolloff_amount = 0;
   );
 );
 
-// Function to update audio processing variables when sliders change
-function update_audio_vars() (
-  // Load tape machine preset
-  load_tape_preset(slider7);
-
-  vd = exp(slider2 * log(10) / 20);
-  vn_base = exp((slider7 == 4 ? slider3 : preset_noise_floor) * log(10) / 20);
-
-  // Apply tape age effects to noise
-  age_factor = 1 + (slider5 / 100) * 3; // Up to 4x noise increase with age
-  vn = vn_base * age_factor;
-
-  // Stereo width factor
-  width_factor = slider6 / 100;
-
-  // Wow & Flutter amount
-  wow_flutter_amount = slider8 / 100;
-
-  // Apply tape machine character to saturation
-  sat_input = slider1 * preset_sat_character;
-  foo=(sat_input/200*$pi);
-  bar = sin(sat_input/200*$pi);
-
-  //head bump - use preset or manual setting
+function calculate_head_bump_filter() local(A, w0, cosw0, sinw0, alpha, beta, a0) (
   head_bump_db = (slider7 == 4 ? slider4 : preset_head_bump);
-  adj = exp(head_bump_db * log(10) / 40);
-  bands = 1;
-  gain = exp(0 * log(10) / 40);
-  shift = (0 < 1 ? 0 : 1);
+  
+  head_bump_db > 0 ? (
+    A = exp(head_bump_db * log(10) / 40);
+    w0 = 2 * $pi * 90 / srate;
+    cosw0 = cos(w0);
+    sinw0 = sin(w0);
+    alpha = sinw0 / (2 * 0.707);
+    beta = sqrt(A) / 0.707;
+    
+    hb_b0 = A * ((A + 1) - (A - 1) * cosw0 + beta * sinw0);
+    hb_b1 = 2 * A * ((A - 1) - (A + 1) * cosw0);
+    hb_b2 = A * ((A + 1) - (A - 1) * cosw0 - beta * sinw0);
+    a0 = (A + 1) + (A - 1) * cosw0 + beta * sinw0;
+    hb_a1 = -2 * ((A - 1) + (A + 1) * cosw0);
+    hb_a2 = (A + 1) + (A - 1) * cosw0 - beta * sinw0;
+    
+    hb_b0 /= a0;
+    hb_b1 /= a0;
+    hb_b2 /= a0;
+    hb_a1 /= a0;
+    hb_a2 /= a0;
+  ) : (
+    hb_b0 = 1;
+    hb_b1 = 0;
+    hb_b2 = 0;
+    hb_a1 = 0;
+    hb_a2 = 0;
+  );
 );
 
-// Initialize audio processing variables
+function calculate_hf_rolloff_filter() local(A, w0, cosw0, sinw0, alpha, beta, a0) (
+  preset_hf_rolloff_amount < 0 ? (
+    A = exp(preset_hf_rolloff_amount * log(10) / 40);
+    w0 = 2 * $pi * preset_hf_rolloff_freq / srate;
+    cosw0 = cos(w0);
+    sinw0 = sin(w0);
+    alpha = sinw0 / (2 * 0.707);
+    beta = sqrt(A) / 0.707;
+    
+    hf_b0 = A * ((A + 1) + (A - 1) * cosw0 + beta * sinw0);
+    hf_b1 = -2 * A * ((A - 1) + (A + 1) * cosw0);
+    hf_b2 = A * ((A + 1) + (A - 1) * cosw0 - beta * sinw0);
+    a0 = (A + 1) - (A - 1) * cosw0 + beta * sinw0;
+    hf_a1 = 2 * ((A - 1) - (A + 1) * cosw0);
+    hf_a2 = (A + 1) - (A - 1) * cosw0 - beta * sinw0;
+    
+    hf_b0 /= a0;
+    hf_b1 /= a0;
+    hf_b2 /= a0;
+    hf_a1 /= a0;
+    hf_a2 /= a0;
+  ) : (
+    hf_b0 = 1;
+    hf_b1 = 0;
+    hf_b2 = 0;
+    hf_a1 = 0;
+    hf_a2 = 0;
+  );
+);
+
+function update_audio_vars() (
+  load_tape_preset(slider7);
+  output_gain = exp(slider2 * log(10) / 20) * preset_output_compensation;
+  noise_base = exp((slider7 == 4 ? slider3 : preset_noise_floor) * log(10) / 20);
+  age_factor = 1 + (slider5 / 100) * 3;
+  noise_gain = noise_base * age_factor;
+  width_factor = slider6 / 100;
+  wow_flutter_amount = slider8 / 100;
+  calculate_head_bump_filter();
+  calculate_hf_rolloff_filter();
+);
+
+// LED meter drawing function
+function draw_led_meter(level, x, y, width, height) local(segments, seg_width, seg_spacing, i, seg_x, brightness) (
+  segments = 20;
+  seg_width = (width - (segments - 1) * 2) / segments;
+  seg_spacing = 2;
+  
+  i = 0;
+  while (i < segments) (
+    seg_x = x + i * (seg_width + seg_spacing);
+    brightness = (i / segments) < level ? 1 : 0.2;
+    
+    // Color based on level (green -> yellow -> red)
+    i < 14 ? (
+      // Green
+      ui_color(0, 255 * brightness, 0);
+    ) : i < 17 ? (
+      // Yellow
+      ui_color(255 * brightness, 255 * brightness, 0);
+    ) : (
+      // Red
+      ui_color(255 * brightness, 0, 0);
+    );
+    
+    ui_push();
+      ui_set_rect(seg_x, y, seg_width, height);
+      ui_fill();
+    ui_pop();
+    
+    i += 1;
+  );
+);
+
 update_audio_vars();
 
 @slider
-// Call the update function when sliders change via host/automation
 update_audio_vars();
 
-@block
-// No VU processing needed for new GUI
-
 @sample
-// Apply tape machine character to saturation amount
 effective_saturation = slider1 * preset_sat_character;
 
-//harmonic content with machine-specific character
 effective_saturation > 0 ? (
-  sat_amount = (effective_saturation/200*$pi);
-  sat_norm = sin(effective_saturation/200*$pi);
+  sat_amount = (effective_saturation / 200) * $pi;
+  sat_norm = sin((effective_saturation / 200) * $pi);
   
-  // Add machine-specific non-linearities
-  slider7 == 0 ? ( // Studer A800 - even harmonics
-    spl0 = min(max( sin(max(min(spl0,1),-1)*sat_amount)/sat_norm + spl0*spl0*0.1 ,-1) ,1);
-    spl1 = min(max( sin(max(min(spl1,1),-1)*sat_amount)/sat_norm + spl1*spl1*0.1 ,-1) ,1)
-  );
-  
-  slider7 == 1 ? ( // Ampex ATR102 - odd harmonics + asymmetry
-    spl0 = min(max( sin(max(min(spl0,1),-1)*sat_amount)/sat_norm + spl0*spl0*spl0*0.15 ,-1) ,1);
-    spl1 = min(max( sin(max(min(spl1,1),-1)*sat_amount)/sat_norm + spl1*spl1*spl1*0.15 ,-1) ,1)
-  );
-  
-  slider7 == 2 ? ( // Sony APR5000 - clean, minimal distortion
-    spl0 = min(max( sin(max(min(spl0,1),-1)*sat_amount)/sat_norm + spl0*spl0*0.05 ,-1) ,1);
-    spl1 = min(max( sin(max(min(spl1,1),-1)*sat_amount)/sat_norm + spl1*spl1*0.05 ,-1) ,1)
-  );
-  
-  slider7 == 3 ? ( // Otari MTR90 - balanced harmonics
-    spl0 = min(max( sin(max(min(spl0,1),-1)*sat_amount)/sat_norm + spl0*spl0*0.08 + spl0*spl0*spl0*0.05 ,-1) ,1);
-    spl1 = min(max( sin(max(min(spl1,1),-1)*sat_amount)/sat_norm + spl1*spl1*0.08 + spl1*spl1*spl1*0.05 ,-1) ,1)
-  );
-  
-  slider7 == 4 ? ( // Basic Tape - original formula
-    spl0 = min(max( sin(max(min(spl0,1),-1)*foo)/bar ,-1) ,1);
-    spl1 = min(max( sin(max(min(spl1,1),-1)*foo)/bar ,-1) ,1)
+  slider7 == 0 ? (
+    spl0 = min(max(sin(max(min(spl0, 1), -1) * sat_amount) / sat_norm + spl0 * spl0 * 0.1, -1), 1);
+    spl1 = min(max(sin(max(min(spl1, 1), -1) * sat_amount) / sat_norm + spl1 * spl1 * 0.1, -1), 1);
+  ) : slider7 == 1 ? (
+    spl0 = min(max(sin(max(min(spl0, 1), -1) * sat_amount) / sat_norm + spl0 * spl0 * spl0 * 0.15, -1), 1);
+    spl1 = min(max(sin(max(min(spl1, 1), -1) * sat_amount) / sat_norm + spl1 * spl1 * spl1 * 0.15, -1), 1);
+  ) : slider7 == 2 ? (
+    spl0 = min(max(sin(max(min(spl0, 1), -1) * sat_amount) / sat_norm + spl0 * spl0 * 0.05, -1), 1);
+    spl1 = min(max(sin(max(min(spl1, 1), -1) * sat_amount) / sat_norm + spl1 * spl1 * 0.05, -1), 1);
+  ) : slider7 == 3 ? (
+    spl0 = min(max(sin(max(min(spl0, 1), -1) * sat_amount) / sat_norm + spl0 * spl0 * 0.08 + spl0 * spl0 * spl0 * 0.05, -1), 1);
+    spl1 = min(max(sin(max(min(spl1, 1), -1) * sat_amount) / sat_norm + spl1 * spl1 * 0.08 + spl1 * spl1 * spl1 * 0.05, -1), 1);
+  ) : (
+    spl0 = min(max(sin(max(min(spl0, 1), -1) * sat_amount) / sat_norm, -1), 1);
+    spl1 = min(max(sin(max(min(spl1, 1), -1) * sat_amount) / sat_norm, -1), 1);
   );
 );
 
-//White noise with machine-specific characteristics
-noise=rand(2)-1;
+// Update input meters
+abs(spl0) > input_peak_l ? input_peak_l = abs(spl0) : input_peak_l *= meter_decay;
+abs(spl1) > input_peak_r ? input_peak_r = abs(spl1) : input_peak_r *= meter_decay;
 
-// Add machine-specific noise coloring
-slider7 == 0 ? ( // Studer A800 - warm noise
-  noise = noise * 0.8 + sin(noise * 3.14159) * 0.2
+noise = rand(2) - 1;
+
+slider7 == 0 ? (
+  noise = noise * 0.8 + sin(noise * $pi) * 0.2;
+) : slider7 == 1 ? (
+  noise = noise + noise * noise * noise * 0.3;
+) : slider7 == 3 ? (
+  noise = noise * 0.9 + sin(noise * $pi * 0.5) * 0.1;
 );
 
-slider7 == 1 ? ( // Ampex ATR102 - grittier noise
-  noise = noise + noise*noise*noise*0.3
-);
-
-slider7 == 2 ? ( // Sony APR5000 - clean white noise
-  noise = noise // Keep original noise unchanged
-);
-
-slider7 == 3 ? ( // Otari MTR90 - slightly colored
-  noise = noise * 0.9 + sin(noise * 1.57) * 0.1
-);
-
-// Tape age effects - made more noticeable
 slider5 > 0 ? (
-  // Add age-related dropouts (brief signal reductions)
   age_dropout_counter += 1;
-  age_dropout_counter > srate/20 ? ( // Check every 1/20 second (more frequent)
+  age_dropout_counter > srate / 20 ? (
     age_dropout_counter = 0;
-    // Random dropout probability based on age - increased for audibility
-    dropout_chance = slider5 / 100 * 0.01; // Max 1% chance per check (10x more likely)
+    dropout_chance = slider5 / 100 * 0.01;
     rand() < dropout_chance ? (
-      dropout_length = floor(rand() * srate * 0.05); // Up to 50ms dropout (longer)
+      dropout_length = floor(rand() * srate * 0.05);
       dropout_counter = dropout_length;
     );
   );
   
-  // Apply dropout if active
   dropout_counter > 0 ? (
-    dropout_factor = 0.05 + rand() * 0.2; // Reduce to 5-25% volume (more dramatic)
+    dropout_factor = 0.05 + rand() * 0.2;
     spl0 *= dropout_factor;
     spl1 *= dropout_factor;
     dropout_counter -= 1;
   );
   
-  // Add age-related modulation noise (more noticeable flutter)
-  age_mod = sin(age_noise_seed * 0.01) * slider5 / 100 * 0.001; // 10x more modulation
+  age_mod = sin(age_noise_seed * 0.01) * slider5 / 100 * 0.001;
   age_noise_seed += 1;
   noise += age_mod;
 );
 
-// Simple Wow and Flutter implementation
 wow_flutter_amount > 0 ? (
-  // Write current samples to buffer
   wf_buffer_l[wf_write_pos] = spl0;
   wf_buffer_r[wf_write_pos] = spl1;
   
-  // WOW: Slow speed variations (0.5 Hz)
   wow_phase += 0.5 / srate;
   wow_phase >= 1 ? wow_phase -= 1;
   
-  // FLUTTER: Fast speed variations (12 Hz)
   flutter_phase += 12 / srate;
   flutter_phase >= 1 ? flutter_phase -= 1;
   
-  // Calculate modulation
   wow_mod = sin(2 * $pi * wow_phase);
   flutter_mod = sin(2 * $pi * flutter_phase);
   total_modulation = wow_flutter_amount * (wow_mod * 0.0001 + flutter_mod * 0.00005);
   
-  // Calculate read position with modulation
-  base_delay = 128;
+  base_delay = 256;
   read_offset = base_delay * (1 + total_modulation);
   read_pos = wf_write_pos - read_offset;
   read_pos < 0 ? read_pos += wf_buffer_size;
   
-  // Simple interpolation
-  read_pos_int = read_pos | 0;
+  read_pos_int = floor(read_pos);
   read_pos_frac = read_pos - read_pos_int;
   read_pos_next = (read_pos_int + 1) % wf_buffer_size;
   
-  // Read with interpolation
-  spl0 = wf_buffer_l[read_pos_int] * (1 - read_pos_frac) +
-         wf_buffer_l[read_pos_next] * read_pos_frac;
-  spl1 = wf_buffer_r[read_pos_int] * (1 - read_pos_frac) +
-         wf_buffer_r[read_pos_next] * read_pos_frac;
+  spl0 = wf_buffer_l[read_pos_int] * (1 - read_pos_frac) + wf_buffer_l[read_pos_next] * read_pos_frac;
+  spl1 = wf_buffer_r[read_pos_int] * (1 - read_pos_frac) + wf_buffer_r[read_pos_next] * read_pos_frac;
   
-  // Increment write position
   wf_write_pos = (wf_write_pos + 1) % wf_buffer_size;
 );
 
-spl0=spl0*vd+noise*vn;
-spl1=spl1*vd+noise*vn;
+spl0 = spl0 * output_gain + noise * noise_gain;
+spl1 = spl1 * output_gain + noise * noise_gain;
 
-//head bump
-dry0=spl0;
-dry1=spl1;
-wet0=spl0+spl1;
-
-t=bi1+bufpos;
-p0=t[0];
-t[0]=wet0;
-
-t=bi2+halfsize+bufpos;
-p1=t[0];
-t[0]=wet0;
-
-wet0 = p0 + p1; // our mdct handles windowing, so we just add
-
-bufpos+=1;
-
-bufpos >= halfsize ? (
-  // we hit our FFT size here
-  // swap bi1 and bi2
-  t=bi1; bi1=bi2; bi2=t;
-  // Map time -> frequency domain
-  mdct(bi1,fftsize);
-  // frequency-shift energy to lower bands
-  // memcpy(bi1,bi1+shift,bands);
-  i=0;
-  loop(bands, bi1[i]=bi1[i*shift+i]; i+=1;);
-  // zero out HF bands;
-  memset(bi1+bands,0,fftsize-bands);
-  imdct(bi1,fftsize);
-  bufpos=0;
+head_bump_db > 0 ? (
+  hb_out_l = hb_b0 * spl0 + hb_b1 * hb_x1_l + hb_b2 * hb_x2_l - hb_a1 * hb_y1_l - hb_a2 * hb_y2_l;
+  hb_x2_l = hb_x1_l;
+  hb_x1_l = spl0;
+  hb_y2_l = hb_y1_l;
+  hb_y1_l = hb_out_l;
+  spl0 = hb_out_l;
+  
+  hb_out_r = hb_b0 * spl1 + hb_b1 * hb_x1_r + hb_b2 * hb_x2_r - hb_a1 * hb_y1_r - hb_a2 * hb_y2_r;
+  hb_x2_r = hb_x1_r;
+  hb_x1_r = spl1;
+  hb_y2_r = hb_y1_r;
+  hb_y1_r = hb_out_r;
+  spl1 = hb_out_r;
 );
 
-// Use machine-specific head bump
-effective_head_bump = (slider7 == 4 ? slider4 : preset_head_bump);
-adj = exp(effective_head_bump * log(10) / 40);
+preset_hf_rolloff_amount < 0 ? (
+  hf_out_l = hf_b0 * spl0 + hf_b1 * hf_x1_l + hf_b2 * hf_x2_l - hf_a1 * hf_y1_l - hf_a2 * hf_y2_l;
+  hf_x2_l = hf_x1_l;
+  hf_x1_l = spl0;
+  hf_y2_l = hf_y1_l;
+  hf_y1_l = hf_out_l;
+  spl0 = hf_out_l;
+  
+  hf_out_r = hf_b0 * spl1 + hf_b1 * hf_x1_r + hf_b2 * hf_x2_r - hf_a1 * hf_y1_r - hf_a2 * hf_y2_r;
+  hf_x2_r = hf_x1_r;
+  hf_x1_r = spl1;
+  hf_y2_r = hf_y1_r;
+  hf_y1_r = hf_out_r;
+  spl1 = hf_out_r;
+);
 
-spl0 = (dry0 + wet0 * adj) * gain;
-spl1 = (dry1 + wet0 * adj) * gain;
-
-// Stereo width processing (Mid/Side)
 mid = (spl0 + spl1) * 0.5;
 side = (spl0 - spl1) * 0.5;
 side *= width_factor;
 
-// Apply subtle machine-specific frequency coloring to stereo image
-slider7 == 0 ? ( // Studer A800 - slightly warm mids
-  mid = mid * 1.02;
-  side = side * 0.98
-);
-
-slider7 == 1 ? ( // Ampex ATR102 - enhanced presence
-  mid = mid + mid*mid*0.01;
-  side = side * 1.05
-);
-
-slider7 == 2 ? ( // Sony APR5000 - clean and accurate
-  mid = mid // No coloring, keep clean
-);
-
-slider7 == 3 ? ( // Otari MTR90 - slight warmth
-  mid = mid * 1.01
+slider7 == 0 ? (
+  mid *= 1.02;
+  side *= 0.98;
+) : slider7 == 1 ? (
+  mid = mid + mid * mid * 0.01;
+  side *= 1.05;
+) : slider7 == 3 ? (
+  mid *= 1.01;
 );
 
 spl0 = mid + side;
 spl1 = mid - side;
+
+// Update output meters
+abs(spl0) > output_peak_l ? output_peak_l = abs(spl0) : output_peak_l *= meter_decay;
+abs(spl1) > output_peak_r ? output_peak_r = abs(spl1) : output_peak_r *= meter_decay;
+
+@gfx 650 330
+
+control_start("main", "tron");
+
+ui_pad(10, 10);
+
+// Header
+ui_split_top(35);
+  ui_fontface("Trebuchet MS");
+  ui_fontsize(28);
+  ui_color(255, 255, 255);
+  ui_align(0.5, 0.5);
+  ui_text("TapeEmu: Classic Tape Machine Emulation");
+ui_pop();
+
+ui_padtop(15);
+
+// Machine selector tabs
+ui_split_top(40);
+  button_width = ui_width() / 5;
   
-//add machine-specific compression when driven
-threshDB = 0; //set to zero. lower to -6 or so for actual comp
-thresh = exp(threshDB/c);
-
-// Machine-specific compression characteristics
-slider7 == 0 ? ( // Studer A800 - gentle, musical compression
-  ratio = 1/2.5;
-  attack = exp( threshDB / (8*srate/1000) / c);
-  release = exp( threshDB / (150*srate/1000) / c )
-);
-
-slider7 == 1 ? ( // Ampex ATR102 - more aggressive
-  ratio = 1/1.5;
-  attack = exp( threshDB / (3*srate/1000) / c);
-  release = exp( threshDB / (80*srate/1000) / c )
-);
-
-slider7 == 2 ? ( // Sony APR5000 - minimal compression
-  ratio = 1/4.0;
-  attack = exp( threshDB / (10*srate/1000) / c);
-  release = exp( threshDB / (200*srate/1000) / c )
-);
-
-slider7 == 3 ? ( // Otari MTR90 - balanced
-  ratio = 1/2.0;
-  attack = exp( threshDB / (6*srate/1000) / c);
-  release = exp( threshDB / (120*srate/1000) / c )
-);
-
-slider7 == 4 ? ( // Basic Tape - original settings
-  ratio = 1/1.8;
-  attack = exp( threshDB / (5*srate/1000) / c);
-  release = exp( threshDB / (100*srate/1000) / c )
-);
-
-@gfx 650 500
-
-// Calculate scale factor based on window size
-base_width = 500;
-base_height = 320;
-scale_x = gfx_w / base_width;
-scale_y = gfx_h / base_height;
-scale = min(scale_x, scale_y);
-scale = max(0.5, min(scale, 3.0));
-
-// Revox A77 inspired GUI
-// Silver-grey background
-gfx_r = 0.85; gfx_g = 0.85; gfx_b = 0.85;
-gfx_rect(0, 0, gfx_w, gfx_h);
-
-// Title panel
-gfx_r = 0.72; gfx_g = 0.72; gfx_b = 0.72;
-gfx_rect(20 * scale, 20 * scale, (gfx_w - 40 * scale), 50 * scale);
-
-// Control panel
-gfx_rect(20 * scale, 90 * scale, (gfx_w - 40 * scale), 280 * scale);
-
-// Title text
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 18 * scale), 'b');
-gfx_x = 40 * scale; gfx_y = 32 * scale;
-gfx_drawstr("TapeEmu");
-
-gfx_setfont(1, "Arial", max(8, 12 * scale));
-gfx_x = 40 * scale; gfx_y = 52 * scale;
-gfx_drawstr("Professional Tape Machine");
-
-// Red accent
-gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
-gfx_rect(gfx_w - 80 * scale, 30 * scale, 40 * scale, 4 * scale);
-
-// Draw knobs - Top row
-knob_y = 140 * scale;
-knob_size = 30 * scale;
-
-// Input/Saturation knob
-knob_x = 80 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y, knob_size/2, 1);
-knob_position = slider1 / 178; // Normalize 0-178 to 0-1
-angle = -2.356 + knob_position * 4.712;
-ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
-ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("INPUT", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
-gfx_drawstr("INPUT");
-// Value
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
-gfx_printf("%.0f%%", slider1);
-
-// Output knob
-knob_x = 160 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y, knob_size/2, 1);
-knob_position = (slider2 + 50) / 50; // Normalize -50 to 0 to 0-1
-angle = -2.356 + knob_position * 4.712;
-ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
-ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("OUTPUT", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
-gfx_drawstr("OUTPUT");
-// Value
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
-gfx_printf("%+.0fdB", slider2);
-
-// Noise knob
-knob_x = 240 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y, knob_size/2, 1);
-knob_position = (slider3 + 105) / 45; // Normalize -105 to -60 to 0-1
-angle = -2.356 + knob_position * 4.712;
-ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
-ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("NOISE", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
-gfx_drawstr("NOISE");
-// Value
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
-gfx_printf("%.0fdB", slider3);
-
-// Head Bump knob
-knob_x = 320 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y, knob_size/2, 1);
-knob_position = (slider4 + 18) / 30; // Normalize -18 to +12 to 0-1
-angle = -2.356 + knob_position * 4.712;
-ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
-ind_y = knob_y - cos(angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("HEAD BUMP", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y + 25 * scale;
-gfx_drawstr("HEAD BUMP");
-// Value
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 15 * scale; gfx_y = knob_y + 40 * scale;
-gfx_printf("%+.1fdB", slider4);
-
-// Bottom row knobs
-knob_y2 = 220 * scale;
-
-// Tape Age knob
-knob_x = 80 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y2, knob_size/2, 1);
-angle = -2.356 + (slider5 / 100) * 4.712;
-ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
-ind_y = knob_y2 - cos(angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("TAPE AGE", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
-gfx_drawstr("TAPE AGE");
-// Value
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 12 * scale; gfx_y = knob_y2 + 40 * scale;
-gfx_printf("%.0f%%", slider5);
-
-// Stereo Width knob
-knob_x = 160 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y2, knob_size/2, 1);
-angle = -2.356 + (slider6 / 200) * 4.712;
-ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
-ind_y = knob_y2 - cos(angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("STEREO WIDTH", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
-gfx_drawstr("STEREO WIDTH");
-// Value
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 12 * scale; gfx_y = knob_y2 + 40 * scale;
-gfx_printf("%.0f%%", slider6);
-
-// Wow/Flutter knob
-knob_x = 240 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y2, knob_size/2, 1);
-angle = -2.356 + (slider8 / 100) * 4.712;
-ind_x = knob_x + sin(angle) * (knob_size/2 - 3);
-ind_y = knob_y2 - cos(angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("WOW/FLUTTER", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
-gfx_drawstr("WOW/FLUTTER");
-// Value
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 12 * scale; gfx_y = knob_y2 + 40 * scale;
-gfx_printf("%.0f%%", slider8);
-
-// Tape Machine selector (fader style)
-fader_x = 400 * scale;
-fader_y = knob_y - 10 * scale;
-fader_height = 100 * scale;
-fader_width = 12 * scale;
-
-// Fader track
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_rect(fader_x - fader_width/2, fader_y, fader_width, fader_height);
-
-// Fader handle
-handle_y = fader_y + (slider7 / 4) * (fader_height - 6) + 3;
-gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
-gfx_rect(fader_x - fader_width/2 + 1, handle_y - 3, fader_width - 2, 6);
-
-// Machine name
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(7, 9 * scale), 'b');
-machine_text = "";
-slider7 == 0 ? machine_text = "STUDER";
-slider7 == 1 ? machine_text = "AMPEX";
-slider7 == 2 ? machine_text = "SONY";
-slider7 == 3 ? machine_text = "OTARI";
-slider7 == 4 ? machine_text = "BASIC";
-gfx_measurestr(machine_text, machine_w, machine_h);
-gfx_x = fader_x - machine_w/2; gfx_y = fader_y + fader_height + 8 * scale;
-gfx_drawstr(machine_text);
-
-// Label
-gfx_setfont(1, "Arial", max(6, 8 * scale));
-gfx_measurestr("TAPE MACHINE", machine_label_w, machine_label_h);
-gfx_x = fader_x - machine_label_w/2; gfx_y = fader_y + fader_height + 25 * scale;
-gfx_drawstr("TAPE MACHINE");
-
-// Status display area
-gfx_r = 0.6; gfx_g = 0.6; gfx_b = 0.6;
-gfx_rect(40 * scale, 310 * scale, (gfx_w - 80 * scale), 50 * scale);
-
-// Status text
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(6, 8 * scale));
-gfx_x = 50 * scale; gfx_y = 325 * scale;
-
-// Show current machine character
-slider7 == 0 ? status_text = "Studer A800 - Warm & Musical" :
-slider7 == 1 ? status_text = "Ampex ATR102 - Punchy & Colored" :
-slider7 == 2 ? status_text = "Sony APR5000 - Clean & Modern" :
-slider7 == 3 ? status_text = "Otari MTR90 - Balanced & Professional" :
-status_text = "Basic Tape - Generic Emulation";
-
-gfx_drawstr(status_text);
-
-// Show active effects
-gfx_x = 50 * scale; gfx_y = 340 * scale;
-// Show active effects - FIXED VERSION
-gfx_x = 50 * scale; gfx_y = 340 * scale;
-
-// Use a single printf with conditional formatting
-effects_active = 0;
-slider5 > 0 ? effects_active = 1;
-slider8 > 0 ? effects_active = 1;
-slider6 != 100 ? effects_active = 1;
-
-effects_active ? (
-    // Simple approach - just show individual status
-    effect_str = "";
-    slider5 > 0 ? gfx_printf("AGE %.0f%% ", slider5);
-    slider8 > 0 ? gfx_printf("W&F %.0f%% ", slider8);
-    slider6 != 100 ? gfx_printf("WIDTH %.0f%%", slider6);
-) : (
-    gfx_drawstr("No Effects Active");
-);
-
-// Mouse interaction system
-mouse_cap == 1 && last_mouse_cap == 0 ? (
-    // Mouse click started - check what was clicked
-    knob_hit = 0;
-    hit_distance = 25 * scale; // Larger hit area
+  // Basic Tape
+  ui_split_left(button_width);
+    is_selected = (slider7 == 4);
+    is_selected ? (
+      control_background_inset();
+      ui_color(0, 255, 0);
+      ui_push();
+        ui_align(0.5, 0.2);
+        ui_push_height(6);
+          ui_push_width(6);
+            ui_fill();
+          ui_pop();
+        ui_pop();
+      ui_pop();
+    ) : control_background_enabled("none");
     
-    // Check top row knobs
-    abs(mouse_x - 80 * scale) <= hit_distance && abs(mouse_y - 140 * scale) <= hit_distance ? (
-        slider_to_edit = 1; knob_hit = 1;
-    ) : abs(mouse_x - 160 * scale) <= hit_distance && abs(mouse_y - 140 * scale) <= hit_distance ? (
-        slider_to_edit = 2; knob_hit = 1;
-    ) : abs(mouse_x - 240 * scale) <= hit_distance && abs(mouse_y - 140 * scale) <= hit_distance ? (
-        slider_to_edit = 3; knob_hit = 1;
-    ) : abs(mouse_x - 320 * scale) <= hit_distance && abs(mouse_y - 140 * scale) <= hit_distance ? (
-        slider_to_edit = 4; knob_hit = 1;
-    ) :
+    ui_color(255, 255, 255);
+    ui_align(0.5, 0.6);
+    ui_fontsize(11);
+    ui_text("BASIC TAPE");
     
-    // Check bottom row knobs
-    abs(mouse_x - 80 * scale) <= hit_distance && abs(mouse_y - 220 * scale) <= hit_distance ? (
-        slider_to_edit = 5; knob_hit = 1;
-    ) : abs(mouse_x - 160 * scale) <= hit_distance && abs(mouse_y - 220 * scale) <= hit_distance ? (
-        slider_to_edit = 6; knob_hit = 1;
-    ) : abs(mouse_x - 240 * scale) <= hit_distance && abs(mouse_y - 220 * scale) <= hit_distance ? (
-        slider_to_edit = 8; knob_hit = 1;
-    ) :
+    is_selected ? control_finish_inset() : control_finish_enabled("none");
     
-    // Check tape machine fader - wider hit area
-    abs(mouse_x - 400 * scale) <= 20 * scale && mouse_y >= 130 * scale && mouse_y <= 230 * scale ? (
-        // Calculate new position
-        fader_pos = (mouse_y - 130 * scale) / (100 * scale);
-        fader_pos = max(0, min(1, fader_pos));
-        slider7 = floor(fader_pos * 4);
-        update_audio_vars(); // Update audio processing variables
-        knob_hit = 1;
+    ui_click() ? (
+      slider7 = 4;
+      sliderchange(slider7);
+      update_audio_vars();
     );
+  ui_pop();
+  
+  // Studer A800
+  ui_split_left(button_width);
+    is_selected = (slider7 == 0);
+    is_selected ? (
+      control_background_inset();
+      ui_color(0, 255, 0);
+      ui_push();
+        ui_align(0.5, 0.2);
+        ui_push_height(6);
+          ui_push_width(6);
+            ui_fill();
+          ui_pop();
+        ui_pop();
+      ui_pop();
+    ) : control_background_enabled("none");
     
-    // Initialize drag
-    knob_hit ? (
-        last_mouse_y = mouse_y;
-        drag_start_y = mouse_y;
-    ) : (
-        slider_to_edit = 0;
+    ui_color(255, 255, 255);
+    ui_align(0.5, 0.6);
+    ui_fontsize(11);
+    ui_text("STUDER A800");
+    
+    is_selected ? control_finish_inset() : control_finish_enabled("none");
+    
+    ui_click() ? (
+      slider7 = 0;
+      sliderchange(slider7);
+      update_audio_vars();
     );
-);
-
-// Handle dragging
-mouse_cap == 1 && slider_to_edit > 0 && slider_to_edit != 7 ? (
-    mouse_delta = last_mouse_y - mouse_y; // Inverted for natural feel
-    sensitivity = 1.0; // Base sensitivity
+  ui_pop();
+  
+  // Ampex ATR102
+  ui_split_left(button_width);
+    is_selected = (slider7 == 1);
+    is_selected ? (
+      control_background_inset();
+      ui_color(0, 255, 0);
+      ui_push();
+        ui_align(0.5, 0.2);
+        ui_push_height(6);
+          ui_push_width(6);
+            ui_fill();
+          ui_pop();
+        ui_pop();
+      ui_pop();
+    ) : control_background_enabled("none");
     
-    // Apply changes with proper scaling
-    slider_to_edit == 1 ? ( // Input/Saturation (0-178)
-        new_val = slider1 + mouse_delta * sensitivity;
-        slider1 = max(0, min(178, new_val));
-        update_audio_vars(); // Update audio processing variables
-    ) : slider_to_edit == 2 ? ( // Output (-50 to 0)
-        new_val = slider2 + mouse_delta * 0.25;
-        slider2 = max(-50, min(0, new_val));
-        update_audio_vars(); // Update audio processing variables
-    ) : slider_to_edit == 3 ? ( // Noise (-105 to -60)
-        new_val = slider3 + mouse_delta * 0.25;
-        slider3 = max(-105, min(-60, new_val));
-        update_audio_vars(); // Update audio processing variables
-    ) : slider_to_edit == 4 ? ( // Head Bump (-18 to +12)
-        new_val = slider4 + mouse_delta * 0.15;
-        slider4 = max(-18, min(12, new_val));
-        update_audio_vars(); // Update audio processing variables
-    ) : slider_to_edit == 5 ? ( // Tape Age (0-100)
-        new_val = slider5 + mouse_delta * 0.5;
-        slider5 = max(0, min(100, new_val));
-        update_audio_vars(); // Update audio processing variables
-    ) : slider_to_edit == 6 ? ( // Stereo Width (0-200)
-        new_val = slider6 + mouse_delta;
-        slider6 = max(0, min(200, new_val));
-        update_audio_vars(); // Update audio processing variables
-    ) : slider_to_edit == 8 ? ( // Wow/Flutter (0-100)
-        new_val = slider8 + mouse_delta * 0.5;
-        slider8 = max(0, min(100, new_val));
-        update_audio_vars(); // Update audio processing variables
+    ui_color(255, 255, 255);
+    ui_align(0.5, 0.6);
+    ui_fontsize(11);
+    ui_text("AMPEX ATR102");
+    
+    is_selected ? control_finish_inset() : control_finish_enabled("none");
+    
+    ui_click() ? (
+      slider7 = 1;
+      sliderchange(slider7);
+      update_audio_vars();
     );
+  ui_pop();
+  
+  // Sony APR5000
+  ui_split_left(button_width);
+    is_selected = (slider7 == 2);
+    is_selected ? (
+      control_background_inset();
+      ui_color(0, 255, 0);
+      ui_push();
+        ui_align(0.5, 0.2);
+        ui_push_height(6);
+          ui_push_width(6);
+            ui_fill();
+          ui_pop();
+        ui_pop();
+      ui_pop();
+    ) : control_background_enabled("none");
     
-    last_mouse_y = mouse_y;
-);
+    ui_color(255, 255, 255);
+    ui_align(0.5, 0.6);
+    ui_fontsize(11);
+    ui_text("SONY APR5000");
+    
+    is_selected ? control_finish_inset() : control_finish_enabled("none");
+    
+    ui_click() ? (
+      slider7 = 2;
+      sliderchange(slider7);
+      update_audio_vars();
+    );
+  ui_pop();
+  
+  // Otari MTR90
+  ui_split_left(button_width);
+    is_selected = (slider7 == 3);
+    is_selected ? (
+      control_background_inset();
+      ui_color(0, 255, 0);
+      ui_push();
+        ui_align(0.5, 0.2);
+        ui_push_height(6);
+          ui_push_width(6);
+            ui_fill();
+          ui_pop();
+        ui_pop();
+      ui_pop();
+    ) : control_background_enabled("none");
+    
+    ui_color(255, 255, 255);
+    ui_align(0.5, 0.6);
+    ui_fontsize(11);
+    ui_text("OTARI MTR90");
+    
+    is_selected ? control_finish_inset() : control_finish_enabled("none");
+    
+    ui_click() ? (
+      slider7 = 3;
+      sliderchange(slider7);
+      update_audio_vars();
+    );
+  ui_pop();
+ui_pop();
 
-// Reset when mouse released
-mouse_cap == 0 ? (
-    slider_to_edit = 0;
-);
+ui_padtop(25);
 
-last_mouse_cap = mouse_cap;
+// Knobs section
+ui_split_top(120);
+  knob_width = ui_width() / 7;
+  
+  // INPUT
+  ui_split_left(knob_width);
+    ui_push();
+      ui_pad(5, 5);
+      ui_split_bottom(30);
+        ui_align(0.5, 0.5);
+        ui_fontsize(10);
+        ui_color(255, 255, 255);
+        ui_text("INPUT");
+      ui_pop();
+      ui_automate(slider1, control_dial(slider1, 0, 178, 0, 0));
+    ui_pop();
+  ui_pop();
+  
+  // OUTPUT
+  ui_split_left(knob_width);
+    ui_push();
+      ui_pad(5, 5);
+      ui_split_bottom(30);
+        ui_align(0.5, 0.5);
+        ui_fontsize(10);
+        ui_color(255, 255, 255);
+        ui_text("OUTPUT");
+      ui_pop();
+      ui_automate(slider2, control_dial(slider2, -50, 0, 0, 0));
+    ui_pop();
+  ui_pop();
+  
+  // NOISE (dimmed if preset active)
+  ui_split_left(knob_width);
+    ui_push();
+      ui_pad(5, 5);
+      ui_split_bottom(30);
+        ui_align(0.5, 0.5);
+        ui_fontsize(10);
+        slider7 != 4 ? ui_color(128, 128, 128) : ui_color(255, 255, 255);
+        ui_text("NOISE");
+      ui_pop();
+      slider7 != 4 ? (
+        ui_push();
+          ui_color(128, 128, 128, 0.5);
+          control_dial(preset_noise_floor, -105, -60, 0, -105);
+        ui_pop();
+      ) : (
+        ui_automate(slider3, control_dial(slider3, -105, -60, 0, -105));
+      );
+    ui_pop();
+  ui_pop();
+  
+  // HEAD BUMP (dimmed if preset active)
+  ui_split_left(knob_width);
+    ui_push();
+      ui_pad(5, 5);
+      ui_split_bottom(30);
+        ui_align(0.5, 0.5);
+        ui_fontsize(10);
+        slider7 != 4 ? ui_color(128, 128, 128) : ui_color(255, 255, 255);
+        ui_text("HEAD BUMP");
+      ui_pop();
+      slider7 != 4 ? (
+        ui_push();
+          ui_color(128, 128, 128, 0.5);
+          control_dial(preset_head_bump, 0, 18, 0, 0);
+        ui_pop();
+      ) : (
+        ui_automate(slider4, control_dial(slider4, 0, 18, 0, 0));
+      );
+    ui_pop();
+  ui_pop();
+  
+  // TAPE AGE
+  ui_split_left(knob_width);
+    ui_push();
+      ui_pad(5, 5);
+      ui_split_bottom(30);
+        ui_align(0.5, 0.5);
+        ui_fontsize(10);
+        ui_color(255, 255, 255);
+        ui_text("TAPE AGE");
+      ui_pop();
+      ui_automate(slider5, control_dial(slider5, 0, 100, 0, 0));
+    ui_pop();
+  ui_pop();
+  
+  // STEREO WIDTH
+  ui_split_left(knob_width);
+    ui_push();
+      ui_pad(5, 5);
+      ui_split_bottom(30);
+        ui_align(0.5, 0.5);
+        ui_fontsize(9);
+        ui_color(255, 255, 255);
+        ui_text("STEREO WIDTH");
+      ui_pop();
+      ui_automate(slider6, control_dial(slider6, 0, 200, 0, 100));
+    ui_pop();
+  ui_pop();
+  
+  // WOW & FLUTTER
+  ui_split_left(knob_width);
+    ui_push();
+      ui_pad(5, 5);
+      ui_split_bottom(30);
+        ui_align(0.5, 0.5);
+        ui_fontsize(9);
+        ui_color(255, 255, 255);
+        ui_text("WOW & FLUTTER");
+      ui_pop();
+      ui_automate(slider8, control_dial(slider8, 0, 100, 0, 0));
+    ui_pop();
+  ui_pop();
+ui_pop();
+
+ui_padtop(5);
+
+// Meters section
+ui_split_bottom(50);
+  ui_pad(10, 5);
+  
+  // Input meter
+  ui_split_top(18);
+    ui_split_left(60);
+      ui_align(1, 0.5);
+      ui_fontsize(10);
+      ui_color(255, 255, 255);
+      ui_text("INPUT");
+    ui_pop();
+    ui_padleft(10);
+    draw_led_meter(max(input_peak_l, input_peak_r), ui_left(), ui_top(), ui_width(), ui_height());
+  ui_pop();
+  
+  ui_padtop(8);
+  
+  // Output meter
+  ui_split_top(18);
+    ui_split_left(60);
+      ui_align(1, 0.5);
+      ui_fontsize(10);
+      ui_color(255, 255, 255);
+      ui_text("OUTPUT");
+    ui_pop();
+    ui_padleft(10);
+    draw_led_meter(max(output_peak_l, output_peak_r), ui_left(), ui_top(), ui_width(), ui_height());
+  ui_pop();
+ui_pop();
