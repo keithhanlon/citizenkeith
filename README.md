@@ -381,11 +381,13 @@ From there, experiment with:
 
 # Tape Emulation
 ## TapeEmu - Professional Tape Machine Emulation
-![TapeEmu Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TapeEmu.png?raw=true)
+![TapeEmu Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TapeEmuV2.png?raw=true)
 
 TapeEmu is a tape machine emulation plugin designed to add the warmth, character, and sonic artifacts of classic analog tape recording to digital audio. Features include harmonic saturation, tape hiss, low-frequency head bump, stereo width control, and tape aging effects like dropouts and wow & flutter.
 
 The plugin offers five different tape machine models (Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, and Basic Tape), each with their own unique saturation curves, compression characteristics, and tonal coloring.
+Version 2 includes a complete GUI overhaul and DSP fixes.
+
 
 ### Controls:
 
@@ -406,11 +408,11 @@ The plugin offers five different tape machine models (Studer A800, Ampex ATR102,
 2. Simulates the inherent noise present in analog tape recordings
 3. Each machine type has slightly different noise characteristics
 
-**Head Bump** (-18 to +12 dB)
+**Head Bump** (0 to +18 dB)
 
 1. Simulates the low-frequency boost that occurs in tape machines
 2. This is a frequency-dependent effect that enhances bass frequencies
-3. Uses FFT processing to apply the boost in specific frequency bands
+3. Uses a biquad low shelf filter centered at 90 Hz with a smooth rolloff
 
 **Tape Age** (0-100%)
 
