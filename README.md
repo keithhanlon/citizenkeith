@@ -29,7 +29,7 @@ https://reaper.blog/2015/06/quick-tip-how-to-install-js-plugins/
 # Plugin Features
 
 Quick links:
-- [Fidelio Channel Strip](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#rfidelio-channel-strip)
+- [Fidelio Channel Strip](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#fidelio-channel-strip)
 - [ReaFripp Tape Loop Delay](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#reafripp-tape-loop-delay)
 - [Tycho Delay TMA-1](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tycho-delay-tma-1)
 - [Stargate Ambient Reverb](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#stargate-ambient-reverb)
