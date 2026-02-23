@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="38af05657ba4c226b3c1bf68b0fc487e30228e3e">
+<index version="1" commit="755579a5270bf6796be6ca5112669bb8a7595f9e">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -222,7 +222,7 @@
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Tape emulation that includes tape machine choices This JSFX released under GPLv3 license\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Tape emulation that includes tape machine choices\par}
 }
 ]]></description>
       </metadata>
@@ -234,6 +234,19 @@
       </version>
       <version name="1.7" author="citizenkeith - Claude AI" time="2025-07-26T19:33:45Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/cb80e3e52facb8e7a57c13ae6c940cad97854b31/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.0" author="citizenkeith - Claude AI" time="2026-02-23T21:25:22Z">
+        <changelog><![CDATA[# TapeEmu 2.0
++ Complete GUI overhaul with machine selector buttons
++ Added double-click to reset knobs to default values
++ Fixed head bump implementation (low shelf @ 90Hz)
++ Fixed Ampex ATR102 gain staging (was 1.7dB hot)
++ Added machine-specific high-frequency rolloff
++ Unity gain by default (0% input, 0dB output)
++ Conditional dimming of Noise and Head Bump knobs when presets active
++ Input/Output LED meters
++ 5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/755579a5270bf6796be6ca5112669bb8a7595f9e/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
