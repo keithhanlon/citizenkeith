@@ -36,8 +36,8 @@ Quick links:
 - [TapeEmu - Professional Tape Machine Emulation](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tapeemu---professional-tape-machine-emulation)
 - [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
 
-#Channel Strips
-##Fidelio Channel Strip
+# Channel Strips
+## Fidelio Channel Strip
 ![Fidelio Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/FidelioChannelStrip.png?raw=true)
 
 Fidelio is a full-featured channel strip plugin combining transformer-style harmonic saturation, a Neve-inspired high shelf EQ, a Trident-style high-pass filter, two parametric mid bands, and a dynamics section with compressor, expander, and gate modes. Designed for tracking and mixing, it adds analog character while providing precise surgical control.
