@@ -4,7 +4,7 @@ author:citizenkeith and Claude AI
 about:Channel strip with transformer-style harmonic coloration, Neve style shelf,
   Trident style HPF, plus a VCA compressor, expander and gate
 // @provides
-//   citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc
+//   [nomain] ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc
 // @license GPL v3
 options:no_meter
 
