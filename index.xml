@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="5534039cc2dbc6bf536a8e402faaab702a45baf9" name="citizenkeith">
+<index version="1" commit="eb63b6121ea73400740c656f27e9b54f3ff17d0e" name="citizenkeith">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -18,6 +18,26 @@
       <version name="1.2" author="citizenkeith and Claude AI" time="2026-02-23T21:18:55Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/38af05657ba4c226b3c1bf68b0fc487e30228e3e/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
         <source file="../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc">https://github.com/keithhanlon/citizenkeith/raw/38af05657ba4c226b3c1bf68b0fc487e30228e3e/citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc</source>
+      </version>
+      <version name="1.3" author="citizenkeith and Claude AI" time="2026-02-24T20:02:48Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/eb63b6121ea73400740c656f27e9b54f3ff17d0e/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="citizenkeith-ui-lib">
+    <reapack name="citizenkeith-ui-lib.jsfx" type="effect" desc="citizenkeith UI Library">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Shared UI library for citizenkeith plugins. Based on work by Geraint Luff.\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith" time="2026-02-24T20:02:48Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/eb63b6121ea73400740c656f27e9b54f3ff17d0e/citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx</source>
+        <source file="citizenkeith-ui-lib.jsfx-inc">https://github.com/keithhanlon/citizenkeith/raw/eb63b6121ea73400740c656f27e9b54f3ff17d0e/citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc</source>
       </version>
     </reapack>
   </category>
