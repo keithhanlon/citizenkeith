@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="f5fa015b6ea7934dbd1ac665ea2b9556eeba4aad" name="citizenkeith">
+<index version="1" commit="9a264fd6ad21f8f9e0c375d7d1656aab7c02b5a0" name="citizenkeith">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -16,8 +16,8 @@
         <source file="fidelio-ui-lib.jsfx-inc">https://github.com/keithhanlon/citizenkeith/raw/1561db3c2cd47ec4e2c29d055791c0ee95268ea1/channel-strip/fidelio-ui-lib.jsfx-inc</source>
       </version>
       <version name="1.2" author="citizenkeith and Claude AI" time="2026-02-23T21:18:55Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/f5fa015b6ea7934dbd1ac665ea2b9556eeba4aad/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
-        <source file="../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc">https://github.com/keithhanlon/citizenkeith/raw/f5fa015b6ea7934dbd1ac665ea2b9556eeba4aad/citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a264fd6ad21f8f9e0c375d7d1656aab7c02b5a0/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
+        <source file="../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc">https://github.com/keithhanlon/citizenkeith/raw/9a264fd6ad21f8f9e0c375d7d1656aab7c02b5a0/citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc</source>
       </version>
     </reapack>
   </category>
