@@ -38,7 +38,7 @@ Quick links:
 - [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
 
 # Channel Strips
-## Fidelio Channel Strip
+## Fidelio Channel Strip v1.3
 ![Fidelio Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/FidelioChannelStrip.png?raw=true)
 
 Fidelio is a full-featured channel strip plugin combining transformer-style harmonic saturation, a Neve-inspired high shelf EQ, a Trident-style high-pass filter, two parametric mid bands, and a dynamics section with compressor, expander, and gate modes. Designed for tracking and mixing, it adds analog character while providing precise surgical control.
@@ -143,7 +143,7 @@ Version 1.2 introduces a redesigned Compress/Expand/Gate selector using tab-styl
 2. Useful for mono compatibility checking
 
 # Delays
-## ReaFripp Tape Loop Delay
+## ReaFripp Tape Loop Delay v1.0
 ![ReaFripp Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/ReaFripp.png?raw=true)
 
 This plugin is inspired by Frippertronics, Robert Fripp's tape delay technique that utilized two Revox tape machines to create repeated delay. It includes optimizations like:
@@ -213,7 +213,7 @@ This creates a vintage tape delay experience with the characteristic imperfectio
   - 5: 8 bars (32 beats)
   - 6: 16 bars (64 beats)
 
-## Tycho Delay TMA-1
+## Tycho Delay TMA-1 v2.0
 ![Tycho Delay TMA-1 Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TychoDelayv2.png?raw=true)
 
 Tycho Delay is a tape delay emulation that goes beyond basic delay functionality to provide vintage tape characteristics with modern optimization and flexibility.
@@ -268,7 +268,7 @@ Version 2 includes a complete GUI overhaul, DSP fixes, a dedicated tempo sync on
 
 # Reverb
 
-## Stargate Ambient Reverb
+## Stargate Ambient Reverb v1.1
 ![targate Ambient Reverb Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/Stargate.png?raw=true)
 
 Stargate Ambient Reverb is a dual-stage algorithmic reverb designed for creating lush, expansive ambient spaces. It features a main diffuse reverb engine that can morph from clear delays to dense reverb textures, plus an independent tail extender for infinite, blooming decays. Perfect for ambient music, cinematic soundscapes, and adding otherworldly depth to any source.
@@ -316,7 +316,7 @@ Blends the tail extender output back into the main signal. At 0%, the tail exten
 
 # Synths
 
-## SynthiAKS Analog Modular Synthesizer
+## SynthiAKS Analog Modular Synthesizer v1.0
 ![SynthiAKS Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/SynthiAKS.png?raw=true)
 
 SynthiAKS (pronounced sinth ee aks) is an emulation of the classic EMS Synthi AKS modular synthesizer, known for its unique pin matrix patching system and distinctive British analog sound used by artists like Pink Floyd and Brian Eno.
@@ -452,7 +452,7 @@ SynthiAKS (pronounced sinth ee aks) is an emulation of the classic EMS Synthi AK
 2. Acts like pressing a key on the synthesizer
 
 # MIDI
-## Probabilistic MIDI Note Generator
+## Probabilistic MIDI Note Generator v1.0
 ![Note Generator Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/NoteGenerator.png?raw=true)
 
 The Probabilistic MIDI Generator creates evolving, generative MIDI patterns using probability-based algorithms. Perfect for ambient music, experimental compositions, modular-style sequencing, and creative improvisation.
@@ -475,7 +475,7 @@ From there, experiment with:
 4. OCTAVES to expand or narrow the melodic range
 
 # Tape Emulation
-## TapeEmu - Professional Tape Machine Emulation
+## TapeEmu - Professional Tape Machine Emulation v2.0
 ![TapeEmu Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TapeEmuV2.png?raw=true)
 
 TapeEmu is a tape machine emulation plugin designed to add the warmth, character, and sonic artifacts of classic analog tape recording to digital audio. Features include harmonic saturation, tape hiss, low-frequency head bump, stereo width control, and tape aging effects like dropouts and wow & flutter.
