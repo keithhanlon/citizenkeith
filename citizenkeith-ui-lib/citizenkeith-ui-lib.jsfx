@@ -1,0 +1,7 @@
+desc: citizenkeith UI Library
+version: 1.0
+author: citizenkeith
+about: Shared UI library for citizenkeith plugins. Based on work by Geraint Luff.
+// @provides
+//   [nomain] citizenkeith-ui-lib.jsfx-inc
+// @license GPL v3
