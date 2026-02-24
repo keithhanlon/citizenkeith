@@ -20,9 +20,6 @@ changelog:
   + Ping pong stereo with crossfade
   + Delay loop lowpass filter and saturation
   + Tempo sync with 28 note values
-// @provides
-//   [nomain] ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc
-// @license GPL v3
 
 import citizenkeith-ui-lib.jsfx-inc
 
