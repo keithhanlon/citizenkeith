@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="9a264fd6ad21f8f9e0c375d7d1656aab7c02b5a0" name="citizenkeith">
+<index version="1" commit="5534039cc2dbc6bf536a8e402faaab702a45baf9" name="citizenkeith">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -84,7 +84,7 @@
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Good quality tape-style delay with optimized memory layout and ping pong. Based on work by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault. Memory layout optimized by Claude AI. Ping pong functionality added (Stillwell approach). Released under GPLv3 license.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Good quality tape-style delay with optimized memory layout and ping pong. Based on work by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault. Ping pong functionality inspired by Stillwell. Memory layout optimized by Claude AI. Released under GPLv3 license.\par}
 }
 ]]></description>
       </metadata>
@@ -96,6 +96,22 @@
       </version>
       <version name="1.8" author="citizenkeith - Claude AI" time="2025-09-02T21:40:48Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/b1f641bb7d884fc3b937f83bd6f12c3f5644eccd/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.0" author="citizenkeith" time="2026-02-24T18:20:50Z">
+        <changelog><![CDATA[# v2.0
++ Complete GUI overhaul using citizenkeith-ui-lib
++ Sync on/off toggle — preserves last sync value when toggled off
++ Removed Off option from sync selector; dedicated SYNC button added
++ Red readout for active sync value
++ Fixed ui_setup memory overlap causing periodic clicks and GUI flashing
++ Cleaned up dead code from troubleshooting (delaylen, init flags, @block tempo tracking)
+# v1.0
++ Initial release with cubic interpolation delay buffer
++ Catmull-Rom interpolation for smooth delay time changes
++ Ping pong stereo with crossfade
++ Delay loop lowpass filter and saturation
++ Tempo sync with 28 note values]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/5534039cc2dbc6bf536a8e402faaab702a45baf9/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
