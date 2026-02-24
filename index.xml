@@ -16,8 +16,8 @@
         <source file="fidelio-ui-lib.jsfx-inc">https://github.com/keithhanlon/citizenkeith/raw/1561db3c2cd47ec4e2c29d055791c0ee95268ea1/channel-strip/fidelio-ui-lib.jsfx-inc</source>
       </version>
       <version name="1.2" author="citizenkeith and Claude AI" time="2026-02-23T21:18:55Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9a264fd6ad21f8f9e0c375d7d1656aab7c02b5a0/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
-        <source file="../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc">https://github.com/keithhanlon/citizenkeith/raw/9a264fd6ad21f8f9e0c375d7d1656aab7c02b5a0/citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/38af05657ba4c226b3c1bf68b0fc487e30228e3e/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
+        <source file="../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc">https://github.com/keithhanlon/citizenkeith/raw/38af05657ba4c226b3c1bf68b0fc487e30228e3e/citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc</source>
       </version>
     </reapack>
   </category>
@@ -246,7 +246,7 @@
 + Conditional dimming of Noise and Head Bump knobs when presets active
 + Input/Output LED meters
 + 5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape]]></changelog>
-        <source>https://github.com/keithhanlon/citizenkeith/raw/f5fa015b6ea7934dbd1ac665ea2b9556eeba4aad/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/755579a5270bf6796be6ca5112669bb8a7595f9e/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
