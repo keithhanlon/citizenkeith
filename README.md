@@ -214,11 +214,21 @@ This creates a vintage tape delay experience with the characteristic imperfectio
   - 6: 16 bars (64 beats)
 
 ## Tycho Delay TMA-1
-![Tycho Delay TMA-1 Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TykoDelay.png?raw=true)
+![Tycho Delay TMA-1 Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TychoDelayv2.png?raw=true)
 
 Tycho Delay is a tape delay emulation that goes beyond basic delay functionality to provide vintage tape characteristics with modern optimization and flexibility.
+Version 2 includes a complete GUI overhaul, DSP fixes, a dedicated tempo sync on/off toggle, ping pong stereo, and an optimized memory layout that eliminates periodic clicks when the plugin window is open.
 
 ### Controls:
+
+**Input** (-90 to +15 dB)
+
+1. Adjusts the level of signal going into the delay buffer
+2. Higher values can drive the tape saturation harder
+
+**Output** (-30 to +30 dB)
+
+1. Master output level control for the entire effect
 
 **Delay** (1-80,000 ms)
 
@@ -226,56 +236,35 @@ Tycho Delay is a tape delay emulation that goes beyond basic delay functionality
 2. When tempo sync is off, this directly controls the delay length
 3. When tempo sync is on, this value is automatically calculated based on the sync division
 
-**Delay (sync)** (Off, 1/32 to 16 bars)
-
-1. Tempo synchronization with 28 different musical divisions:
-* 0: Off (manual delay time)
-* 1-28: Various note values including Standard notes (1/32, 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8, 16 (bars)), Triplets (T) (1/16T, 1/8T, 1/4T, etc. (2/3 of normal length)) and Dotted (D) (1/32D, 1/16D, 1/8D, etc. (1.5x normal length))
-
-**Mix** (0-1)
-
-1. Blends between dry signal (0) and wet delayed signal (1)
-2.v0.5 gives equal parts dry and wet
-
-**Input Gain** (-90 to +15 dB)
-
-1. Adjusts the level of signal going into the delay buffer
-2. Higher values can drive the tape saturation harder
-
 **Feedback** (-90 to +15 dB)
 
 1. Controls how much delayed signal is fed back into the delay line
 2. Higher values create longer, more sustained echoes
 3. Negative dB values prevent runaway feedback
 
-**Volume** (-30 to +30 dB)
+**Ping Pong** (0-100%)
 
-1. Master output level control for the entire effect
+1. Controls the stereo spread of the ping pong effect
+2. At 0% the delay is mono; higher values create wider stereo bouncing echoes
+3. Uses a crossfade to prevent clicks when the signal switches sides
 
-**Dry Out** (-90 to +15 dB)
-
-1. Independent level control for the dry (unprocessed) signal
-
-**Wet Out** (-90 to +15 dB)
-
-1. Independent level control for the wet (delayed) signal
-
-**Delay Loop Lowpass** (1,000-15,000 Hz)
-
-1. High-frequency filter applied within the delay feedback loop
-2. Simulates tape's natural high-frequency roll-off over repeated passes
-3. Lower values create warmer, more vintage tape sounds
-
-**Delay Loop Saturation** (1-100%)
+**Saturation** (1-100%)
 
 1. Tape-style saturation applied within the delay feedback loop
 2. Creates harmonic distortion that builds up with each repeat
 3. Simulates tape compression and saturation characteristics
 
-**Output Saturation** (1-100%)
+**Lowpass** (1,000-15,000 Hz)
 
-1. Saturation applied to the final mixed output
-2. Adds overall harmonic coloration to the entire effect
+1. High-frequency filter applied within the delay feedback loop
+2. Simulates tape's natural high-frequency roll-off over repeated passes
+3. Lower values create warmer, more vintage tape sounds
+
+**Delay Sync** (On/Off)
+
+1. Enables or disables tempo synchronization
+2. When toggled off, the last sync division is remembered and restored when re-enabled
+3. When toggled on, the delay time immediately updates to match the current sync division
 
 # Reverb
 

@@ -1,173 +1,144 @@
 desc: Tycho Delay TMA-1
-version: 1.8
+version: 2.0
 author: citizenkeith
-about: Good quality tape-style delay with optimized memory layout and ping pong.
+about:
+  Good quality tape-style delay with optimized memory layout and ping pong.
   Based on work by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault.
-  Memory layout optimized by Claude AI. Ping pong functionality added (Stillwell approach).
+  Ping pong functionality inspired by Stillwell. Memory layout optimized by Claude AI.
   Released under GPLv3 license.
+changelog:
+  # v2.0
+  + Complete GUI overhaul using citizenkeith-ui-lib
+  + Sync on/off toggle — preserves last sync value when toggled off
+  + Removed Off option from sync selector; dedicated SYNC button added
+  + Red readout for active sync value
+  + Fixed ui_setup memory overlap causing periodic clicks and GUI flashing
+  + Cleaned up dead code from troubleshooting (delaylen, init flags, @block tempo tracking)
+  # v1.0
+  + Initial release with cubic interpolation delay buffer
+  + Catmull-Rom interpolation for smooth delay time changes
+  + Ping pong stereo with crossfade
+  + Delay loop lowpass filter and saturation
+  + Tempo sync with 28 note values
+// @provides
+//   [nomain] ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc
+// @license GPL v3
+
+import citizenkeith-ui-lib.jsfx-inc
 
 slider10:400<1,80000,1>-Delay (ms)
-slider11:0<0,28,1{Off,1/32,1/16T,1/32D,1/16,1/8T,1/16D,1/8,1/4T,1/8D,1/4,1/2T,1/4D,1/2,1T,1/2D,1,2T,1D,2,4T,2D,4,8T,4D,8,16T,8D,16}>-Delay (sync)
+slider11:1<1,28,1{1/32,1/16T,1/32D,1/16,1/8T,1/16D,1/8,1/4T,1/8D,1/4,1/2T,1/4D,1/2,1T,1/2D,1,2T,1D,2,4T,2D,4,8T,4D,8,16T,8D,16}>-Delay (sync)
 slider12:0.5<0,1,0.01>-Mix
+slider38:0<0,1,1>-Sync On
 slider20:0<-90,15,0.1>-Input Gain (dB)
 slider21:-4<-90,15,0.1>-Feedback (dB)
 slider30:10000<1000,15000,1>-Delay Loop Lowpass (Hz)
 slider35:1<1,100,1>-Delay Loop Saturation (%)
-slider36:1<1,100,1>-Output Saturation (%)
 slider37:0<0,100,1>-Ping Pong Width (%)
 slider50:0<-30,30,0.1>-Volume (dB)
-slider51:0<-90,15,0.1>-Dry Out (dB)
-slider52:0<-90,15,0.1>-Wet Out (dB)
 
-options:gfx_hz=60 no_meter gfx_idle
+options:gfx_hz=60
 
 @init
 
-// === SIMPLIFIED MEMORY LAYOUT OPTIMIZATION ===
-// Keep original functionality while improving memory layout
+// Memory layout
+max_delay_samples = 65536;
+buffer_size_stereo = max_delay_samples * 2;
+buffer_mask_stereo = buffer_size_stereo - 1;
 
-// Optimized buffer management with cache-friendly alignment
-max_delay_samples = 65536; // Power-of-2 for efficient modulo (2^16)
-buffer_size_stereo = max_delay_samples * 2; // Total memory size for stereo
-buffer_mask_stereo = buffer_size_stereo - 1; // Bitmask for stereo buffer wraparound
-
-// Simple alignment for better cache utilization (align to 64-byte boundaries)
 delay_buffer_base = 1000;
-// Simple alignment calculation without complex bitwise operations
 delay_buffer = delay_buffer_base + (64 - (delay_buffer_base % 64));
 
 write_pos = 0;
 current_delay_samples = 0;
 target_delay_samples = 0;
 
-// Ping pong state variables (PROPER IMPLEMENTATION)
-ping_pong_state = 0;  // 0 = left emphasis, 1 = right emphasis
-delay_position = 0;   // Current position in delay (for ping pong switching)
+PINGPONG_SWITCH_ZONE = 400;
+ping_pong_state = 0;
+delay_position = 0;
 
-// Cubic interpolation coefficient lookup table for maximum performance
-coeff_table_size = 256; // 256 entries for excellent quality vs memory balance
-coeff_table_mask = coeff_table_size - 1; // Bitmask for table wraparound
+coeff_table_size = 256;
+coeff_table_mask = coeff_table_size - 1;
 
-// Place coefficient table after delay buffer with simple alignment
 coeff_table_base = delay_buffer + buffer_size_stereo + 100;
 coeff_table = coeff_table_base + (64 - (coeff_table_base % 64));
 
-// Pre-calculate Catmull-Rom coefficients for all fractional positions
 i = 0;
 loop(coeff_table_size,
-  t = i / coeff_table_size; // Fractional position 0.0 to 1.0
+  t = i / coeff_table_size;
   t2 = t * t;
   t3 = t2 * t;
-  
-  // Store 4 Catmull-Rom coefficients per table entry
-  coeff_table[i * 4 + 0] = 0.5 * (-t + 2*t2 - t3);     // p0 coefficient
-  coeff_table[i * 4 + 1] = 0.5 * (2 - 5*t2 + 3*t3);    // p1 coefficient
-  coeff_table[i * 4 + 2] = 0.5 * (t + 4*t2 - 3*t3);    // p2 coefficient
-  coeff_table[i * 4 + 3] = 0.5 * (-t2 + t3);           // p3 coefficient
+
+  coeff_table[i * 4 + 0] = 0.5 * (-t + 2*t2 - t3);
+  coeff_table[i * 4 + 1] = 0.5 * (2 - 5*t2 + 3*t3);
+  coeff_table[i * 4 + 2] = 0.5 * (t + 4*t2 - 3*t3);
+  coeff_table[i * 4 + 3] = 0.5 * (-t2 + t3);
   i += 1;
 );
 
-// Parameter smoothing system - different speeds for different parameter types
-delay_smooth_coeff = exp(-2 * $pi * 20 / srate);      // 20Hz - fast delay time changes
-gain_smooth_coeff = exp(-2 * $pi * 30 / srate);       // 30Hz - medium gain changes
-filter_smooth_coeff = exp(-2 * $pi * 25 / srate);     // 25Hz - medium filter changes
-saturation_smooth_coeff = exp(-2 * $pi * 15 / srate); // 15Hz - slower saturation changes
+delay_smooth_coeff = exp(-2 * $pi * 20 / srate);
+gain_smooth_coeff = exp(-2 * $pi * 30 / srate);
+filter_smooth_coeff = exp(-2 * $pi * 25 / srate);
+saturation_smooth_coeff = exp(-2 * $pi * 15 / srate);
 
-// Current smoothed parameter values - initialize to defaults matching slider defaults
-smooth_input_gain = 1;    // 0 dB
-smooth_feedback = 0.631;  // -4 dB
-smooth_volume = 1;        // 0 dB
-smooth_dry = 1;           // 0 dB
-smooth_wet = 1;           // 0 dB
-smooth_mix = 0.5;         // 50% mix
+smooth_input_gain = 1;
+smooth_feedback = 0.631;
+smooth_volume = 1;
+smooth_mix = 0.5;
 smooth_filter_freq = 10000;
 smooth_delay_sat = 1;
-smooth_output_sat = 1;
 smooth_pingpong_width = 0;
 
-// Target parameter values (set by sliders) - match smooth defaults
 target_input_gain = 1;
 target_feedback = 0.631;
 target_volume = 1;
-target_dry = 1;
-target_wet = 1;
 target_mix = 0.5;
 target_filter_freq = 10000;
 target_delay_sat = 1;
-target_output_sat = 1;
 target_pingpong_width = 0;
 
-// Initialize previous slider values for caching
-oslider10 = delaylen = 0;
+oslider10 = 0;
 oslider11 = slider11;
-oslider12 = -999;
-oslider20 = oslider21 = oslider30 = oslider35 = oslider36 = oslider37 = oslider50 = oslider51 = oslider52 = -999;
+sync_on = 0;
 
-// Filter initialization flag
-aa_freq_set = 0;
-initialized_smooth_values = 0;
-
-// Last values for efficient filter/saturation updates
 last_filter_freq = 10000;
 last_delay_sat = 1;
-last_output_sat = 1;
-last_pingpong_width = 0;
 
-// GUI interaction variables
-text_input_active = 0;
-text_input_slider = 0;
-text_input_buffer = "";
-last_click_time = 0;
-last_click_x = 0;
-last_click_y = 0;
-time_counter = 0;
-slider_to_edit = 0;
-last_mouse_cap = 0;
+// Helper functions
+function draw_label_at(cx, cy) (
+  gfx_setfont(1, "Arial", 11);
+  gfx_measurestr(#lbl, lbl_w, lbl_h);
+  gfx_x = cx - lbl_w/2;
+  gfx_y = cy;
+  gfx_drawstr(#lbl);
+);
 
-// GUI calculation caching system for maximum performance
-gui_cache_dirty = 1; // Force initial calculation
-last_gui_scale = 0;
+function draw_value_at(cx, cy) (
+  gfx_setfont(1, "Arial", 14);
+  gfx_measurestr(#val, val_w, val_h);
+  gfx_x = cx - val_w/2;
+  gfx_y = cy;
+  gfx_drawstr(#val);
+);
 
-// Cached knob angles (expensive trigonometry calculations)
-cached_delay_angle = 0;
-cached_feedback_angle = 0;
-cached_mix_angle = 0;
-cached_input_angle = 0;
-cached_volume_angle = 0;
-cached_filter_angle = 0;
-cached_delay_sat_angle = 0;
-cached_output_sat_angle = 0;
+function draw_knob_inactive(cx, cy, radius, value, vmin, vmax) local(ratio, angle, x1, y1, x2, y2) (
+  gfx_r = 0.3; gfx_g = 0.3; gfx_b = 0.32; gfx_a = 1;
+  gfx_circle(cx, cy, radius, 1, 1);
 
-// Cached parameter values for change detection
-last_gui_slider10 = -1;
-last_gui_slider21 = -999;
-last_gui_slider12 = -1;
-last_gui_slider20 = -999;
-last_gui_slider50 = -999;
-last_gui_slider30 = -1;
-last_gui_slider35 = -1;
-last_gui_slider36 = -1;
-last_gui_slider11 = -1;
-last_gui_slider37 = -1;
+  ratio = (value - vmin) / (vmax - vmin);
+  angle = -2.3 + 4.6 * ratio;
+  x1 = cx + sin(angle) * radius * 0.3;
+  y1 = cy - cos(angle) * radius * 0.3;
+  x2 = cx + sin(angle) * radius * 0.8;
+  y2 = cy - cos(angle) * radius * 0.8;
 
-// Cached formatted text strings (expensive sprintf operations)
-cached_delay_text = "";
-cached_feedback_text = "";
-cached_input_text = "";
-cached_volume_text = "";
-cached_filter_text = "";
-cached_mix_text = "";
-cached_delay_sat_text = "";
-cached_output_sat_text = "";
-cached_sync_div_text = "";
-cached_pingpong_text = "";
+  gfx_r = 0.5; gfx_g = 0.5; gfx_b = 0.52; gfx_a = 1;
+  gfx_line(x1, y1, x2, y2, 1);
+);
 
-// Optimized buffer operations with cubic interpolation support
 function clear_buffer() local(clear_samples, i) (
-  // Only clear the actual delay length, not entire buffer
   current_delay_samples > 0 ? (
     clear_samples = min(current_delay_samples * 2, buffer_size_stereo);
-    // Clear in cache-friendly blocks
     i = 0;
     loop(clear_samples / 8,
       delay_buffer[i] = 0; delay_buffer[i+1] = 0;
@@ -176,140 +147,96 @@ function clear_buffer() local(clear_samples, i) (
       delay_buffer[i+6] = 0; delay_buffer[i+7] = 0;
       i += 8;
     );
-    // Clear remaining samples
     loop(clear_samples & 7,
       delay_buffer[i] = 0;
       i += 1;
     );
   );
   write_pos = 0;
-  delay_position = 0; // Reset ping pong position
+  delay_position = 0;
 );
 
-// Ultra-fast Catmull-Rom interpolation using pre-calculated coefficient table
 function catmull_rom_interp_fast(p0, p1, p2, p3, t) local(table_index, c0, c1, c2, c3) (
-  // Convert fractional position to table index (0-255)
   table_index = (t * coeff_table_size) & coeff_table_mask;
-  table_index *= 4; // Each entry has 4 coefficients
-  
-  // Fast table lookup - no math calculations!
-  c0 = coeff_table[table_index];     // p0 coefficient
-  c1 = coeff_table[table_index + 1]; // p1 coefficient
-  c2 = coeff_table[table_index + 2]; // p2 coefficient
-  c3 = coeff_table[table_index + 3]; // p3 coefficient
-  
-  // Apply coefficients to sample points
+  table_index *= 4;
+
+  c0 = coeff_table[table_index];
+  c1 = coeff_table[table_index + 1];
+  c2 = coeff_table[table_index + 2];
+  c3 = coeff_table[table_index + 3];
+
   p0 * c0 + p1 * c1 + p2 * c2 + p3 * c3;
 );
 
-// High-performance cubic delay read with Catmull-Rom interpolation
 function cubic_delay_read(delay_samples) local(int_delay, frac_delay, base_pos) (
-  // Split into integer and fractional parts
   int_delay = floor(delay_samples);
   frac_delay = delay_samples - int_delay;
-  
-  // Calculate base read position (the sample we're interpolating around)
-  // Go back in time from write position by delay amount
+
   base_pos = (write_pos - (int_delay * 2)) & buffer_mask_stereo;
-  
-  // Get four samples for Catmull-Rom interpolation
-  // For Catmull-Rom: interpolate between p1 and p2, using p0 and p3 for curve shape
-  
-  // p0 (one sample older than base)
+
   pos0 = (base_pos - 2) & buffer_mask_stereo;
   p0l = delay_buffer[pos0];
   p0r = delay_buffer[pos0 + 1];
-  
-  // p1 (base sample - what we're interpolating from)
+
   p1l = delay_buffer[base_pos];
   p1r = delay_buffer[base_pos + 1];
-  
-  // p2 (one sample newer than base)
+
   pos2 = (base_pos + 2) & buffer_mask_stereo;
   p2l = delay_buffer[pos2];
   p2r = delay_buffer[pos2 + 1];
-  
-  // p3 (two samples newer than base)
+
   pos3 = (base_pos + 4) & buffer_mask_stereo;
   p3l = delay_buffer[pos3];
   p3r = delay_buffer[pos3 + 1];
-  
-  // Perform ultra-fast Catmull-Rom interpolation using coefficient table
+
   this.left = catmull_rom_interp_fast(p0l, p1l, p2l, p3l, frac_delay);
   this.right = catmull_rom_interp_fast(p0r, p1r, p2r, p3r, frac_delay);
 );
 
-// Efficient circular buffer write with proper stereo indexing
 function buffer_write(left, right) (
   delay_buffer[write_pos] = left;
   delay_buffer[write_pos + 1] = right;
   write_pos = (write_pos + 2) & buffer_mask_stereo;
 );
 
-//--- Optimized Saturation functions with SIMD-style stereo processing
-
-// Fast tanh approximation constants
 tanh_a = 27/32;
 tanh_b = 1;
 
-// Fast tanh approximation - much more efficient than sin6 polynomial
 function fast_tanh(x) (
   x2 = x * x;
   x * (tanh_a + x2) / (tanh_b + tanh_a * x2);
 );
 
-// Simplified saturation setup
 function setdrive(drive_percent) (
-  // Convert percentage to drive amount (1-10 range works well)
   this.drive = 1 + (drive_percent * 0.09);
-  this.makeup = 1 / this.drive; // Compensate for gain loss
+  this.makeup = 1 / this.drive;
 );
 
-// SIMD-style stereo saturation - processes both channels simultaneously
 function saturate_stereo(left, right) instance(drive, makeup) (
-  // Soft clip to prevent excessive values for both channels
   left = max(-2, min(2, left));
   right = max(-2, min(2, right));
-  
-  // Apply drive and fast tanh saturation to both channels in parallel
+
   this.left = fast_tanh(left * drive) * makeup;
   this.right = fast_tanh(right * drive) * makeup;
 );
 
-// Legacy single-channel saturation for compatibility
-function saturate(x) instance(drive, makeup) (
-  // Soft clip to prevent excessive values
-  x = max(-2, min(2, x));
-  // Apply drive and fast tanh saturation
-  fast_tanh(x * drive) * makeup;
-);
-
-//--- Optimized Filter functions (Biquad Lowpass) with denormal protection
-
-// Denormal protection constant - use simple decimal format
 DENORMAL_OFFSET = 0.000000000001;
 
-// Efficient biquad lowpass filter setup
 function bq_setlp(freq) (
-  // Pre-calculate commonly used values
   omega = 2 * $pi * freq / srate;
   cos_omega = cos(omega);
   sin_omega = sin(omega);
-  
-  // Q factor for smooth lowpass response
-  // Use slightly lower Q for more gentle filtering at low frequencies
+
   q = 0.5;
   alpha = sin_omega / (2 * q);
-  
-  // Calculate biquad coefficients
+
   b0 = (1 - cos_omega) * 0.5;
   b1 = 1 - cos_omega;
   b2 = b0;
   a0 = 1 + alpha;
   a1 = -2 * cos_omega;
   a2 = 1 - alpha;
-  
-  // Normalize coefficients with denormal protection
+
   this.b0 = (b0 / a0) + DENORMAL_OFFSET;
   this.b1 = (b1 / a0) + DENORMAL_OFFSET;
   this.b2 = (b2 / a0) + DENORMAL_OFFSET;
@@ -317,236 +244,173 @@ function bq_setlp(freq) (
   this.a2 = (a2 / a0) + DENORMAL_OFFSET;
 );
 
-// Efficient biquad processing with denormal protection
-function bq_lp(input) instance(b0, b1, b2, a1, a2, x1, x2, y1, y2) (
-  // Direct Form II implementation with denormal protection
-  output = b0 * input + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-  
-  // Denormal protection - flush very small values to zero
-  abs(output) < 0.000000000001 ? output = 0;
-  
-  // Update delay line
-  x2 = x1; x1 = input;
-  y2 = y1; y1 = output;
-  
-  output;
-);
-
-// Optimized stereo biquad processing with denormal protection
 function bq_lp_stereo(left, right) instance(
   b0, b1, b2, a1, a2,
-  xl1, xl2, yl1, yl2,  // Left channel delays
-  xr1, xr2, yr1, yr2   // Right channel delays
+  xl1, xl2, yl1, yl2,
+  xr1, xr2, yr1, yr2
 ) (
-  // Process both channels with same coefficients
   this.left = b0 * left + b1 * xl1 + b2 * xl2 - a1 * yl1 - a2 * yl2;
   this.right = b0 * right + b1 * xr1 + b2 * xr2 - a1 * yr1 - a2 * yr2;
-  
-  // Denormal protection - flush very small values to zero
-  abs(this.left) < 0.000000000001 ? this.left = 0;
-  abs(this.right) < 0.000000000001 ? this.right = 0;
-  
-  // Update delay lines for both channels
+
+  abs(this.left) < DENORMAL_OFFSET ? this.left = 0;
+  abs(this.right) < DENORMAL_OFFSET ? this.right = 0;
+
   xl2 = xl1; xl1 = left;
   yl2 = yl1; yl1 = this.left;
   xr2 = xr1; xr1 = right;
   yr2 = yr1; yr1 = this.right;
 );
 
-// Advanced tempo sync calculation with comprehensive musical divisions
-// T = Triplet (2/3 of normal length), D = Dotted (1.5x normal length)
 function calculate_sync_time(sync_index) local(beats, ms_per_beat) (
-  // Calculate milliseconds per beat (quarter note)
-  ms_per_beat = 60000 / tempo; // 60000 ms per minute / BPM
-  
-  // Calculate beats based on sync division
-  sync_index == 1 ? beats = 1/8 :        // 1/32 note
-  sync_index == 2 ? beats = 1/6 :        // 1/16T (triplet)
-  sync_index == 3 ? beats = 3/16 :       // 1/32D (dotted)
-  sync_index == 4 ? beats = 1/4 :        // 1/16 note
-  sync_index == 5 ? beats = 1/3 :        // 1/8T (triplet)
-  sync_index == 6 ? beats = 3/8 :        // 1/16D (dotted)
-  sync_index == 7 ? beats = 1/2 :        // 1/8 note
-  sync_index == 8 ? beats = 2/3 :        // 1/4T (triplet)
-  sync_index == 9 ? beats = 3/4 :        // 1/8D (dotted)
-  sync_index == 10 ? beats = 1 :         // 1/4 note
-  sync_index == 11 ? beats = 4/3 :       // 1/2T (triplet)
-  sync_index == 12 ? beats = 1.5 :       // 1/4D (dotted)
-  sync_index == 13 ? beats = 2 :         // 1/2 note
-  sync_index == 14 ? beats = 8/3 :       // 1T (whole note triplet)
-  sync_index == 15 ? beats = 3 :         // 1/2D (dotted)
-  sync_index == 16 ? beats = 4 :         // 1 whole note
-  sync_index == 17 ? beats = 16/3 :      // 2T (2 bar triplet)
-  sync_index == 18 ? beats = 6 :         // 1D (whole note dotted)
-  sync_index == 19 ? beats = 8 :         // 2 whole notes
-  sync_index == 20 ? beats = 32/3 :      // 4T
-  sync_index == 21 ? beats = 12 :        // 2D
-  sync_index == 22 ? beats = 16 :        // 4 whole notes
-  sync_index == 23 ? beats = 64/3 :      // 8T
-  sync_index == 24 ? beats = 24 :        // 4D
-  sync_index == 25 ? beats = 32 :        // 8 whole notes
-  sync_index == 26 ? beats = 128/3 :     // 16T
-  sync_index == 27 ? beats = 48 :        // 8D
-  sync_index == 28 ? beats = 64 :        // 16 whole notes
-  beats = 1; // Default fallback
-  
-  // Convert beats to milliseconds
+  ms_per_beat = 60000 / tempo;
+
+  sync_index == 1 ? beats = 1/8 :
+  sync_index == 2 ? beats = 1/6 :
+  sync_index == 3 ? beats = 3/16 :
+  sync_index == 4 ? beats = 1/4 :
+  sync_index == 5 ? beats = 1/3 :
+  sync_index == 6 ? beats = 3/8 :
+  sync_index == 7 ? beats = 1/2 :
+  sync_index == 8 ? beats = 2/3 :
+  sync_index == 9 ? beats = 3/4 :
+  sync_index == 10 ? beats = 1 :
+  sync_index == 11 ? beats = 4/3 :
+  sync_index == 12 ? beats = 1.5 :
+  sync_index == 13 ? beats = 2 :
+  sync_index == 14 ? beats = 8/3 :
+  sync_index == 15 ? beats = 3 :
+  sync_index == 16 ? beats = 4 :
+  sync_index == 17 ? beats = 16/3 :
+  sync_index == 18 ? beats = 6 :
+  sync_index == 19 ? beats = 8 :
+  sync_index == 20 ? beats = 32/3 :
+  sync_index == 21 ? beats = 12 :
+  sync_index == 22 ? beats = 16 :
+  sync_index == 23 ? beats = 64/3 :
+  sync_index == 24 ? beats = 24 :
+  sync_index == 25 ? beats = 32 :
+  sync_index == 26 ? beats = 128/3 :
+  sync_index == 27 ? beats = 48 :
+  sync_index == 28 ? beats = 64 :
+  beats = 1;
+
   beats * ms_per_beat;
 );
 
-// SIMPLIFIED MEMORY LAYOUT OPTIMIZATION NOTES:
-// - Delay buffer and coefficient table aligned to cache boundaries
-// - Cubic interpolation uses pre-calculated coefficient lookup table (60-70% faster)
-// - Buffer clearing optimized for cache-line sized chunks
-// - Parameter groups kept together for better cache locality
-// - Original functionality preserved - all GUI and parameter handling unchanged
-// - Expected 15-25% improvement in cache utilization with full compatibility
+function get_sync_name(sync_index) (
+  sync_index == 1 ? "1/32" :
+  sync_index == 2 ? "1/16T" :
+  sync_index == 3 ? "1/32D" :
+  sync_index == 4 ? "1/16" :
+  sync_index == 5 ? "1/8T" :
+  sync_index == 6 ? "1/16D" :
+  sync_index == 7 ? "1/8" :
+  sync_index == 8 ? "1/4T" :
+  sync_index == 9 ? "1/8D" :
+  sync_index == 10 ? "1/4" :
+  sync_index == 11 ? "1/2T" :
+  sync_index == 12 ? "1/4D" :
+  sync_index == 13 ? "1/2" :
+  sync_index == 14 ? "1T" :
+  sync_index == 15 ? "1/2D" :
+  sync_index == 16 ? "1" :
+  sync_index == 17 ? "2T" :
+  sync_index == 18 ? "1D" :
+  sync_index == 19 ? "2" :
+  sync_index == 20 ? "4T" :
+  sync_index == 21 ? "2D" :
+  sync_index == 22 ? "4" :
+  sync_index == 23 ? "8T" :
+  sync_index == 24 ? "4D" :
+  sync_index == 25 ? "8" :
+  sync_index == 26 ? "16T" :
+  sync_index == 27 ? "8D" :
+  sync_index == 28 ? "16" :
+  "1/32";
+);
+
+// Initialize filters and buffers
+aa_freq = min(srate * 0.4, 20000);
+input_aa_filter.bq_setlp(aa_freq);
+output_aa_filter.bq_setlp(aa_freq);
+delay_loop_filter.bq_setlp(smooth_filter_freq);
+delaysat.setdrive(smooth_delay_sat);
+
+// Initialize filter state variables
+input_aa_filter.xl1 = input_aa_filter.xl2 = input_aa_filter.yl1 = input_aa_filter.yl2 = 0;
+input_aa_filter.xr1 = input_aa_filter.xr2 = input_aa_filter.yr1 = input_aa_filter.yr2 = 0;
+
+output_aa_filter.xl1 = output_aa_filter.xl2 = output_aa_filter.yl1 = output_aa_filter.yl2 = 0;
+output_aa_filter.xr1 = output_aa_filter.xr2 = output_aa_filter.yr1 = output_aa_filter.yr2 = 0;
+
+delay_loop_filter.xl1 = delay_loop_filter.xl2 = delay_loop_filter.yl1 = delay_loop_filter.yl2 = 0;
+delay_loop_filter.xr1 = delay_loop_filter.xr2 = delay_loop_filter.yr1 = delay_loop_filter.yr2 = 0;
+
+// Clear delay buffer
+i = 0;
+loop(buffer_size_stereo,
+  delay_buffer[i] = 0;
+  i += 1;
+);
+
+// Initialize delay time
+target_delay_samples = min(floor(srate * 0.001 * slider10), max_delay_samples - 4);
+current_delay_samples = target_delay_samples;
+
+// UI setup — placed after all memory allocations to avoid overlap
+ui_setup(200000);
 
 @slider
 
-// Update delay length when slider changes with enhanced tempo sync
-(oslider10 != slider10 || oslider11 != slider11) ? (
-  // Handle advanced tempo sync
+(abs(oslider10 - slider10) > 0.1 || oslider11 != slider11 || sync_on != slider38) ? (
+  sync_on = slider38;
+
   (oslider11 != slider11) ? (
-    slider11 > 0 ? (
-      // Use new comprehensive tempo sync calculation
-      slider10 = calculate_sync_time(slider11);
-    );
     oslider11 = slider11;
   );
-  
-  // Calculate new target delay length
-  new_delay_ms = slider10;
-  target_delay_samples = min(floor(srate * 0.001 * new_delay_ms), max_delay_samples - 4); // -4 for cubic interpolation
-  
-  // Initialize current delay if first time
-  !current_delay_samples ? current_delay_samples = target_delay_samples;
-  
-  oslider10 = slider10;
-  
-  // Clear buffer only if delay length significantly changed (more than 100ms)
-  abs(target_delay_samples - current_delay_samples) > (srate * 0.1) ? clear_buffer();
-  
-  // GUI cache needs update
-  gui_cache_dirty = 1;
-);
 
-// Initialize target values on first run and update when sliders change
-// Simplified - always update to ensure real-time response
-last_target_input_gain = target_input_gain;
-last_target_feedback = target_feedback;
-last_target_volume = target_volume;
-last_target_mix = target_mix;
-last_target_filter_freq = target_filter_freq;
-last_target_delay_sat = target_delay_sat;
-last_target_output_sat = target_output_sat;
-last_target_pingpong_width = target_pingpong_width;
+  sync_on ? (
+    new_sync_time = calculate_sync_time(slider11);
+    abs(new_sync_time - slider10) > 0.5 ? slider10 = new_sync_time;
+  );
+
+  target_delay_samples = min(floor(srate * 0.001 * slider10), max_delay_samples - 4);
+  oslider10 = slider10;
+
+  abs(target_delay_samples - current_delay_samples) > (srate * 0.5) ? clear_buffer();
+);
 
 target_input_gain = 10^(slider20/20);
 target_feedback = 10^(slider21/20);
 target_volume = 10^(slider50/20);
-target_dry = 10^(slider51/20);
-target_wet = 10^(slider52/20);
 target_mix = slider12;
-
-// Filter frequency and saturation targets
 target_filter_freq = slider30;
 target_delay_sat = slider35;
-target_output_sat = slider36;
-target_pingpong_width = slider37 / 100.0; // Convert percentage to 0.0-1.0
-
-// Check if any parameters changed significantly (for automation/presets)
-abs(target_input_gain - last_target_input_gain) > 0.001 ? gui_cache_dirty = 1;
-abs(target_feedback - last_target_feedback) > 0.001 ? gui_cache_dirty = 1;
-abs(target_volume - last_target_volume) > 0.001 ? gui_cache_dirty = 1;
-abs(target_mix - last_target_mix) > 0.001 ? gui_cache_dirty = 1;
-abs(target_filter_freq - last_target_filter_freq) > 10.0 ? gui_cache_dirty = 1;
-abs(target_delay_sat - last_target_delay_sat) > 0.1 ? gui_cache_dirty = 1;
-abs(target_output_sat - last_target_output_sat) > 0.1 ? gui_cache_dirty = 1;
-abs(target_pingpong_width - last_target_pingpong_width) > 0.01 ? gui_cache_dirty = 1;
-
-// Initialize smoothed values to targets on first run
-!initialized_smooth_values ? (
-  smooth_input_gain = target_input_gain;
-  smooth_feedback = target_feedback;
-  smooth_volume = target_volume;
-  smooth_dry = target_dry;
-  smooth_wet = target_wet;
-  smooth_mix = target_mix;
-  smooth_filter_freq = target_filter_freq;
-  smooth_delay_sat = target_delay_sat;
-  smooth_output_sat = target_output_sat;
-  smooth_pingpong_width = target_pingpong_width;
-  
-  // CRITICAL: Initialize filters and saturation on first run
-  delay_loop_filter.bq_setlp(smooth_filter_freq);
-  delaysat.setdrive(smooth_delay_sat);
-  outputsat.setdrive(smooth_output_sat);
-  
-  // Set last values to current to prevent immediate re-initialization
-  last_filter_freq = smooth_filter_freq;
-  last_delay_sat = smooth_delay_sat;
-  last_output_sat = smooth_output_sat;
-  last_pingpong_width = smooth_pingpong_width;
-  
-  initialized_smooth_values = 1;
-);
-
-// Pre-calculate anti-aliasing filter frequency once
-!aa_freq_set ? (
-  aa_freq = min(srate * 0.4, 20000); // Cap at 20kHz for efficiency
-  input_aa_filter.bq_setlp(aa_freq);   // Single stereo input AA filter
-  output_aa_filter.bq_setlp(aa_freq);  // Single stereo output AA filter
-  aa_freq_set = 1;
-);
+target_pingpong_width = slider37 / 100.0;
+sync_on = slider38;
 
 @sample
 
-// Universal parameter smoothing system with conditional optimization
-// Only smooth parameters that are actually changing to save CPU
-
-// Smooth delay time changes to prevent clicks/pops
 current_delay_samples = target_delay_samples + (current_delay_samples - target_delay_samples) * delay_smooth_coeff;
 
-// Conditional parameter smoothing - only smooth parameters that need it
-// Check for significant changes using carefully chosen thresholds:
-// - Gain parameters: 0.1% threshold (~-60dB change) - below audible level
-// - Filter frequency: 1Hz threshold - below perceptible frequency changes
-// - Saturation: 0.1% threshold - below audible saturation changes
-// This prevents unnecessary CPU usage while maintaining smooth audio
 param_change_mask = 0;
 
-// Gain parameters (use 0.001 threshold = 0.1% for audible changes)
 abs(target_input_gain - smooth_input_gain) > 0.001 ? param_change_mask |= 1;
 abs(target_feedback - smooth_feedback) > 0.001 ? param_change_mask |= 2;
 abs(target_volume - smooth_volume) > 0.001 ? param_change_mask |= 4;
-abs(target_dry - smooth_dry) > 0.001 ? param_change_mask |= 8;
-abs(target_wet - smooth_wet) > 0.001 ? param_change_mask |= 16;
-abs(target_mix - smooth_mix) > 0.001 ? param_change_mask |= 32;
+abs(target_mix - smooth_mix) > 0.001 ? param_change_mask |= 8;
+abs(target_filter_freq - smooth_filter_freq) > 10.0 ? param_change_mask |= 16;
+abs(target_delay_sat - smooth_delay_sat) > 0.1 ? param_change_mask |= 32;
+abs(target_pingpong_width - smooth_pingpong_width) > 0.01 ? param_change_mask |= 64;
 
-// Filter and saturation parameters (use larger thresholds for less sensitive parameters)
-abs(target_filter_freq - smooth_filter_freq) > 10.0 ? param_change_mask |= 64;   // 10Hz threshold
-abs(target_delay_sat - smooth_delay_sat) > 0.1 ? param_change_mask |= 128;     // 0.1% threshold
-abs(target_output_sat - smooth_output_sat) > 0.1 ? param_change_mask |= 256;   // 0.1% threshold
-abs(target_pingpong_width - smooth_pingpong_width) > 0.01 ? param_change_mask |= 512; // 1% threshold
-
-// Only perform smoothing calculations for parameters that are changing
 param_change_mask & 1 ? smooth_input_gain = target_input_gain + (smooth_input_gain - target_input_gain) * gain_smooth_coeff;
 param_change_mask & 2 ? smooth_feedback = target_feedback + (smooth_feedback - target_feedback) * gain_smooth_coeff;
 param_change_mask & 4 ? smooth_volume = target_volume + (smooth_volume - target_volume) * gain_smooth_coeff;
-param_change_mask & 8 ? smooth_dry = target_dry + (smooth_dry - target_dry) * gain_smooth_coeff;
-param_change_mask & 16 ? smooth_wet = target_wet + (smooth_wet - target_wet) * gain_smooth_coeff;
-param_change_mask & 32 ? smooth_mix = target_mix + (smooth_mix - target_mix) * gain_smooth_coeff;
+param_change_mask & 8 ? smooth_mix = target_mix + (smooth_mix - target_mix) * gain_smooth_coeff;
+param_change_mask & 16 ? smooth_filter_freq = target_filter_freq + (smooth_filter_freq - target_filter_freq) * filter_smooth_coeff;
+param_change_mask & 32 ? smooth_delay_sat = target_delay_sat + (smooth_delay_sat - target_delay_sat) * saturation_smooth_coeff;
+param_change_mask & 64 ? smooth_pingpong_width = target_pingpong_width + (smooth_pingpong_width - target_pingpong_width) * gain_smooth_coeff;
 
-// Filter frequency smoothing (only when changing)
-param_change_mask & 64 ? smooth_filter_freq = target_filter_freq + (smooth_filter_freq - target_filter_freq) * filter_smooth_coeff;
-
-// Saturation drive smoothing (only when changing)
-param_change_mask & 128 ? smooth_delay_sat = target_delay_sat + (smooth_delay_sat - target_delay_sat) * saturation_smooth_coeff;
-param_change_mask & 256 ? smooth_output_sat = target_output_sat + (smooth_output_sat - target_output_sat) * saturation_smooth_coeff;
-param_change_mask & 512 ? smooth_pingpong_width = target_pingpong_width + (smooth_pingpong_width - target_pingpong_width) * gain_smooth_coeff;
-
-// Update filter and saturation only when smoothed values change significantly
 abs(smooth_filter_freq - last_filter_freq) > 10 ? (
   delay_loop_filter.bq_setlp(smooth_filter_freq);
   last_filter_freq = smooth_filter_freq;
@@ -557,638 +421,282 @@ abs(smooth_delay_sat - last_delay_sat) > 0.1 ? (
   last_delay_sat = smooth_delay_sat;
 );
 
-abs(smooth_output_sat - last_output_sat) > 0.1 ? (
-  outputsat.setdrive(smooth_output_sat);
-  last_output_sat = smooth_output_sat;
-);
-
-// Apply input anti-aliasing filtering (stereo)
 input_aa_filter.bq_lp_stereo(spl0, spl1);
 lp_spl0 = input_aa_filter.left;
 lp_spl1 = input_aa_filter.right;
 
-// PROPER PING PONG DELAY PROCESSING (based on Stillwell approach)
-current_delay_samples >= 4 ? ( // Need at least 4 samples for cubic interpolation
-  // Read from delay buffer using cubic interpolation
+current_delay_samples >= 4 ? (
   delayed_samples.cubic_delay_read(current_delay_samples);
   delayed0 = delayed_samples.left;
   delayed1 = delayed_samples.right;
 
-  // Apply delay loop saturation using SIMD-style stereo processing
   delaysat.saturate_stereo(delayed0, delayed1);
   delayed0 = delaysat.left;
   delayed1 = delaysat.right;
 
-  // Apply delay loop lowpass filtering (stereo)
   delay_loop_filter.bq_lp_stereo(delayed0, delayed1);
   delayed0 = delay_loop_filter.left;
   delayed1 = delay_loop_filter.right;
 
-  // Calculate new buffer input using smoothed parameters
   buffer_input0 = delayed0 * smooth_feedback + lp_spl0 * smooth_input_gain;
   buffer_input1 = delayed1 * smooth_feedback + lp_spl1 * smooth_input_gain;
 
-  // Write to delay buffer using optimized circular buffer
   buffer_write(buffer_input0, buffer_input1);
-  
-  // PING PONG PROCESSING (like Stillwell delay)
+
   smooth_pingpong_width > 0 ? (
-    // Ping pong is enabled - create smooth switching
-    // Calculate smooth switching factor near delay wraparound
-    switch_zone = 400; // Samples for smooth transition
-    abs(delay_position) < switch_zone ? (
-      switch_factor = ping_pong_state ? abs(delay_position) / switch_zone : (switch_zone - abs(delay_position)) / switch_zone;
+    abs(delay_position) < PINGPONG_SWITCH_ZONE ? (
+      switch_factor = ping_pong_state ?
+        abs(delay_position) / PINGPONG_SWITCH_ZONE :
+        (PINGPONG_SWITCH_ZONE - abs(delay_position)) / PINGPONG_SWITCH_ZONE;
     ) : (
-      switch_factor = ping_pong_state; // Full left or right
+      switch_factor = ping_pong_state;
     );
-    
-    // Advance delay position and handle wraparound
+
     delay_position += 1;
     delay_position >= current_delay_samples ? (
       delay_position = 0;
-      ping_pong_state = 1 - ping_pong_state; // Toggle between 0 and 1
+      ping_pong_state = 1 - ping_pong_state;
     );
-    
-    // Create mono sum of delayed signal for ping pong
+
     delayed_mono = (delayed0 + delayed1) * 0.5;
-    
-    // Calculate pan position based on ping pong width and switch factor
-    ping_pong_pan_base = (1 - smooth_pingpong_width) * 0.5; // Center position when width = 0
+
+    ping_pong_pan_base = (1 - smooth_pingpong_width) * 0.5;
     ping_pong_pan_position = ping_pong_pan_base + smooth_pingpong_width * switch_factor;
-    
-    // Apply ping pong panning to the delayed signal
-    delayed0 = delayed_mono * ping_pong_pan_position;
-    delayed1 = delayed_mono * (1 - ping_pong_pan_position);
+
+    delayed0 = delayed_mono * sqrt(1 - ping_pong_pan_position);
+    delayed1 = delayed_mono * sqrt(ping_pong_pan_position);
   ) : (
-    // No ping pong - advance delay position for consistency but don't use it
     delay_position += 1;
     delay_position >= current_delay_samples ? delay_position = 0;
   );
 
 ) : (
-  // No delay - zero delayed signal, but still write input to buffer
   delayed0 = delayed1 = 0;
   buffer_write(lp_spl0 * smooth_input_gain, lp_spl1 * smooth_input_gain);
-  // Reset delay position when delay is too short
   delay_position = 0;
   ping_pong_state = 0;
 );
 
-// Mix dry and wet signals using smoothed mix parameter
-dry_signal0 = spl0 * smooth_dry;
-dry_signal1 = spl1 * smooth_dry;
-wet_signal0 = delayed0 * smooth_wet;
-wet_signal1 = delayed1 * smooth_wet;
+output0 = (spl0 * (1 - smooth_mix) + delayed0 * smooth_mix) * smooth_volume;
+output1 = (spl1 * (1 - smooth_mix) + delayed1 * smooth_mix) * smooth_volume;
 
-// Apply smooth mix control and output saturation using SIMD-style stereo processing
-mixed_signal0 = (dry_signal0 * (1 - smooth_mix) + wet_signal0 * smooth_mix) * smooth_volume;
-mixed_signal1 = (dry_signal1 * (1 - smooth_mix) + wet_signal1 * smooth_mix) * smooth_volume;
-
-outputsat.saturate_stereo(mixed_signal0, mixed_signal1);
-output0 = outputsat.left;
-output1 = outputsat.right;
-
-// Apply output anti-aliasing filtering (stereo) and write to outputs
 output_aa_filter.bq_lp_stereo(output0, output1);
 spl0 = output_aa_filter.left;
 spl1 = output_aa_filter.right;
 
-@gfx 700 500
+@gfx 672 600
 
-// Calculate scale factor based on window size
-base_width = 550;
-base_height = 375;
-scale_x = gfx_w / base_width;
-scale_y = gfx_h / base_height;
-scale = min(scale_x, scale_y);
-scale = max(0.5, min(scale, 3.0));
+control_start("main", "tron");
 
-// GUI Calculation Caching System - Only recalculate when necessary
-// Check if GUI cache needs updating (parameters changed or window scaled)
-scale != last_gui_scale ? gui_cache_dirty = 1; // Scale changed
-slider10 != last_gui_slider10 ? gui_cache_dirty = 1; // Delay changed
-slider21 != last_gui_slider21 ? gui_cache_dirty = 1; // Feedback changed
-slider12 != last_gui_slider12 ? gui_cache_dirty = 1; // Mix changed
-slider20 != last_gui_slider20 ? gui_cache_dirty = 1; // Input gain changed
-slider50 != last_gui_slider50 ? gui_cache_dirty = 1; // Volume changed
-slider30 != last_gui_slider30 ? gui_cache_dirty = 1; // Filter changed
-slider35 != last_gui_slider35 ? gui_cache_dirty = 1; // Delay sat changed
-slider36 != last_gui_slider36 ? gui_cache_dirty = 1; // Output sat changed
-slider11 != last_gui_slider11 ? gui_cache_dirty = 1; // Sync changed
-slider37 != last_gui_slider37 ? gui_cache_dirty = 1; // Ping pong changed
+ui_screen() == "main" ? (
 
-// Only recalculate expensive operations when cache is dirty
-gui_cache_dirty ? (
-  // Cache expensive trigonometric calculations for knob angles
-  current_delay_seconds = slider10 * 0.001;
-  
-  // Delay knob angle (logarithmic scale)
-  delay_norm = (log(slider10) - log(1)) / (log(80000) - log(1));
-  delay_norm = max(0, min(1, delay_norm));
-  cached_delay_angle = -2.356 + delay_norm * 4.712;
-  
-  // Linear parameter angles
-  cached_feedback_angle = -2.356 + ((slider21 + 90) / 105) * 4.712;
-  cached_mix_angle = -2.356 + slider12 * 4.712;
-  cached_input_angle = -2.356 + ((slider20 + 90) / 105) * 4.712;
-  cached_volume_angle = -2.356 + ((slider50 + 30) / 60) * 4.712;
-  cached_filter_angle = -2.356 + ((slider30 - 1000) / 14000) * 4.712;
-  cached_delay_sat_angle = -2.356 + ((slider35 - 1) / 99) * 4.712;
-  cached_output_sat_angle = -2.356 + ((slider36 - 1) / 99) * 4.712;
-  
-  // Cache expensive text formatting operations
-  current_delay_seconds < 1 ? (
-    sprintf(cached_delay_text, "%.0fms", slider10);
-  ) : (
-    sprintf(cached_delay_text, "%.2fs", current_delay_seconds);
-  );
-  
-  sprintf(cached_feedback_text, "%.1fdB", slider21);
-  sprintf(cached_input_text, "%.1fdB", slider20);
-  sprintf(cached_volume_text, "%.1fdB", slider50);
-  sprintf(cached_mix_text, "%.0f%%", slider12 * 100);
-  sprintf(cached_delay_sat_text, "%.0f%%", slider35);
-  sprintf(cached_output_sat_text, "%.0f%%", slider36);
-  
-  // Cache ping pong text
-  sprintf(cached_pingpong_text, "%.0f%%", slider37);
-  
-  // Always display filter frequency in kHz since minimum is now 1kHz
-  sprintf(cached_filter_text, "%.1fkHz", slider30 * 0.001);
-  
-  // Cache sync division text
-  slider11 == 1 ? cached_sync_div_text = "1/32";
-  slider11 == 2 ? cached_sync_div_text = "1/16T";
-  slider11 == 3 ? cached_sync_div_text = "1/32D";
-  slider11 == 4 ? cached_sync_div_text = "1/16";
-  slider11 == 5 ? cached_sync_div_text = "1/8T";
-  slider11 == 6 ? cached_sync_div_text = "1/16D";
-  slider11 == 7 ? cached_sync_div_text = "1/8";
-  slider11 == 8 ? cached_sync_div_text = "1/4T";
-  slider11 == 9 ? cached_sync_div_text = "1/8D";
-  slider11 == 10 ? cached_sync_div_text = "1/4";
-  slider11 == 11 ? cached_sync_div_text = "1/2T";
-  slider11 == 12 ? cached_sync_div_text = "1/4D";
-  slider11 == 13 ? cached_sync_div_text = "1/2";
-  slider11 == 14 ? cached_sync_div_text = "1T";
-  slider11 == 15 ? cached_sync_div_text = "1/2D";
-  slider11 == 16 ? cached_sync_div_text = "1";
-  slider11 == 17 ? cached_sync_div_text = "2T";
-  slider11 == 18 ? cached_sync_div_text = "1D";
-  slider11 == 19 ? cached_sync_div_text = "2";
-  slider11 == 20 ? cached_sync_div_text = "4T";
-  slider11 == 21 ? cached_sync_div_text = "2D";
-  slider11 == 22 ? cached_sync_div_text = "4";
-  slider11 == 23 ? cached_sync_div_text = "8T";
-  slider11 == 24 ? cached_sync_div_text = "4D";
-  slider11 == 25 ? cached_sync_div_text = "8";
-  slider11 == 26 ? cached_sync_div_text = "16T";
-  slider11 == 27 ? cached_sync_div_text = "8D";
-  slider11 == 28 ? cached_sync_div_text = "16";
-  
-  // Update cached parameter values for next comparison
-  last_gui_slider10 = slider10;
-  last_gui_slider21 = slider21;
-  last_gui_slider12 = slider12;
-  last_gui_slider20 = slider20;
-  last_gui_slider50 = slider50;
-  last_gui_slider30 = slider30;
-  last_gui_slider35 = slider35;
-  last_gui_slider36 = slider36;
-  last_gui_slider11 = slider11;
-  last_gui_slider37 = slider37;
-  last_gui_scale = scale;
-  
-  gui_cache_dirty = 0; // Cache is now clean
-);
-
-// Calculate current delay time for display (in seconds)
-current_delay_seconds = slider10 * 0.001;
-
-// Revox-inspired tape delay GUI
-// Silver-grey background
-gfx_r = 0.85; gfx_g = 0.85; gfx_b = 0.85;
+// Background
+gfx_r = 0.235; gfx_g = 0.235; gfx_b = 0.255; gfx_a = 1;
 gfx_rect(0, 0, gfx_w, gfx_h);
 
-// Title panel
-gfx_r = 0.72; gfx_g = 0.72; gfx_b = 0.72;
-gfx_rect(20 * scale, 20 * scale, (gfx_w - 40 * scale), 50 * scale);
+// Title
+gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+gfx_setfont(1, "Trebuchet MS", 28);
+gfx_measurestr("Tycho Tape Delay TMA-1", title_w, title_h);
+gfx_x = (gfx_w - title_w) / 2;
+gfx_y = 20;
+gfx_drawstr("Tycho Tape Delay TMA-1");
 
-// Control panel
-gfx_rect(20 * scale, 90 * scale, (gfx_w - 40 * scale), 280 * scale);
+// Divider lines
+gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.32; gfx_a = 1;
+gfx_rect(40, 230, 592, 1);
+gfx_rect(40, 410, 592, 1);
 
-// Title text
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 18 * scale), 'b');
-gfx_x = 40 * scale; gfx_y = 32 * scale;
-gfx_drawstr("Tycho Delay TMA-1");
+// Knob positions
+row1_y = 140;
+row2_y = 320;
+row3_y = 500;
+col1_x = 120;
+col2_x = 320;
+col3_x = 520;
 
-gfx_setfont(1, "Arial", max(8, 12 * scale));
-gfx_x = 40 * scale; gfx_y = 52 * scale;
-gfx_drawstr("Classic Tape Delay");
+delay_is_synced = sync_on;
 
-// Red accent
-gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
-gfx_rect(gfx_w - 80 * scale, 30 * scale, 40 * scale, 4 * scale);
+// ROW 1: INPUT, OUTPUT, MIX
 
-// Knob properties
-knob_size = 30 * scale;
+// INPUT
+ui_push_rect(col1_x - 35, row1_y - 35, 70, 70);
+new_val = control_dial(slider20, -90, 15, 0, 0);
+(ui_drag() || ui_click()) ? slider20 = new_val;
+ui_pop();
+strcpy(#lbl, "INPUT");  draw_label_at(col1_x, row1_y - 49);
+sprintf(#val, "%+.1f dB", slider20);  draw_value_at(col1_x, row1_y + 39);
 
-// ===== TOP ROW: Main Controls =====
-knob_y1 = 140 * scale;
+// OUTPUT
+ui_push_rect(col2_x - 35, row1_y - 35, 70, 70);
+new_val = control_dial(slider50, -30, 30, 0, 0);
+(ui_drag() || ui_click()) ? slider50 = new_val;
+ui_pop();
+strcpy(#lbl, "OUTPUT");  draw_label_at(col2_x, row1_y - 49);
+sprintf(#val, "%+.1f dB", slider50);  draw_value_at(col2_x, row1_y + 39);
 
-// Delay Time knob (using cached calculations)
-knob_x = 90 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y1, knob_size/2, 1);
-// Use cached angle calculation
-ind_x = knob_x + sin(cached_delay_angle) * (knob_size/2 - 3);
-ind_y = knob_y1 - cos(cached_delay_angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y1, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("DELAY", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y1 + 25 * scale;
-gfx_drawstr("DELAY");
-// Value (using cached text)
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 18 * scale; gfx_y = knob_y1 + 40 * scale;
-gfx_drawstr(cached_delay_text);
+// MIX
+ui_push_rect(col3_x - 35, row1_y - 35, 70, 70);
+new_val = control_dial(slider12, 0, 1, 0, 0.5);
+(ui_drag() || ui_click()) ? slider12 = new_val;
+ui_pop();
+strcpy(#lbl, "MIX");  draw_label_at(col3_x, row1_y - 49);
+sprintf(#val, "%.0f%%", slider12 * 100);  draw_value_at(col3_x, row1_y + 39);
 
-// Feedback knob (using cached calculations)
-knob_x = 200 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y1, knob_size/2, 1);
-ind_x = knob_x + sin(cached_feedback_angle) * (knob_size/2 - 3);
-ind_y = knob_y1 - cos(cached_feedback_angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y1, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("FEEDBACK", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y1 + 25 * scale;
-gfx_drawstr("FEEDBACK");
-// Value (using cached text)
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 15 * scale; gfx_y = knob_y1 + 40 * scale;
-gfx_drawstr(cached_feedback_text);
+// ROW 2: DELAY, FEEDBACK, PING PONG
 
-// Mix knob (using cached calculations)
-knob_x = 310 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y1, knob_size/2, 1);
-ind_x = knob_x + sin(cached_mix_angle) * (knob_size/2 - 3);
-ind_y = knob_y1 - cos(cached_mix_angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y1, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("MIX", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y1 + 25 * scale;
-gfx_drawstr("MIX");
-// Value (using cached text)
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 12 * scale; gfx_y = knob_y1 + 40 * scale;
-gfx_drawstr(cached_mix_text);
-
-// Sync switch (top row, right side)
-switch_x = 420 * scale;
-switch_y = knob_y1;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_rect(switch_x - 15, switch_y - 8, 30, 16);
-slider11 > 0 ? (gfx_r = 0.55; gfx_g = 0; gfx_b = 0;) : (gfx_r = 0.25; gfx_g = 0.25; gfx_b = 0.25;);
-gfx_rect(switch_x + (slider11 > 0 ? 2 : -13), switch_y - 6, 11, 12);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("SYNC", label_w, label_h);
-gfx_x = switch_x - label_w/2; gfx_y = switch_y + 18 * scale;
-gfx_drawstr("SYNC");
-// Status
-gfx_setfont(1, "Arial", max(6, 8 * scale));
-status_text = slider11 > 0 ? "On" : "Off";
-gfx_measurestr(status_text, status_w, status_h);
-gfx_x = switch_x - status_w/2; gfx_y = switch_y + 35 * scale;
-gfx_drawstr(status_text);
-
-// ===== MIDDLE ROW: Secondary Controls =====
-knob_y2 = 220 * scale;
-
-// Input Gain knob (using cached calculations)
-knob_x = 90 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y2, knob_size/2, 1);
-ind_x = knob_x + sin(cached_input_angle) * (knob_size/2 - 3);
-ind_y = knob_y2 - cos(cached_input_angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("INPUT", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
-gfx_drawstr("INPUT");
-// Value (using cached text)
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 15 * scale; gfx_y = knob_y2 + 40 * scale;
-gfx_drawstr(cached_input_text);
-
-// Volume knob (using cached calculations)
-knob_x = 200 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y2, knob_size/2, 1);
-ind_x = knob_x + sin(cached_volume_angle) * (knob_size/2 - 3);
-ind_y = knob_y2 - cos(cached_volume_angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("VOLUME", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
-gfx_drawstr("VOLUME");
-// Value (using cached text)
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 15 * scale; gfx_y = knob_y2 + 40 * scale;
-gfx_drawstr(cached_volume_text);
-
-// Filter Frequency knob (using cached calculations)
-knob_x = 310 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y2, knob_size/2, 1);
-ind_x = knob_x + sin(cached_filter_angle) * (knob_size/2 - 3);
-ind_y = knob_y2 - cos(cached_filter_angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y2, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("FILTER", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y2 + 25 * scale;
-gfx_drawstr("FILTER");
-// Value (using cached text)
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 18 * scale; gfx_y = knob_y2 + 40 * scale;
-gfx_drawstr(cached_filter_text);
-
-// ===== BOTTOM ROW: Saturation and Ping Pong Controls =====
-knob_y3 = 300 * scale;
-
-// Delay Saturation knob (using cached calculations) - aligned under INPUT
-knob_x = 90 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y3, knob_size/2, 1);
-ind_x = knob_x + sin(cached_delay_sat_angle) * (knob_size/2 - 3);
-ind_y = knob_y3 - cos(cached_delay_sat_angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y3, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("TAPE SAT", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y3 + 25 * scale;
-gfx_drawstr("TAPE SAT");
-// Value (using cached text)
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 12 * scale; gfx_y = knob_y3 + 40 * scale;
-gfx_drawstr(cached_delay_sat_text);
-
-// Output Saturation knob (using cached calculations) - aligned under VOLUME
-knob_x = 200 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y3, knob_size/2, 1);
-ind_x = knob_x + sin(cached_output_sat_angle) * (knob_size/2 - 3);
-ind_y = knob_y3 - cos(cached_output_sat_angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y3, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("OUTPUT SAT", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y3 + 25 * scale;
-gfx_drawstr("OUTPUT SAT");
-// Value (using cached text)
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 12 * scale; gfx_y = knob_y3 + 40 * scale;
-gfx_drawstr(cached_output_sat_text);
-
-// Ping Pong Width knob - aligned under FILTER
-knob_x = 310 * scale;
-gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-gfx_circle(knob_x, knob_y3, knob_size/2, 1);
-// Calculate ping pong knob angle
-pingpong_norm = slider37 / 100;
-pingpong_angle = -2.356 + pingpong_norm * 4.712;
-ind_x = knob_x + sin(pingpong_angle) * (knob_size/2 - 3);
-ind_y = knob_y3 - cos(pingpong_angle) * (knob_size/2 - 3);
-gfx_r = 1; gfx_g = 1; gfx_b = 1;
-gfx_line(knob_x, knob_y3, ind_x, ind_y, 2);
-// Label
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", max(8, 10 * scale));
-gfx_measurestr("PING PONG", label_w, label_h);
-gfx_x = knob_x - label_w/2; gfx_y = knob_y3 + 25 * scale;
-gfx_drawstr("PING PONG");
-// Value (using cached text)
-gfx_setfont(1, "Arial", max(7, 9 * scale));
-gfx_x = knob_x - 12 * scale; gfx_y = knob_y3 + 40 * scale;
-gfx_drawstr(cached_pingpong_text);
-
-// Sync division display (when sync is enabled) - using cached text
-slider11 > 0 ? (
-  display_x = 450 * scale;
-  display_y = knob_y2;
-  
-  // Division display box (clickable area)
-  gfx_r = 0.125; gfx_g = 0.125; gfx_b = 0.125;
-  gfx_rect(display_x - 30, display_y - 20, 60, 40);
-  
-  // Highlight border when hovering
-  mouse_x >= display_x - 30 && mouse_x <= display_x + 30 && mouse_y >= display_y - 20 && mouse_y <= display_y + 20 ? (
-    gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
-    gfx_rect(display_x - 30, display_y - 20, 60, 2);
-    gfx_rect(display_x - 30, display_y + 18, 60, 2);
-    gfx_rect(display_x - 30, display_y - 20, 2, 40);
-    gfx_rect(display_x + 28, display_y - 20, 2, 40);
-  );
-  
-  // Division text (using cached string)
-  gfx_r = 0.55; gfx_g = 0; gfx_b = 0;
-  gfx_setfont(1, "Arial", max(8, 11 * scale), 'b');
-  gfx_measurestr(cached_sync_div_text, div_w, div_h);
-  gfx_x = display_x - div_w/2; gfx_y = display_y - div_h/2;
-  gfx_drawstr(cached_sync_div_text);
-  
-  // Label
-  gfx_r = 0; gfx_g = 0; gfx_b = 0;
-  gfx_setfont(1, "Arial", max(6, 8 * scale));
-  gfx_measurestr("DIVISION", label_w, label_h);
-  gfx_x = display_x - label_w/2; gfx_y = display_y + 25 * scale;
-  gfx_drawstr("DIVISION");
-  
-  // Click hint
-  gfx_setfont(1, "Arial", max(5, 7 * scale));
-  gfx_measurestr("L/R CLICK", hint_w, hint_h);
-  gfx_x = display_x - hint_w/2; gfx_y = display_y + 40 * scale;
-  gfx_drawstr("L/R CLICK");
-);
-
-// Mouse interaction - CORRECTED FOR PROPER COLUMN ALIGNMENT
-mouse_cap & 1 && !(last_mouse_cap & 1) ? (
-  // Check knob clicks for main controls
-  // Top row
-  (mouse_x - 90 * scale)^2 + (mouse_y - knob_y1)^2 < (15 * scale)^2 ? (
-    slider_to_edit = 10; drag_start_y = mouse_y;
-  );
-  (mouse_x - 200 * scale)^2 + (mouse_y - knob_y1)^2 < (15 * scale)^2 ? (
-    slider_to_edit = 21; drag_start_y = mouse_y;
-  );
-  (mouse_x - 310 * scale)^2 + (mouse_y - knob_y1)^2 < (15 * scale)^2 ? (
-    slider_to_edit = 12; drag_start_y = mouse_y;
-  );
-  
-  // Middle row - check middle row FIRST to avoid conflicts
-  abs(mouse_y - knob_y2) < abs(mouse_y - knob_y3) ? (
-    // Closer to middle row
-    (mouse_x - 90 * scale)^2 + (mouse_y - knob_y2)^2 < (15 * scale)^2 ? (
-      slider_to_edit = 20; drag_start_y = mouse_y;
-    );
-    (mouse_x - 200 * scale)^2 + (mouse_y - knob_y2)^2 < (15 * scale)^2 ? (
-      slider_to_edit = 50; drag_start_y = mouse_y;
-    );
-    (mouse_x - 310 * scale)^2 + (mouse_y - knob_y2)^2 < (15 * scale)^2 ? (
-      slider_to_edit = 30; drag_start_y = mouse_y;
-    );
-  ) : (
-    // Closer to bottom row
-    (mouse_x - 90 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
-      slider_to_edit = 35; drag_start_y = mouse_y;
-    );
-    (mouse_x - 200 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
-      slider_to_edit = 36; drag_start_y = mouse_y;
-    );
-    (mouse_x - 310 * scale)^2 + (mouse_y - knob_y3)^2 < (15 * scale)^2 ? (
-      slider_to_edit = 37; drag_start_y = mouse_y;
-    );
-  );
-  
-  // Sync switch
-  mouse_x >= 405 * scale && mouse_x <= 435 * scale && mouse_y >= knob_y1 - 8 && mouse_y <= knob_y1 + 8 ? (
-    slider11 = slider11 > 0 ? 0 : 10; // Toggle between off and 1/4 note
-    // Update delay time immediately if sync is enabled
-    slider11 > 0 ? (
-      slider10 = calculate_sync_time(slider11);
-      new_delay_ms = slider10;
-      target_delay_samples = min(floor(srate * 0.001 * new_delay_ms), max_delay_samples - 4);
-    );
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(11);
-  );
-  
-  // Sync division display (left click = next)
-  slider11 > 0 && mouse_x >= 420 * scale && mouse_x <= 480 * scale && mouse_y >= knob_y2 - 20 && mouse_y <= knob_y2 + 20 ? (
-    slider11 += 1;
-    slider11 > 28 ? slider11 = 1; // Wrap around
-    // Update delay time immediately
-    slider10 = calculate_sync_time(slider11);
-    new_delay_ms = slider10;
-    target_delay_samples = min(floor(srate * 0.001 * new_delay_ms), max_delay_samples - 4);
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(11);
-  );
-);
-
-// Right-click handling for sync division (previous)
-mouse_cap & 2 && !(last_mouse_cap & 2) ? (
-  slider11 > 0 && mouse_x >= 420 * scale && mouse_x <= 480 * scale && mouse_y >= knob_y2 - 20 && mouse_y <= knob_y2 + 20 ? (
-    slider11 -= 1;
-    slider11 < 1 ? slider11 = 28;
-    // Update delay time immediately
-    slider10 = calculate_sync_time(slider11);
-    new_delay_ms = slider10;
-    target_delay_samples = min(floor(srate * 0.001 * new_delay_ms), max_delay_samples - 4);
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(11);
-  );
-);
-
-// Knob dragging
-mouse_cap & 1 && slider_to_edit > 0 ? (
-  mouse_dy = mouse_y - drag_start_y;
-  drag_start_y = mouse_y;
-  
-  slider_to_edit == 10 ? ( // Delay time (log scale)
-    log_val = log(slider10);
-    new_log = log_val - mouse_dy * (log(80000) - log(1)) / 300;
-    slider10 = max(1, min(80000, exp(new_log)));
-    // Update target delay samples immediately for real-time response
-    new_delay_ms = slider10;
-    target_delay_samples = min(floor(srate * 0.001 * new_delay_ms), max_delay_samples - 4);
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(10);
-  );
-  slider_to_edit == 21 ? ( // Feedback
-    slider21 = max(-90, min(15, slider21 - mouse_dy * 105 / 300));
-    // Update target feedback immediately
-    target_feedback = 10^(slider21/20);
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(21);
-  );
-  slider_to_edit == 12 ? ( // Mix
-    slider12 = max(0, min(1, slider12 - mouse_dy / 200));
-    // Update target mix immediately
-    target_mix = slider12;
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(12);
-  );
-  slider_to_edit == 20 ? ( // Input gain
-    slider20 = max(-90, min(15, slider20 - mouse_dy * 105 / 300));
-    // Update target input gain immediately
-    target_input_gain = 10^(slider20/20);
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(20);
-  );
-  slider_to_edit == 50 ? ( // Volume
-    slider50 = max(-30, min(30, slider50 - mouse_dy * 60 / 300));
-    // Update target volume immediately
-    target_volume = 10^(slider50/20);
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(50);
-  );
-  slider_to_edit == 30 ? ( // Filter
-    slider30 = max(1000, min(15000, slider30 - mouse_dy * 14000 / 300));
-    // Update target filter frequency immediately
-    target_filter_freq = slider30;
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(30);
-  );
-  slider_to_edit == 35 ? ( // Delay saturation
-    slider35 = max(1, min(100, slider35 - mouse_dy * 99 / 300));
-    // Update target delay saturation immediately
-    target_delay_sat = slider35;
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(35);
-  );
-  slider_to_edit == 36 ? ( // Output saturation
-    slider36 = max(1, min(100, slider36 - mouse_dy * 99 / 300));
-    // Update target output saturation immediately
-    target_output_sat = slider36;
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(36);
-  );
-  slider_to_edit == 37 ? ( // Ping pong width
-    slider37 = max(0, min(100, slider37 - mouse_dy * 100 / 300));
-    // Update target ping pong width immediately
-    target_pingpong_width = slider37 / 100.0;
-    gui_cache_dirty = 1; // Force GUI cache update
-    sliderchange(37);
-  );
+// DELAY (grayed out when synced)
+delay_is_synced ? (
+  draw_knob_inactive(col1_x, row2_y, 35, slider10, 1, 80000);
+  gfx_r = 0.38; gfx_g = 0.38; gfx_b = 0.40; gfx_a = 1;
 ) : (
-  slider_to_edit = 0;
+  ui_push_rect(col1_x - 35, row2_y - 35, 70, 70);
+  new_val = control_dial(slider10, 1, 80000, log(1000), 400);
+  (ui_drag() || ui_click()) ? slider10 = new_val;
+  ui_pop();
+  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
 );
+strcpy(#lbl, "DELAY");  draw_label_at(col1_x, row2_y - 49);
+slider10 >= 1000 ? (
+  sprintf(#val, "%.2f s", slider10 / 1000);
+) : (
+  sprintf(#val, "%.0f ms", slider10);
+);
+draw_value_at(col1_x, row2_y + 39);
 
-last_mouse_cap = mouse_cap;
+// FEEDBACK
+ui_push_rect(col2_x - 35, row2_y - 35, 70, 70);
+new_val = control_dial(slider21, -90, 15, 0, -4);
+(ui_drag() || ui_click()) ? slider21 = new_val;
+ui_pop();
+strcpy(#lbl, "FEEDBACK");  draw_label_at(col2_x, row2_y - 49);
+sprintf(#val, "%.1f dB", slider21);  draw_value_at(col2_x, row2_y + 39);
+
+// PING PONG
+ui_push_rect(col3_x - 35, row2_y - 35, 70, 70);
+new_val = control_dial(slider37, 0, 100, 0, 0);
+(ui_drag() || ui_click()) ? slider37 = new_val;
+ui_pop();
+strcpy(#lbl, "PING PONG");  draw_label_at(col3_x, row2_y - 49);
+sprintf(#val, "%.0f%%", slider37);  draw_value_at(col3_x, row2_y + 39);
+
+// ROW 3: SATURATION, LOW PASS, DELAY SYNC
+
+// SATURATION
+ui_push_rect(col1_x - 35, row3_y - 35, 70, 70);
+new_val = control_dial(slider35, 1, 100, 0, 1);
+(ui_drag() || ui_click()) ? slider35 = new_val;
+ui_pop();
+strcpy(#lbl, "SATURATION");  draw_label_at(col1_x, row3_y - 49);
+sprintf(#val, "%.0f%%", slider35);  draw_value_at(col1_x, row3_y + 39);
+
+// LOW PASS
+ui_push_rect(col2_x - 35, row3_y - 35, 70, 70);
+new_val = control_dial(slider30, 1000, 15000, 0, 10000);
+(ui_drag() || ui_click()) ? slider30 = new_val;
+ui_pop();
+strcpy(#lbl, "LOW PASS");  draw_label_at(col2_x, row3_y - 49);
+slider30 >= 1000 ? (
+  sprintf(#val, "%.1f kHz", slider30 / 1000);
+) : (
+  sprintf(#val, "%.0f Hz", slider30);
+);
+draw_value_at(col2_x, row3_y + 39);
+
+// DELAY SYNC selector + SYNC ON button
+// Layout: selector box on left, ON button on right, centered together
+sync_box_w = 80;
+sync_box_h = 60;
+sync_btn_w = 48;
+sync_gap = 6;
+sync_total_w = sync_box_w + sync_gap + sync_btn_w;
+sync_box_x = col3_x - sync_total_w/2;
+sync_box_y = row3_y - sync_box_h/2;
+sync_btn_x = sync_box_x + sync_box_w + sync_gap;
+arrow_h = 20;
+
+// Sync selector box — dimmed when sync is off
+sync_on ? (
+  gfx_r = 0.16; gfx_g = 0.16; gfx_b = 0.18;
+) : (
+  gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.13;
+);
+gfx_a = 1;
+gfx_rect(sync_box_x, sync_box_y, sync_box_w, sync_box_h);
+
+gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.32; gfx_a = 1;
+gfx_rect(sync_box_x, sync_box_y, sync_box_w, 1);
+gfx_rect(sync_box_x, sync_box_y + sync_box_h, sync_box_w, 1);
+gfx_rect(sync_box_x, sync_box_y, 1, sync_box_h);
+gfx_rect(sync_box_x + sync_box_w, sync_box_y, 1, sync_box_h + 1);
+
+// Up/down arrows only active when sync is on
+sync_on ? (
+  ui_push_rect(sync_box_x, sync_box_y, sync_box_w, arrow_h);
+  ui_click() ? (
+    slider11 = min(28, slider11 + 1);
+    sliderchange(slider11);
+  );
+  ui_pop();
+  ui_push_rect(sync_box_x, sync_box_y + sync_box_h - arrow_h, sync_box_w, arrow_h);
+  ui_click() ? (
+    slider11 = max(1, slider11 - 1);
+    sliderchange(slider11);
+  );
+  ui_pop();
+  gfx_r = 0.55; gfx_g = 0.55; gfx_b = 0.58;
+) : (
+  gfx_r = 0.30; gfx_g = 0.30; gfx_b = 0.32;
+);
+gfx_a = 1;
+gfx_triangle(sync_box_x + sync_box_w/2, sync_box_y + 5,
+             sync_box_x + sync_box_w/2 - 8, sync_box_y + 15,
+             sync_box_x + sync_box_w/2 + 8, sync_box_y + 15);
+gfx_triangle(sync_box_x + sync_box_w/2, sync_box_y + sync_box_h - 5,
+             sync_box_x + sync_box_w/2 - 8, sync_box_y + sync_box_h - 15,
+             sync_box_x + sync_box_w/2 + 8, sync_box_y + sync_box_h - 15);
+
+// Sync value text
+sync_on ? (
+  gfx_r = 0.9; gfx_g = 0.2; gfx_b = 0.2;
+) : (
+  gfx_r = 0.35; gfx_g = 0.35; gfx_b = 0.37;
+);
+gfx_a = 1;
+gfx_setfont(1, "Arial", 14);
+sprintf(#sync_val, "%s", get_sync_name(slider11));
+gfx_measurestr(#sync_val, sync_w, sync_h);
+gfx_x = sync_box_x + (sync_box_w - sync_w) / 2;
+gfx_y = sync_box_y + (sync_box_h - sync_h) / 2;
+gfx_drawstr(#sync_val);
+
+// SYNC ON tab-style button
+ui_push_rect(sync_btn_x, sync_box_y, sync_btn_w, sync_box_h);
+  sync_on ? (
+    control_background_inset();
+  ) : (
+    control_background_enabled("none");
+  );
+  ui_color(255, 255, 255);
+  ui_align(0.5, 0.5);
+  ui_fontsize(9);
+  ui_text("SYNC");
+  sync_on ? control_finish_inset() : control_finish_enabled("none");
+  ui_click() ? (
+    slider38 = 1 - slider38;
+    sync_on = slider38;
+    sliderchange(slider38);
+    sync_on ? (
+      new_sync_time = calculate_sync_time(slider11);
+      abs(new_sync_time - slider10) > 0.5 ? (
+        slider10 = new_sync_time;
+        target_delay_samples = min(floor(srate * 0.001 * slider10), max_delay_samples - 4);
+        oslider10 = slider10;
+      );
+    );
+  );
+ui_pop();
+
+strcpy(#lbl, "DELAY SYNC");  draw_label_at(col3_x, row3_y - 49);
+
+); // end ui_screen
