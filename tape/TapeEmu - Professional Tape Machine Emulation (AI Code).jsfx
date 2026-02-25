@@ -3,21 +3,23 @@ version: 2.0
 author: citizenkeith - Claude AI
 about: Tape emulation that includes tape machine choices
 // Linux users can download the Trebuchet MS font at https://font.download/font/trebuchet-ms-2
-changelog:
-  # TapeEmu 2.0
-  + Complete GUI overhaul with machine selector buttons
-  + Added double-click to reset knobs to default values
-  + Fixed head bump implementation (low shelf @ 90Hz)
-  + Fixed Ampex ATR102 gain staging (was 1.7dB hot)
-  + Added machine-specific high-frequency rolloff
-  + Unity gain by default (0% input, 0dB output)
-  + Conditional dimming of Noise and Head Bump knobs when presets active
-  + Input/Output LED meters
-  + 5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape
-  
-// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
 
-@license GPL v3
+// @version 2.0
+// @author citizenkeith
+// @license GPL v3
+// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
+// @changelog
+//   v2.0
+//     Complete GUI overhaul with machine selector buttons
+//     Added double-click to reset knobs to default values
+//     Fixed head bump implementation (low shelf @ 90Hz)
+//     Fixed Ampex ATR102 gain staging (was 1.7dB hot)
+//     Added machine-specific high-frequency rolloff
+//     Unity gain by default (0% input, 0dB output)
+//     Conditional dimming of Noise and Head Bump knobs when presets active
+//     Input/Output LED meters
+//     5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape
+
 options: no_meter
 
 // Import UI library
