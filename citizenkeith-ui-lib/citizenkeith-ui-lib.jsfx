@@ -2,6 +2,19 @@ desc: citizenkeith UI Library
 version: 1.0
 author: citizenkeith
 about: Shared UI library for citizenkeith plugins. Based on work by Geraint Luff.
+
+// @version 1.0
+// @author citizenkeith
+// @license GPL v3
 // @provides
 //   [nomain] citizenkeith-ui-lib.jsfx-inc
-// @license GPL v3
+// @about
+//   Shared UI component library used by all citizenkeith JSFX plugins.
+//   Provides themed knobs, sliders, switches, selectors, and layout
+//   primitives for the Tron, Black and White, and Bitmap Simple themes.
+//   Based on Geraint Luff's JSFX UI library with custom modifications.
+//   Install this package once — all citizenkeith plugins depend on it.
+// @changelog
+//   v1.0
+//     Initial standalone release as a ReaPack dependency package
+//     Previously bundled inside individual plugins (Fidelio, TapeEmu, Tycho)

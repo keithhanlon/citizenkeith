@@ -11,8 +11,6 @@ about:
 // @version 2.0
 // @author citizenkeith
 // @license GPL v3
-// @provides
-//   [nomain] ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
 // @about
 //   Emulation of the Watkins WEM Project V Fuzz pedal.
