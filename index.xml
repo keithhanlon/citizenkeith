@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="66336877936887b0f190b23074d81468efd7c215" name="citizenkeith">
+<index version="1" commit="c4944a6cfe2b2e8cc86a0f21ef145af8cd09ec4d" name="citizenkeith">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -132,6 +132,22 @@
 + Delay loop lowpass filter and saturation
 + Tempo sync with 28 note values]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/5534039cc2dbc6bf536a8e402faaab702a45baf9/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="distortion">
+    <reapack name="Watkins Fuzz (AI Code).jsfx" type="effect" desc="Watkins Fuzz">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Emulation of the Watkins WEM Project V Fuzz pedal, a sophisticated 8-transistor British fuzz from the late 1960s. Features asymmetric quasi-complementary clipping, inductor resonance modeling, and dynamic octave effects. Famous for use by Brian Eno and Robert Fripp on classic recordings. This JSFX released under GPLv3 license\par}
+}
+]]></description>
+      </metadata>
+      <version name="2.0" author="citizenkeith / Claude AI" time="2026-02-25T04:50:25Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/c4944a6cfe2b2e8cc86a0f21ef145af8cd09ec4d/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
