@@ -36,6 +36,7 @@ Quick links:
 - [SynthiAKS Analog Modular Synthesizer](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#synthiaks-analog-modular-synthesizer)
 - [TapeEmu - Professional Tape Machine Emulation](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tapeemu---professional-tape-machine-emulation)
 - [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
+- [WatkinsFuzz](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#watkinsfuzz)
 
 # Channel Strips
 ## Fidelio Channel Strip v1.3
@@ -266,10 +267,37 @@ Version 2 includes a complete GUI overhaul, DSP fixes, a dedicated tempo sync on
 2. When toggled off, the last sync division is remembered and restored when re-enabled
 3. When toggled on, the delay time immediately updates to match the current sync division
 
+# Distortion
+## Watkins Fuzz Pedal v2.0
+![Watkins Fuzz Pedal Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/WatkinsFuzzv2.png?raw=true)
+
+**FEATURES**
+
+1. Asymmetric Clipping — models the quasi-complementary NPN/PNP output stage for the lopsided harmonic character of the Project V
+
+2. Multi-Stage Transistor gain — four gain stages with individual bias, saturation curves, and soft-knee limiting
+
+3. Bias Trimmers — two independent trim controls that shift the operating point of the gain stages
+
+4. Drive Mode — toggle between Dark (low-pass filtered, thick and wooly) and Bright (full bandwidth, cutting and aggressive)
+
+5. Edge Mode — increases inter-stage gain for a more compressed tone
+
+6. Inductor Resonance — bandpass resonator with controls for frequency, Q, saturation, and mix level
+
+7. Octave Effect — three modes using full-wave rectification, frequency doubling, and intermodulation
+
+8. Dynamic Octave Blend — octave content rises with playing intensity
+
+9. Power Supply Sag — simulates battery voltage, reducing headroom and adding compression as the signal builds
+
+10. Thermal Drift — slow transistor warm-up modeling that shifts gain and bias over time
+
+
 # Reverb
 
 ## Stargate Ambient Reverb v1.1
-![targate Ambient Reverb Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/Stargate.png?raw=true)
+![Stargate Ambient Reverb Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/Stargate.png?raw=true)
 
 Stargate Ambient Reverb is a dual-stage algorithmic reverb designed for creating lush, expansive ambient spaces. It features a main diffuse reverb engine that can morph from clear delays to dense reverb textures, plus an independent tail extender for infinite, blooming decays. Perfect for ambient music, cinematic soundscapes, and adding otherworldly depth to any source.
 ### Controls:
