@@ -1,0 +1,771 @@
+desc:Watkins Fuzz
+author: citizenkeith / Claude AI
+version: 2.0
+about: 
+  Emulation of the Watkins WEM Project V Fuzz pedal, a sophisticated 8-transistor British fuzz from the late 1960s.
+  Features asymmetric quasi-complementary clipping, inductor resonance modeling, and dynamic octave effects.
+  Famous for use by Brian Eno and Robert Fripp on classic recordings.
+  This JSFX released under GPLv3 license
+
+// ReaPack metadata
+// @version 2.0
+// @author citizenkeith
+// @license GPL v3
+// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
+// @about
+//   Emulation of the Watkins WEM Project V Fuzz pedal.
+//   8-transistor British fuzz circa late 1960s — asymmetric quasi-complementary
+//   clipping, inductor resonance, dynamic octave effect, power supply sag,
+//   and thermal drift modeling. Custom Tron-theme GUI.
+// @changelog
+//   v2.0
+//     Full custom GUI built with citizenkeith-ui-lib (Tron theme)
+//     Per-section color-coded panel headers: FUZZ, BIAS, OCTAVE, INDUCTOR, AGING
+//     Drive and Edge promoted to top-level toggle switches with live state display
+//     Octave Mode promoted to top-level 3-way tab selector
+//     All sliders hidden from default REAPER slider view
+//     Double-click any knob to reset to default value
+//     Amber value readouts below each knob
+//     update_parameters() keeps DSP in sync with GUI knob movement
+//   v1.0
+//     Initial release
+//     16-parameter fuzz engine: asymmetric clipping, inductor resonance,
+//     octave generation, power supply sag, thermal drift
+
+import citizenkeith-ui-lib.jsfx-inc
+
+slider1:0.1<0,1,0.01>-Attack (Fuzz Amount)
+slider2:1<0,1,0.01>-Volume
+slider3:0<0,1,1{Dark,Bright}>-Drive
+slider4:0<0,1,1{Smooth,Edge}>-Edge
+slider5:0<0,1,0.01>-Bias Trim 1
+slider6:0<0,1,0.01>-Bias Trim 2
+slider7:1200<400,3000,10>-Inductor Resonant Frequency (Hz)
+slider8:3.5<0.5,10,0.1>-Inductor Q Factor
+slider9:0.4<0,1,0.01>-Inductor Saturation
+slider10:0.3<0,1,0.01>-Inductor Mix
+slider11:0.35<0,1,0.01>-Octave Amount
+slider12:0<0,2,1{Subtle,Moderate,Aggressive}>-Octave Mode
+slider13:1800<800,4000,10>-Octave Filter Frequency (Hz)
+slider14:0.6<0,1,0.01>-Octave Blend Dynamics
+slider15:0.5<0,1,0.01>-Sag Amount
+slider16:0.3<0,1,0.01>-Temperature Drift
+
+@init
+
+// ============================================================
+// UI LIBRARY SETUP
+// ============================================================
+ui_setup(4096);
+
+// ============================================================
+// DSP FUNCTIONS
+// ============================================================
+
+function tanh(x)
+(
+  (exp(2*x) - 1) / (exp(2*x) + 1);
+);
+
+function power_supply_sag(signal_level, sag_amount)
+local(load, voltage_drop, supply_voltage)
+(
+  load = signal_level * signal_level;
+  load > sag_voltage ? (
+    sag_voltage = sag_voltage + 0.05 * (load - sag_voltage);
+  ) : (
+    sag_voltage = sag_voltage + 0.001 * (load - sag_voltage);
+  );
+  voltage_drop = sag_voltage * sag_amount * 0.3;
+  supply_voltage = 1.0 - voltage_drop;
+  max(0.7, min(1.0, supply_voltage));
+);
+
+function temperature_drift(signal_level, drift_amount)
+local(heat, temp_coefficient, drift)
+(
+  heat = signal_level * signal_level;
+  temperature = temperature + 0.0002 * (heat - temperature);
+  temp_coefficient = temperature * drift_amount;
+  drift = 1.0 + (temp_coefficient - temp_coefficient * temp_coefficient * 2.0) * 0.05;
+  temp_bias_shift = (temperature - 0.5) * drift_amount * 0.1;
+  drift;
+);
+
+function sag_compression(input, supply_voltage)
+local(compressed, threshold)
+(
+  threshold = 0.7 * supply_voltage;
+  abs(input) > threshold ? (
+    compressed = input > 0 ?
+      threshold + (input - threshold) * 0.6 :
+      -threshold + (input + threshold) * 0.6;
+  ) : (
+    compressed = input;
+  );
+  compressed;
+);
+
+function sag_gain_reduction(supply_voltage)
+local(gain_factor)
+(
+  gain_factor = 0.6 + (supply_voltage - 0.7) / 0.3 * 0.4;
+  max(0.6, min(1.0, gain_factor));
+);
+
+function asymmetric_clip(x, pos_thresh, neg_thresh, asymmetry)
+local(output, pos_knee, neg_knee)
+(
+  pos_knee = 1.0 / (1.0 - pos_thresh);
+  neg_knee = 1.0 / (1.0 - neg_thresh);
+  x > pos_thresh ? (
+    output = pos_thresh + (1.0 - pos_thresh) *
+             tanh((x - pos_thresh) * pos_knee * asymmetry);
+  ) : x < -neg_thresh ? (
+    output = -neg_thresh - (1.0 - neg_thresh) *
+             tanh((-x - neg_thresh) * neg_knee / asymmetry);
+  ) : (
+    output = x;
+  );
+  output;
+);
+
+function transistor_sat(x, gain, pos_sat, neg_sat, bias_shift)
+local(shifted, sat_pos, sat_neg)
+(
+  shifted = x + bias_shift;
+  sat_pos = pos_sat * (2.0 / (1.0 + exp(-shifted * gain / pos_sat)) - 1.0);
+  sat_neg = -neg_sat * (2.0 / (1.0 + exp(shifted * gain / neg_sat)) - 1.0);
+  shifted > 0 ? sat_pos : sat_neg;
+);
+
+function svf_tick(input, freq, q)
+local(f, feedback, lowpass, highpass, bandpass)
+(
+  f = 2.0 * sin($pi * freq / srate);
+  feedback = 1.0 / q;
+  lowpass = svf_lp + f * svf_bp;
+  highpass = input - lowpass - feedback * svf_bp;
+  bandpass = svf_bp + f * highpass;
+  svf_lp = lowpass;
+  svf_bp = bandpass;
+  svf_hp = highpass;
+  bandpass;
+);
+
+function rlc_resonator(input, freq, q, damping)
+local(omega, alpha, a0, a1, a2, b0, b1, b2, output)
+(
+  omega = 2.0 * $pi * freq / srate;
+  alpha = sin(omega) / (2.0 * q);
+  a0 = 1.0 + alpha;
+  a1 = -2.0 * cos(omega);
+  a2 = 1.0 - alpha;
+  b0 = alpha;
+  b1 = 0;
+  b2 = -alpha;
+  output = (b0 / a0) * input + (b1 / a0) * rlc_x1 + (b2 / a0) * rlc_x2
+           - (a1 / a0) * rlc_y1 - (a2 / a0) * rlc_y2;
+  rlc_x2 = rlc_x1;
+  rlc_x1 = input;
+  rlc_y2 = rlc_y1;
+  rlc_y1 = output;
+  output * (1.0 - damping * 0.1);
+);
+
+function inductor_saturate(input, sat_amount)
+local(flux, sat_flux)
+(
+  flux = inductor_flux + input * 0.1;
+  sat_flux = tanh(flux * (1.0 + sat_amount * 10.0));
+  inductor_flux = sat_flux * 0.995;
+  inductor_output = (sat_flux - inductor_last_flux);
+  inductor_last_flux = sat_flux;
+  inductor_output;
+);
+
+function multi_resonator(input, base_freq, q)
+local(peak1, peak2, peak3)
+(
+  peak1 = svf_tick(input, base_freq, q);
+  peak2 = rlc_resonator(input, base_freq * 2.3, q * 0.6, 0.3);
+  peak3 = rlc_resonator(input, base_freq * 3.7, q * 0.4, 0.5);
+  peak1 + peak2 * 0.3 + peak3 * 0.15;
+);
+
+function octave_rectify(input)
+local(rectified)
+(
+  rectified = abs(input);
+  octave_hp = octave_hp + 0.01 * (rectified - octave_hp);
+  rectified = rectified - octave_hp;
+  rectified;
+);
+
+function octave_doubler(input, intensity)
+local(squared, shaped)
+(
+  squared = input * input;
+  shaped = input >= 0 ? squared : -squared;
+  shaped * intensity;
+);
+
+function octave_enhance(input, amount)
+local(even_harmonics)
+(
+  even_harmonics = input * input - (input * input * input * input) * 0.3;
+  input + even_harmonics * amount;
+);
+
+function octave_intermod(input, prev_input, mod_amount)
+local(ring_mod)
+(
+  ring_mod = input * prev_input;
+  octave_intermod_hp = octave_intermod_hp + 0.015 * (ring_mod - octave_intermod_hp);
+  (ring_mod - octave_intermod_hp) * mod_amount;
+);
+
+function octave_filter(input, center_freq)
+local(bp_coeff)
+(
+  bp_coeff = 2.0 * sin($pi * center_freq / srate);
+  octave_bp_low = octave_bp_low + bp_coeff * octave_bp_band;
+  octave_bp_high = input - octave_bp_low - 0.5 * octave_bp_band;
+  octave_bp_band = octave_bp_band + bp_coeff * octave_bp_high;
+  octave_bp_band;
+);
+
+function octave_dynamic_mix(input, octave_sig, dynamics_amount, static_mix)
+local(abs_input, envelope, dynamic_mix)
+(
+  abs_input = abs(input);
+  envelope = abs_input > octave_env ?
+             octave_env + 0.1 * (abs_input - octave_env) :
+             octave_env + 0.001 * (abs_input - octave_env);
+  octave_env = envelope;
+  dynamic_mix = min(1.0, static_mix + envelope * dynamics_amount);
+  input * (1.0 - dynamic_mix) + octave_sig * dynamic_mix;
+);
+
+// Initialize filter states
+svf_lp = svf_bp = svf_hp = 0;
+rlc_x1 = rlc_x2 = rlc_y1 = rlc_y2 = 0;
+inductor_flux = inductor_last_flux = inductor_output = 0;
+octave_hp = 0;
+octave_intermod_hp = 0;
+octave_bp_low = octave_bp_high = octave_bp_band = 0;
+octave_env = 0;
+prev_sample = 0;
+sag_voltage = 0;
+temperature = 0;
+temp_bias_shift = 0;
+gain_stage1 = 3.0;
+gain_stage2 = 4.5;
+gain_stage3 = 6.0;
+gain_stage4 = 2.5;
+fc_low = 120 / srate;
+fc_high = 3500 / srate;
+lp1 = hp1 = 0;
+
+// ============================================================
+// GFX HELPER FUNCTIONS  (must be in @init)
+// ============================================================
+
+// Draw a section box with colored header bar + border
+function draw_section_box(bx, by, bw, bh, hr, hg, hb, header_text)
+local(tw, th)
+(
+  // Dark section background
+  gfx_r = 0.13; gfx_g = 0.13; gfx_b = 0.15; gfx_a = 1;
+  gfx_rect(bx, by, bw, bh);
+  // Colored header bar
+  gfx_r = hr; gfx_g = hg; gfx_b = hb; gfx_a = 1;
+  gfx_rect(bx, by, bw, 22);
+  // Header text (dark, bold)
+  gfx_r = 0.08; gfx_g = 0.08; gfx_b = 0.08; gfx_a = 1;
+  gfx_setfont(1, "Arial", 11, 'b');
+  gfx_measurestr(header_text, tw, th);
+  gfx_x = bx + bw/2 - tw/2;
+  gfx_y = by + 11 - th/2;
+  gfx_drawstr(header_text);
+  // Border
+  gfx_r = 0.30; gfx_g = 0.30; gfx_b = 0.34; gfx_a = 1;
+  gfx_rect(bx,      by,      bw, 1);
+  gfx_rect(bx,      by + bh, bw, 1);
+  gfx_rect(bx,      by,      1,  bh);
+  gfx_rect(bx + bw, by,      1,  bh + 1);
+);
+
+// Draw knob label (uses global #lbl)
+function draw_label_at(lx, ly)
+local(lw, lh)
+(
+  gfx_r = 0.68; gfx_g = 0.68; gfx_b = 0.72; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#lbl, lw, lh);
+  gfx_x = lx - lw/2;
+  gfx_y = ly;
+  gfx_drawstr(#lbl);
+);
+
+// Draw knob value (uses global #val, amber color)
+function draw_value_at(vx, vy)
+local(vw, vh)
+(
+  gfx_r = 1.0; gfx_g = 0.82; gfx_b = 0.44; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#val, vw, vh);
+  gfx_x = vx - vw/2;
+  gfx_y = vy;
+  gfx_drawstr(#val);
+);
+
+// Draw a greyed-out non-interactive knob
+function draw_knob_inactive(cx, cy, r, val, vmin, vmax)
+local(norm, angle, start_a, end_a, px, py, i, a, track_r)
+(
+  start_a = $pi * 0.75;
+  end_a   = $pi * 2.25;
+  norm    = max(0, min(1, (val - vmin) / (vmax - vmin)));
+  angle   = start_a + norm * (end_a - start_a);
+  gfx_r = 0.16; gfx_g = 0.16; gfx_b = 0.18; gfx_a = 1;
+  gfx_circle(cx, cy, r - 2, 1, 1);
+  track_r = r - 5;
+  i = 0;
+  loop(270,
+    a = start_a + i * $pi / 180;
+    gfx_r = 0.22; gfx_g = 0.22; gfx_b = 0.24; gfx_a = 1;
+    gfx_circle(cx + cos(a)*track_r, cy + sin(a)*track_r, 1.2, 1, 1);
+    i += 1;
+  );
+  i = 0;
+  loop(floor(norm * 270),
+    a = start_a + i * $pi / 180;
+    gfx_r = 0.28; gfx_g = 0.32; gfx_b = 0.38; gfx_a = 1;
+    gfx_circle(cx + cos(a)*track_r, cy + sin(a)*track_r, 1.2, 1, 1);
+    i += 1;
+  );
+  px = cx + cos(angle) * (r * 0.45);
+  py = cy + sin(angle) * (r * 0.45);
+  gfx_r = 0.40; gfx_g = 0.40; gfx_b = 0.44; gfx_a = 1;
+  gfx_circle(px, py, 2.5, 1, 1);
+);
+
+// Draw a centered switch-row label
+function draw_switch_label(cx, ly, label)
+local(lw, lh)
+(
+  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(label, lw, lh);
+  gfx_x = cx - lw/2;
+  gfx_y = ly;
+  gfx_drawstr(label);
+);
+
+// Double-click detection (run once per frame)
+function check_dbl_click()
+local(mx, my, now, dt)
+(
+  mx  = mouse_x;
+  my  = mouse_y;
+  now = time_precise();
+  (mouse_cap & 1) && !(mouse_cap_last & 1) ? (
+    dt = now - dbl_click_time;
+    (dt < 0.4) && (dt > 0.05) && (abs(mx - dbl_click_x) < 8) && (abs(my - dbl_click_y) < 8) ? (
+      dbl_click_fired = 1;
+      dbl_click_cx    = mx;
+      dbl_click_cy    = my;
+    ) : (
+      dbl_click_fired = 0;
+    );
+    dbl_click_time = now;
+    dbl_click_x    = mx;
+    dbl_click_y    = my;
+  ) : (
+    dbl_click_fired = 0;
+  );
+);
+
+// Returns 1 if a double-click occurred inside the given rect
+function dbl_click_in_rect(rx, ry, rw, rh)
+(
+  dbl_click_fired &&
+  (dbl_click_cx >= rx) && (dbl_click_cx < rx + rw) &&
+  (dbl_click_cy >= ry) && (dbl_click_cy < ry + rh)
+);
+
+// ============================================================
+// PARAMETER UPDATE FUNCTION
+// Mirrors @slider logic — call from @gfx after any knob change
+// so DSP variables stay in sync without waiting for @slider.
+// ============================================================
+
+function update_parameters()
+(
+  attack            = slider1 * slider1;
+  volume            = slider2;
+  drive_mode        = slider3;
+  edge_mode         = slider4;
+  trim1             = slider5 * 0.5 + 0.75;
+  trim2             = slider6 * 0.5 + 0.75;
+  bias_shift1       = (slider5 - 0.5) * 0.2;
+  bias_shift2       = (slider6 - 0.5) * 0.15;
+  inductor_freq     = slider7;
+  inductor_q        = slider8;
+  inductor_sat      = slider9;
+  inductor_mix      = slider10;
+  octave_amount     = slider11;
+  octave_mode       = slider12;
+  octave_filter_freq = slider13;
+  octave_dynamics   = slider14;
+  sag_amount        = slider15;
+  temp_drift_amount = slider16;
+  edge_boost        = edge_mode ? 1.8 : 1.0;
+  drive_treble      = drive_mode ? 1.5 : 0.7;
+  npn_sat = 0.7;
+  pnp_sat = 0.55;
+);
+
+// Initialize double-click state
+dbl_click_time = 0;
+dbl_click_x = dbl_click_y = 0;
+dbl_click_fired = 0;
+dbl_click_cx = dbl_click_cy = 0;
+mouse_cap_last = 0;
+
+
+@slider
+attack           = slider1 * slider1;
+volume           = slider2;
+drive_mode       = slider3;
+edge_mode        = slider4;
+trim1            = slider5 * 0.5 + 0.75;
+trim2            = slider6 * 0.5 + 0.75;
+bias_shift1      = (slider5 - 0.5) * 0.2;
+bias_shift2      = (slider6 - 0.5) * 0.15;
+inductor_freq    = slider7;
+inductor_q       = slider8;
+inductor_sat     = slider9;
+inductor_mix     = slider10;
+octave_amount    = slider11;
+octave_mode      = slider12;
+octave_filter_freq = slider13;
+octave_dynamics  = slider14;
+sag_amount       = slider15;
+temp_drift_amount = slider16;
+edge_boost       = edge_mode ? 1.8 : 1.0;
+drive_treble     = drive_mode ? 1.5 : 0.7;
+npn_sat = 0.7;
+pnp_sat = 0.55;
+
+@sample
+input = spl0 + spl1 * 0.5;
+
+signal_level = abs(input) > signal_level ?
+               signal_level + 0.1 * (abs(input) - signal_level) :
+               signal_level + 0.01 * (abs(input) - signal_level);
+
+supply_voltage  = power_supply_sag(signal_level, sag_amount);
+temp_gain_mod   = temperature_drift(signal_level, temp_drift_amount);
+sag_gain_mod    = sag_gain_reduction(supply_voltage);
+total_gain_mod  = temp_gain_mod * sag_gain_mod;
+
+stage1 = input * gain_stage1 * trim1 * total_gain_mod;
+stage1 = transistor_sat(stage1, 4.0, 0.8*supply_voltage, 0.7*supply_voltage, bias_shift1 + temp_bias_shift);
+stage1 = sag_compression(stage1, supply_voltage);
+
+hp1    = hp1 + fc_low * (stage1 - hp1);
+stage2 = (stage1 - hp1) * gain_stage2 * attack * total_gain_mod;
+stage2 = asymmetric_clip(stage2, 0.6*supply_voltage, 0.5*supply_voltage, 2.0);
+stage2 = sag_compression(stage2, supply_voltage);
+
+octave_mode == 0 ? (
+  octave_raw = octave_rectify(stage2);
+  octave_raw = octave_enhance(octave_raw, 0.3);
+) : octave_mode == 1 ? (
+  octave_raw = octave_doubler(stage2, 0.8);
+  octave_raw = octave_raw + octave_intermod(stage2, prev_sample, 0.4);
+  octave_raw = octave_enhance(octave_raw, 0.5);
+) : (
+  oct1 = octave_rectify(stage2);
+  oct2 = octave_doubler(stage2, 1.0);
+  oct3 = octave_intermod(stage2, prev_sample, 0.7);
+  octave_raw = oct1*0.4 + oct2*0.4 + oct3*0.2;
+  octave_raw = octave_enhance(octave_raw, 0.8);
+);
+
+octave_filtered      = octave_filter(octave_raw, octave_filter_freq);
+octave_sat           = tanh(octave_filtered * 2.0) * 0.7;
+stage2_with_octave   = octave_dynamic_mix(stage2, octave_sat, octave_dynamics, octave_amount);
+prev_sample          = stage2;
+
+resonant     = multi_resonator(stage2_with_octave, inductor_freq, inductor_q);
+resonant_sat = inductor_saturate(resonant, inductor_sat);
+stage3       = stage2_with_octave + (resonant + resonant_sat) * inductor_mix;
+stage3       = stage3 * gain_stage3 * total_gain_mod;
+stage3       = asymmetric_clip(stage3, 0.5*supply_voltage, 0.4*supply_voltage, 1.8);
+
+stage4 = stage3 * gain_stage4 * edge_boost * trim2 * total_gain_mod;
+lp1    = lp1 + fc_high * drive_treble * (stage4 - lp1);
+stage4 = drive_mode ? stage4 : lp1;
+
+output = asymmetric_clip(stage4 * 0.4, 0.65*supply_voltage, 0.45*supply_voltage, 2.5);
+output = transistor_sat(output, 2.5, npn_sat*supply_voltage, pnp_sat*supply_voltage, bias_shift2 + temp_bias_shift);
+
+spl0 = output * volume;
+spl1 = output * volume;
+
+// ============================================================
+// GFX — Tron theme, citizenkeith-ui-lib
+// ============================================================
+
+@gfx 660 456
+
+control_start("main", "tron");
+
+ui_screen() == "main" ? (
+
+// ---- Background ----
+gfx_r = 0.14; gfx_g = 0.14; gfx_b = 0.16; gfx_a = 1;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+check_dbl_click();
+update_parameters();
+
+// ============================================================
+// LAYOUT CONSTANTS
+// ============================================================
+
+// Section row 1: y=96..276
+row1_y  = 96;
+row1_h  = 180;
+row1_cy = row1_y + 22 + 68;   // knob center y = 170
+
+// Section row 2: y=268..432
+row2_y  = row1_y + row1_h + 8;
+row2_h  = 164;
+row2_cy = row2_y + 22 + 68;   // knob center y = 358
+
+// Row 1 column extents
+fuzz_x = 8;   fuzz_w = 196;   // x=8..204
+bias_x = 212; bias_w = 132;   // x=212..344
+oct_x  = 352; oct_w  = 300;   // x=352..652
+
+// Row 2 column extents
+ind_x  = 8;   ind_w  = 428;   // x=8..436
+age_x  = 444; age_w  = 208;   // x=444..652
+
+// ============================================================
+// PLUGIN TITLE
+// ============================================================
+gfx_r = 0.78; gfx_g = 0.78; gfx_b = 0.82; gfx_a = 1;
+gfx_setfont(1, "Trebuchet MS", 14, 'b');
+gfx_x = 12; gfx_y = 8;
+gfx_drawstr("WATKINS FUZZ PEDAL");
+
+// ============================================================
+// SWITCH ROW  (Drive toggle, Edge toggle, Octave Mode 3-way)
+// ============================================================
+
+sw_label_y  = 34;   // y for row header text ("DRIVE", etc.)
+sw_center_y = 62;   // vertical center of toggle switches (clear of labels above)
+sw_h        = 20;   // toggle height
+sw_state_y  = sw_center_y + 14; // state text below switch
+
+// --- DRIVE (slider3: Dark / Bright) ----
+drive_cx = 90;
+draw_switch_label(drive_cx, sw_label_y, "DRIVE");
+ui_push_rect(drive_cx - 26, sw_center_y - sw_h/2, 52, sw_h);
+  slider3 = control_switch(slider3);
+  slider_automate(slider3);
+ui_pop();
+// current mode text
+sw_lbl_str = slider3 ? "BRIGHT" : "DARK";
+slider3 ? (gfx_r=1.0; gfx_g=0.72; gfx_b=0.26;) : (gfx_r=1.0; gfx_g=1.0; gfx_b=1.0;);
+gfx_a = 1; gfx_setfont(1, "Arial", 10);
+gfx_measurestr(sw_lbl_str, sw_lw, sw_lh);
+gfx_x = drive_cx - sw_lw/2; gfx_y = sw_state_y;
+gfx_drawstr(sw_lbl_str);
+
+// --- EDGE (slider4: Smooth / Edge) ----
+edge_cx = 235;
+draw_switch_label(edge_cx, sw_label_y, "EDGE");
+ui_push_rect(edge_cx - 26, sw_center_y - sw_h/2, 52, sw_h);
+  slider4 = control_switch(slider4);
+  slider_automate(slider4);
+ui_pop();
+sw_lbl_str = slider4 ? "EDGE" : "SMOOTH";
+slider4 ? (gfx_r=1.0; gfx_g=0.55; gfx_b=0.20;) : (gfx_r=1.0; gfx_g=1.0; gfx_b=1.0;);
+gfx_a = 1; gfx_setfont(1, "Arial", 10);
+gfx_measurestr(sw_lbl_str, sw_lw, sw_lh);
+gfx_x = edge_cx - sw_lw/2; gfx_y = sw_state_y;
+gfx_drawstr(sw_lbl_str);
+
+// --- OCTAVE MODE (slider12: 0=Subtle, 1=Moderate, 2=Aggressive) ----
+oct_sw_x0   = 290;
+oct_sw_y0   = sw_center_y - 12;
+oct_sw_totw = 330;
+oct_tab_w   = floor(oct_sw_totw / 3);
+oct_tab_h   = 24;
+
+draw_switch_label(oct_sw_x0 + oct_sw_totw/2, sw_label_y, "OCTAVE MODE");
+
+i = 0;
+loop(3,
+  ui_push_rect(oct_sw_x0 + i*oct_tab_w + 1, oct_sw_y0, oct_tab_w - 2, oct_tab_h);
+    i == slider12 ? control_background_inset() : control_background_enabled("none");
+    ui_color(255, 255, 255);
+    ui_align(0.5, 0.5);
+    ui_fontsize(9);
+    i == 0 ? ui_text("SUBTLE") : i == 1 ? ui_text("MODERATE") : ui_text("AGGRESSIVE");
+    i == slider12 ? control_finish_inset() : control_finish_enabled("none");
+    ui_click() ? (slider12 = i; slider_automate(slider12););
+  ui_pop();
+  i += 1;
+);
+
+// ============================================================
+// ROW 1 — FUZZ | BIAS | OCTAVE
+// ============================================================
+
+// ---- FUZZ SECTION ---- (red accent)
+draw_section_box(fuzz_x, row1_y, fuzz_w, row1_h, 0.82, 0.22, 0.14, "FUZZ");
+
+fuzz_att_cx = fuzz_x + 49;
+ui_push_rect(fuzz_att_cx - 22, row1_cy - 22, 44, 44);
+  slider1 = control_dial(slider1, 0, 1, 0);
+  slider_automate(slider1);
+ui_pop();
+dbl_click_in_rect(fuzz_att_cx-22, row1_cy-22, 44, 44) ? (slider1 = 0.1; slider_automate(slider1););
+strcpy(#lbl, "ATTACK"); draw_label_at(fuzz_att_cx, row1_cy - 36);
+sprintf(#val, "%.2f", slider1); draw_value_at(fuzz_att_cx, row1_cy + 26);
+
+fuzz_vol_cx = fuzz_x + 147;
+ui_push_rect(fuzz_vol_cx - 22, row1_cy - 22, 44, 44);
+  slider2 = control_dial(slider2, 0, 1, 0);
+  slider_automate(slider2);
+ui_pop();
+dbl_click_in_rect(fuzz_vol_cx-22, row1_cy-22, 44, 44) ? (slider2 = 1.0; slider_automate(slider2););
+strcpy(#lbl, "VOLUME"); draw_label_at(fuzz_vol_cx, row1_cy - 36);
+sprintf(#val, "%.2f", slider2); draw_value_at(fuzz_vol_cx, row1_cy + 26);
+
+// ---- BIAS SECTION ---- (amber accent)
+draw_section_box(bias_x, row1_y, bias_w, row1_h, 0.80, 0.58, 0.08, "BIAS");
+
+bias_t1_cx = bias_x + 33;
+ui_push_rect(bias_t1_cx - 22, row1_cy - 22, 44, 44);
+  slider5 = control_dial(slider5, 0, 1, 0);
+  slider_automate(slider5);
+ui_pop();
+dbl_click_in_rect(bias_t1_cx-22, row1_cy-22, 44, 44) ? (slider5 = 0.0; slider_automate(slider5););
+strcpy(#lbl, "TRIM 1"); draw_label_at(bias_t1_cx, row1_cy - 36);
+sprintf(#val, "%.2f", slider5); draw_value_at(bias_t1_cx, row1_cy + 26);
+
+bias_t2_cx = bias_x + 99;
+ui_push_rect(bias_t2_cx - 22, row1_cy - 22, 44, 44);
+  slider6 = control_dial(slider6, 0, 1, 0);
+  slider_automate(slider6);
+ui_pop();
+dbl_click_in_rect(bias_t2_cx-22, row1_cy-22, 44, 44) ? (slider6 = 0.0; slider_automate(slider6););
+strcpy(#lbl, "TRIM 2"); draw_label_at(bias_t2_cx, row1_cy - 36);
+sprintf(#val, "%.2f", slider6); draw_value_at(bias_t2_cx, row1_cy + 26);
+
+// ---- OCTAVE SECTION ---- (cyan accent)
+draw_section_box(oct_x, row1_y, oct_w, row1_h, 0.12, 0.62, 0.88, "OCTAVE");
+
+oct_amt_cx = oct_x + 51;
+ui_push_rect(oct_amt_cx - 22, row1_cy - 22, 44, 44);
+  slider11 = control_dial(slider11, 0, 1, 0);
+  slider_automate(slider11);
+ui_pop();
+dbl_click_in_rect(oct_amt_cx-22, row1_cy-22, 44, 44) ? (slider11 = 0.35; slider_automate(slider11););
+strcpy(#lbl, "AMOUNT"); draw_label_at(oct_amt_cx, row1_cy - 36);
+sprintf(#val, "%.2f", slider11); draw_value_at(oct_amt_cx, row1_cy + 26);
+
+oct_bld_cx = oct_x + 150;
+ui_push_rect(oct_bld_cx - 22, row1_cy - 22, 44, 44);
+  slider14 = control_dial(slider14, 0, 1, 0);
+  slider_automate(slider14);
+ui_pop();
+dbl_click_in_rect(oct_bld_cx-22, row1_cy-22, 44, 44) ? (slider14 = 0.6; slider_automate(slider14););
+strcpy(#lbl, "BLEND"); draw_label_at(oct_bld_cx, row1_cy - 36);
+sprintf(#val, "%.2f", slider14); draw_value_at(oct_bld_cx, row1_cy + 26);
+
+oct_frq_cx = oct_x + 249;
+ui_push_rect(oct_frq_cx - 22, row1_cy - 22, 44, 44);
+  slider13 = control_dial(slider13, 800, 4000, 0);
+  slider_automate(slider13);
+ui_pop();
+dbl_click_in_rect(oct_frq_cx-22, row1_cy-22, 44, 44) ? (slider13 = 1800; slider_automate(slider13););
+strcpy(#lbl, "FREQ"); draw_label_at(oct_frq_cx, row1_cy - 36);
+sprintf(#val, "%.0f Hz", slider13); draw_value_at(oct_frq_cx, row1_cy + 26);
+
+// ============================================================
+// ROW 2 — INDUCTOR | AGING
+// ============================================================
+
+// ---- INDUCTOR SECTION ---- (violet accent)
+draw_section_box(ind_x, row2_y, ind_w, row2_h, 0.52, 0.26, 0.82, "INDUCTOR");
+
+ind_frq_cx = ind_x + 55;
+ui_push_rect(ind_frq_cx - 22, row2_cy - 22, 44, 44);
+  slider7 = control_dial(slider7, 400, 3000, 0);
+  slider_automate(slider7);
+ui_pop();
+dbl_click_in_rect(ind_frq_cx-22, row2_cy-22, 44, 44) ? (slider7 = 1200; slider_automate(slider7););
+strcpy(#lbl, "FREQ"); draw_label_at(ind_frq_cx, row2_cy - 36);
+sprintf(#val, "%.0f Hz", slider7); draw_value_at(ind_frq_cx, row2_cy + 26);
+
+ind_q_cx = ind_x + 163;
+ui_push_rect(ind_q_cx - 22, row2_cy - 22, 44, 44);
+  slider8 = control_dial(slider8, 0.5, 10, 0);
+  slider_automate(slider8);
+ui_pop();
+dbl_click_in_rect(ind_q_cx-22, row2_cy-22, 44, 44) ? (slider8 = 3.5; slider_automate(slider8););
+strcpy(#lbl, "Q"); draw_label_at(ind_q_cx, row2_cy - 36);
+sprintf(#val, "%.1f", slider8); draw_value_at(ind_q_cx, row2_cy + 26);
+
+ind_sat_cx = ind_x + 271;
+ui_push_rect(ind_sat_cx - 22, row2_cy - 22, 44, 44);
+  slider9 = control_dial(slider9, 0, 1, 0);
+  slider_automate(slider9);
+ui_pop();
+dbl_click_in_rect(ind_sat_cx-22, row2_cy-22, 44, 44) ? (slider9 = 0.4; slider_automate(slider9););
+strcpy(#lbl, "SAT"); draw_label_at(ind_sat_cx, row2_cy - 36);
+sprintf(#val, "%.2f", slider9); draw_value_at(ind_sat_cx, row2_cy + 26);
+
+ind_mix_cx = ind_x + 379;
+ui_push_rect(ind_mix_cx - 22, row2_cy - 22, 44, 44);
+  slider10 = control_dial(slider10, 0, 1, 0);
+  slider_automate(slider10);
+ui_pop();
+dbl_click_in_rect(ind_mix_cx-22, row2_cy-22, 44, 44) ? (slider10 = 0.3; slider_automate(slider10););
+strcpy(#lbl, "MIX"); draw_label_at(ind_mix_cx, row2_cy - 36);
+sprintf(#val, "%.2f", slider10); draw_value_at(ind_mix_cx, row2_cy + 26);
+
+// ---- AGING SECTION ---- (green accent)
+draw_section_box(age_x, row2_y, age_w, row2_h, 0.22, 0.72, 0.32, "AGING");
+
+age_sag_cx = age_x + 54;
+ui_push_rect(age_sag_cx - 22, row2_cy - 22, 44, 44);
+  slider15 = control_dial(slider15, 0, 1, 0);
+  slider_automate(slider15);
+ui_pop();
+dbl_click_in_rect(age_sag_cx-22, row2_cy-22, 44, 44) ? (slider15 = 0.5; slider_automate(slider15););
+strcpy(#lbl, "SAG"); draw_label_at(age_sag_cx, row2_cy - 36);
+sprintf(#val, "%.2f", slider15); draw_value_at(age_sag_cx, row2_cy + 26);
+
+age_tmp_cx = age_x + 158;
+ui_push_rect(age_tmp_cx - 22, row2_cy - 22, 44, 44);
+  slider16 = control_dial(slider16, 0, 1, 0);
+  slider_automate(slider16);
+ui_pop();
+dbl_click_in_rect(age_tmp_cx-22, row2_cy-22, 44, 44) ? (slider16 = 0.3; slider_automate(slider16););
+strcpy(#lbl, "TEMP"); draw_label_at(age_tmp_cx, row2_cy - 36);
+sprintf(#val, "%.2f", slider16); draw_value_at(age_tmp_cx, row2_cy + 26);
+
+// ---- End frame ----
+mouse_cap_last = mouse_cap;
+
+) : ui_system();
