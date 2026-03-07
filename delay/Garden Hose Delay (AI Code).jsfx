@@ -5,7 +5,7 @@ about:
   # Garden Hose Delay - Time Cube Emulator
   An emulation of the Cooper Time Cube, a classic electromechanical delay unit
   that created its characteristic doubling effect by sending audio through a
-  coiled garden hose as a transmission line.
+  coiled garden hose as a transmission line. 
 
 // @changelog
 //   2.0 - STEREO and OUTPUT sections swapped in bottom row.

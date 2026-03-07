@@ -6,7 +6,7 @@ desc: Tycho Delay TMA-1
 // @about
 //   Good quality tape-style delay with optimized memory layout and ping pong.
 //   Based on work by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault.
-//   Ping pong functionality inspired by Stillwell. Memory layout optimized by Claude AI.
+//   Ping pong functionality inspired by Stillwell. Memory layout optimized by Claude AI. 
 // @changelog
 //   v2.1
 //     Double-click to reset knobs, amber value readouts

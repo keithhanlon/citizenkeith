@@ -5,7 +5,7 @@ changelog:Initial release - Port of igorski's Rechoir VST to JSFX
 about:
   # ReaChoir - Harmonized Delay
   
-  Tempo-synced delay with pitch-shifted harmonized echoes.
+  Tempo-synced delay with pitch-shifted harmonized echoes. 
   
   Port of igorski's Rechoir VST (https://github.com/igorski/rechoir)
   

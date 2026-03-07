@@ -1,7 +1,7 @@
 desc: Transparent Bus Compressor
 author: citizenkeith - Claude AI
 version: 2.0
-about: SSL/Sonitus-inspired glue compression for mix bus duty
+about: SSL/Sonitus-inspired glue compression for mix bus duty 
 // RMS detection, soft knee, program-dependent release
 // Released under GPLv3 License
 

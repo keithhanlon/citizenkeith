@@ -4,7 +4,7 @@ author: citizenkeith - Claude AI
 about:
   Frippertronics-inspired tape loop delay.
   Variable loop length, feedback, damping, saturation, and wow/flutter modulation.
-  Supports tempo sync with seven time divisions.
+  Supports tempo sync with seven time divisions. 
 
 // ReaPack metadata
 // @version 2.0

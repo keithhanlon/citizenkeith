@@ -4,7 +4,7 @@ version: 2.0
 about: 
   Emulation of the Watkins WEM Project V Fuzz pedal, a sophisticated 8-transistor British fuzz from the late 1960s.
   Features asymmetric quasi-complementary clipping, inductor resonance modeling, and dynamic octave effects.
-  Famous for use by Brian Eno and Robert Fripp on classic recordings.
+  Famous for use by Brian Eno and Robert Fripp on classic recordings. 
   This JSFX released under GPLv3 license
 
 // ReaPack metadata

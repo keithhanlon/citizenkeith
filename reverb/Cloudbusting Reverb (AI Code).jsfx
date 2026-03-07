@@ -5,7 +5,7 @@ about:
   # Cloudbusting Reverb
   
   An algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion,
-  per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections.
+  per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections. 
   
   ## Credits
   Based on the CloudSeed reverb algorithm by Valdemar Erlingsson (Ghost Note Audio).

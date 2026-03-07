@@ -1,6 +1,7 @@
 desc: Tempo Tremolo
 author: citizenkeith
 version: 2.0
+about:Tempo-synced stereo tremolo with morphing wave shapes.
 // ReaPack metadata
 // @version 2.0
 // @author citizenkeith
@@ -9,7 +10,7 @@ version: 2.0
 // @about
 //   Tempo-synced stereo tremolo with morphing wave shapes.
 //   Square, triangle, and sine waveforms with smooth morphing,
-//   tempo sync, and stereo phase offset.
+//   tempo sync, and stereo phase offset. 
 // @changelog
 //   v2.0
 //     Optimized DSP: smooth_coef in @init, per-sample rate smoothing,

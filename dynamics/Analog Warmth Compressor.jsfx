@@ -9,7 +9,7 @@ version:2.0
 // @about
 //   VintageWarmer-inspired compressor with optional 2x oversampling via
 //   a 63-tap halfband FIR filter. Soft/medium/hard slider6, parallel slider8,
-//   stereo-linked detection.
+//   stereo-linked detection. 
 // @changelog
 //   2.0 - Fixed fir_coeffs memory collision at address 0; replaced shift-register
 //         delay lines with circular buffers (31x fewer memory moves per sample);

@@ -1,7 +1,7 @@
 desc:Probabilistic MIDI Note Generator
 version: 2.0
 author: citizenkeith and Claude AI
-about: MIDI pattern generator with scale-aware probabilistic note selection
+about: MIDI pattern generator with scale-aware probabilistic note selection 
 // @version 2.0
 // @author citizenkeith
 // @license GPL v3

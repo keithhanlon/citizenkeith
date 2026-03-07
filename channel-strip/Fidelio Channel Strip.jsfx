@@ -5,7 +5,7 @@ desc:Fidelio Channel Strip
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
 // @about
 //   Channel strip with transformer-style harmonic coloration, Neve-style shelf,
-//   Trident-style HPF, plus a VCA compressor, expander and gate.
+//   Trident-style HPF, plus a VCA compressor, expander and gate. 
 // @changelog
 //   v1.6
 //     Removed redundant output meter calculation in @sample
