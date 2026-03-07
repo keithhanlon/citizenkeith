@@ -10,13 +10,11 @@ about: Stereo widener, BBD chorus, ping pong delay and three reverb choices, for
 // @about
 //   Stereo widener, BBD-style chorus, ping-pong delay, and three reverb algorithms
 //   (Verbity2, Bloom/MidiVerb II, Dattorro) for a Robin Guthrie / Cocteau Twins inspired tone.
-//   Custom Tron-theme GUI with double-click to reset knobs and amber value readouts.
 // @changelog
 //   v2.1
-//     Redesigned GUI: wider window, Tron theme consistent with citizenkeith plugin family
+//     New "standard" GUI: wider window
 //     Added amber value readouts below all knobs
 //     Added double-click to reset knobs to default values
-//     Full ReaPack metadata header
 //   v2.0
 //     BBD chorus, ping-pong delay, triple reverb (Verbity2, Bloom, Dattorro)
 //     Stereo widener stage always on

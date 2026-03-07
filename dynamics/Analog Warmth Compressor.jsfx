@@ -9,7 +9,7 @@ version:2.0
 // @about
 //   VintageWarmer-inspired compressor with optional 2x oversampling via
 //   a 63-tap halfband FIR filter. Soft/medium/hard slider6, parallel slider8,
-//   stereo-linked detection, Watkins-style GUI.
+//   stereo-linked detection.
 // @changelog
 //   2.0 - Fixed fir_coeffs memory collision at address 0; replaced shift-register
 //         delay lines with circular buffers (31x fewer memory moves per sample);
@@ -20,7 +20,7 @@ version:2.0
 //         clean single-pass; GUI layout constants moved to @init (computed once, not
 //         per frame); named slider variables used throughout @gfx (fixes incorrect
 //         knob positions on first insert); exp() instead of 10^x for dB conversions;
-//         memset() for buffer init; added Watkins-style GUI
+//         memset() for buffer init; added new "standard" GUI
 //   1.1 - Initial release
 
 import citizenkeith-ui-lib.jsfx-inc

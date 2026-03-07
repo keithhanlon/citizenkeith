@@ -1,13 +1,13 @@
 desc:Probabilistic MIDI Note Generator
 version: 2.0
 author: citizenkeith and Claude AI
-about: Generative MIDI pattern generator with scale-aware probabilistic note selection
+about: MIDI pattern generator with scale-aware probabilistic note selection
 // @version 2.0
 // @author citizenkeith
 // @license GPL v3
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
 // @about
-//   Generative MIDI pattern generator. Outputs note-on/off events based on
+//   MIDI pattern generator. Outputs note-on/off events based on
 //   probabilistic pattern generation across 12 scales. Supports project tempo
 //   sync or internal BPM. Fully MIDI-spec compliant note-off messages.
 // @changelog

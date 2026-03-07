@@ -18,7 +18,7 @@ about:
 //   Boosts quiet passages while leaving loud peaks untouched.
 // @changelog
 //   v1.1
-//     Added custom GUI: horizontal sliders, boost meter bar
+//     New "standard" GUI
 //     Removed default REAPER slider UI
 //     Sidechain HPF raised to 150Hz for better bass control
 //     Level-dependent sensitivity taper replaces hard gate floor

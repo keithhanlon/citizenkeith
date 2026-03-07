@@ -15,7 +15,7 @@ version: 2.0
 //     Optimized DSP: smooth_coef in @init, per-sample rate smoothing,
 //     morph_wave early-outs, independent phase_r increment,
 //     note_div_values at safe base address, dead cache vars removed
-//     Custom citizenkeith-family GUI
+//     New "standard" GUI
 //   v1.0
 //     Initial release
 

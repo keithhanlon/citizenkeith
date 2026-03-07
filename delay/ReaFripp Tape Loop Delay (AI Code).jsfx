@@ -16,7 +16,7 @@ about:
 //   and tempo sync.
 // @changelog
 //   v2.0
-//     New citizenkeith-family GUI (4 sections: DELAY, TEMPO SYNC, TAPE EFFECTS, OUTPUT)
+//     New "standard" GUI
 //     DELAY section: Loop, Feedback, Damping knobs; Loop greys out when sync active
 //     TEMPO SYNC section: Tycho-style scrolling division box + SYNC button, purple header
 //     TAPE EFFECTS section: Sat Mode switch, Saturation, W&F knobs

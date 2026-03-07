@@ -13,7 +13,7 @@ about:
 //         Added full ReaPack metadata (provides, screenshot, links).
 //   1.4 - OUTPUT section (green) for Wet Mix. STEREO header blue.
 //         Row heights increased for bottom breathing room.
-//   1.3 - GUI: ECHOES/EQ/STEREO sections. ui_setup/freemem fix.
+//   1.3 - New "standard" GUI. ui_setup/freemem fix.
 //   1.2 - Stereo Width as continuous 0-2ms R channel delay offset.
 //   1.1 - Fixed buffer size, drift_slew, Character slider range.
 

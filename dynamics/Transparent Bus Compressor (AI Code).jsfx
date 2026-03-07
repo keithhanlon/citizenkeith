@@ -14,7 +14,7 @@ about: SSL/Sonitus-inspired glue compression for mix bus duty
 //   soft knee, program-dependent release, and stereo-linked gain reduction.
 // @changelog
 //   v2.0
-//     Added citizenkeith-family GUI (COMPRESS row, OUTPUT + GR METER row)
+//     Added new "standard" GUI
 //     Fixed RMS buffer address collision (was at address 0, overlapping audio)
 //     Fixed RMS math: buffer now stores power (x^2), single sqrt at read
 //     Fixed RMS O(n) per-sample loop: replaced with O(1) running sum

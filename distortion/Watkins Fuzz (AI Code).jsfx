@@ -16,10 +16,10 @@ about:
 //   Emulation of the Watkins WEM Project V Fuzz pedal.
 //   8-transistor British fuzz circa late 1960s — asymmetric quasi-complementary
 //   clipping, inductor resonance, dynamic octave effect, power supply sag,
-//   and thermal drift modeling. Custom Tron-theme GUI.
+//   and thermal drift modeling.
 // @changelog
 //   v2.0
-//     Full custom GUI built with citizenkeith-ui-lib (Tron theme)
+//     New "standard" GUI
 //     Per-section color-coded panel headers: FUZZ, BIAS, OCTAVE, INDUCTOR, AGING
 //     Drive and Edge promoted to top-level toggle switches with live state display
 //     Octave Mode promoted to top-level 3-way tab selector

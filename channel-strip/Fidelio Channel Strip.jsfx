@@ -13,8 +13,7 @@ desc:Fidelio Channel Strip
 //     Reduced window size: 700x828 -> 580x680
 //     Smaller knobs and tighter spacing
 //   v1.4
-//     Redesigned GUI: dark background, family-standard title style
-//     Section header colors match citizenkeith plugin family
+//     New "standard" GUI
 //     Dim knob labels, amber value readouts
 //     White VU meters
 //     C/E/G mode selector with per-mode colors

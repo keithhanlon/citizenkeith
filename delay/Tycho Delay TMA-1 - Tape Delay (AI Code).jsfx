@@ -9,12 +9,10 @@ desc: Tycho Delay TMA-1
 //   Ping pong functionality inspired by Stillwell. Memory layout optimized by Claude AI.
 // @changelog
 //   v2.1
-//     Redesigned GUI: section boxes (I/O, Delay, Character) matching citizenkeith plugin family
-//     Dark background, family-standard title style
 //     Double-click to reset knobs, amber value readouts
 //     Sync selector integrated into Delay section
 //   v2.0
-//     Complete GUI overhaul using citizenkeith-ui-lib
+//     New "standard" GUI
 //     Sync on/off toggle with dedicated SYNC button
 //     Fixed ui_setup memory overlap causing periodic clicks
 //   v1.0
