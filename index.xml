@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="bded48aaba76e10bfc53df52bb77c97744c7fce0" name="citizenkeith">
+<index version="1" commit="a69ced761bb71a8a3a666d189851e707d843efb3" name="citizenkeith">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -7,7 +7,7 @@
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Channel strip with transformer-style harmonic coloration, Neve style shelf, Trident style HPF, plus a VCA compressor, expander and gate\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Channel strip with transformer-style harmonic coloration, Neve-style shelf, Trident-style HPF, plus a VCA compressor, expander and gate.\par}
 }
 ]]></description>
       </metadata>
@@ -21,6 +21,22 @@
       </version>
       <version name="1.3" author="citizenkeith and Claude AI" time="2026-02-24T20:02:48Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/eb63b6121ea73400740c656f27e9b54f3ff17d0e/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
+      </version>
+      <version name="1.6" author="citizenkeith" time="2026-03-07T01:55:47Z">
+        <changelog><![CDATA[v1.6
+  Removed redundant output meter calculation in @sample
+v1.5
+  Reduced window size: 700x828 -> 580x680
+  Smaller knobs and tighter spacing
+v1.4
+  Redesigned GUI: dark background, family-standard title style
+  Section header colors match citizenkeith plugin family
+  Dim knob labels, amber value readouts
+  White VU meters
+  C/E/G mode selector with per-mode colors
+  Centered Polarity and SAT ON switches
+  Compressor knobs repositioned for better spacing]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/a69ced761bb71a8a3a666d189851e707d843efb3/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
       </version>
     </reapack>
   </category>
