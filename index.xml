@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="a69ced761bb71a8a3a666d189851e707d843efb3" name="citizenkeith">
+<index version="1" commit="9da29e960f651d3fac670f294af95b767fb45ec2" name="citizenkeith">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -65,39 +65,15 @@ v1.4
 \widowctrl\hyphauto
 
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Garden Hose Delay - Time Cube Emulator\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 An emulation of the Cooper Time Cube, a classic electromechanical delay unit from the 1970s that created its characteristic doubling effect by sending audio through a coiled garden hose as a transmission line.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 An emulation of the Cooper Time Cube, a classic electromechanical delay unit that created its characteristic doubling effect by sending audio through a coiled garden hose as a transmission line.\par}
 }
 ]]></description>
       </metadata>
       <version name="1.0" author="citizenkeith and Claude AI" time="2026-02-21T19:19:41Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/3d9e3081a375735465bb5fcd34fe34f67e8c8f8b/delay/Garden%20Hose%20Delay%20(AI%20Code).jsfx</source>
       </version>
-    </reapack>
-    <reapack name="ReaChoir Delay - Harmonized Delay.jsfx" type="effect" desc="ReaChoir - Harmonized Delay">
-      <metadata>
-        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
-{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
-\widowctrl\hyphauto
-
-{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 ReaChoir - Harmonized Delay\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 Tempo-synced delay with pitch-shifted harmonized echoes.\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 Port of igorski's Rechoir VST (https://github.com/igorski/rechoir)\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 Features:\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Tempo-synced delay (quantized to 16th notes)\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Pitch shifting (\u177 ?1 octave)\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab 7 musical scales for harmonization\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Square wave LFOs (tempo-synced modulation)\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Independent stereo modulation (Odd/Even channels)\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Freeze mode with reverb\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Lowpass filter with resonance\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Bit reduction/decimator\sa180\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 Original VST by igorski JSFX port by citizenkeith\par}
-}
-]]></description>
-      </metadata>
-      <version name="1.0.0" author="citizenkeith" time="2026-02-22T01:41:59Z">
-        <changelog><![CDATA[Initial release - Port of igorski's Rechoir VST to JSFX]]></changelog>
-        <source>https://github.com/keithhanlon/citizenkeith/raw/1df68abd9c51af352ce3be8dac4b8fb1adc17095/delay/ReaChoir%20Delay%20-%20Harmonized%20Delay.jsfx</source>
+      <version name="2.0" author="citizenkeith and Claude AI" time="2026-03-07T02:11:08Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/delay/Garden%20Hose%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
     <reapack name="ReaFripp Tape Loop Delay (AI Code).jsfx" type="effect" desc="ReaFripp Tape Loop Delay">
@@ -106,12 +82,15 @@ v1.4
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Frippertronics-inspired loop plugin with Revox 77 inspired GUI This JSFX released under GPLv3 license\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Frippertronics-inspired tape loop delay. Variable loop length, feedback, damping, saturation, and wow/flutter modulation. Supports tempo sync with seven time divisions.\par}
 }
 ]]></description>
       </metadata>
       <version name="1.0" author="citizenkeith - Claude AI" time="2025-07-26T16:41:38Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/250c81cf22bfe84766e870b22759daeab20c7a1a/delay/ReaFripp%20Tape%20Loop%20Delay%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.0" author="citizenkeith - Claude AI" time="2026-03-07T02:11:08Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/delay/ReaFripp%20Tape%20Loop%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
     <reapack name="Tycho Delay TMA-1 - Tape Delay (AI Code).jsfx" type="effect" desc="Tycho Delay TMA-1">
@@ -120,7 +99,7 @@ v1.4
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Good quality tape-style delay with optimized memory layout and ping pong. Based on work by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault. Ping pong functionality inspired by Stillwell. Memory layout optimized by Claude AI. Released under GPLv3 license.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Good quality tape-style delay with optimized memory layout and ping pong. Based on work by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault. Ping pong functionality inspired by Stillwell. Memory layout optimized by Claude AI.\par}
 }
 ]]></description>
       </metadata>
@@ -149,6 +128,21 @@ v1.4
 + Tempo sync with 28 note values]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/5534039cc2dbc6bf536a8e402faaab702a45baf9/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
       </version>
+      <version name="2.5" author="citizenkeith" time="2026-03-07T02:11:08Z">
+        <changelog><![CDATA[v2.1
+  Redesigned GUI: section boxes (I/O, Delay, Character) matching citizenkeith plugin family
+  Dark background, family-standard title style
+  Double-click to reset knobs, amber value readouts
+  Sync selector integrated into Delay section
+v2.0
+  Complete GUI overhaul using citizenkeith-ui-lib
+  Sync on/off toggle with dedicated SYNC button
+  Fixed ui_setup memory overlap causing periodic clicks
+v1.0
+  Initial release with Catmull-Rom interpolation delay buffer
+  Ping pong stereo, tempo sync, tape saturation]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
+      </version>
     </reapack>
   </category>
   <category name="distortion">
@@ -168,32 +162,138 @@ v1.4
     </reapack>
   </category>
   <category name="dynamics">
+    <reapack name="Analog Warmth Compressor.jsfx" type="effect" desc="Analog Warmth Compressor">
+      <version name="2.0" author="citizenkeith" time="2026-03-07T02:11:08Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/dynamics/Analog%20Warmth%20Compressor.jsfx</source>
+      </version>
+    </reapack>
+    <reapack name="FM Radio Compressor.jsfx" type="effect" desc="FM Radio Compressor">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Upward compressor inspired by analog FM radio processing. Boosts quiet passages while leaving loud peaks untouched.\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.1" author="citizenkeith" time="2026-03-07T02:11:08Z">
+        <changelog><![CDATA[v1.1
+  Added custom GUI: horizontal sliders, boost meter bar
+  Removed default REAPER slider UI
+  Sidechain HPF raised to 150Hz for better bass control
+  Level-dependent sensitivity taper replaces hard gate floor
+  Automatic makeup gain baked into sensitivity scaling
+  Pre-charge fix eliminates startup distortion spike
+v1.0
+  Initial release
+  Upward compression with lookahead circular buffer
+  Program-dependent three-tier release
+  Soft limiter (x/1+|x|) output safety stage
+  PDC reported to REAPER for phase alignment]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/dynamics/FM%20Radio%20Compressor.jsfx</source>
+      </version>
+    </reapack>
     <reapack name="Transparent Bus Compressor (AI Code).jsfx" type="effect" desc="Transparent Bus Compressor">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Clean, artifact-free compression for mix bus duty\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 SSL/Sonitus-inspired glue compression for mix bus duty\par}
 }
 ]]></description>
       </metadata>
       <version name="1.5" author="citizenkeith - Claude AI" time="2026-02-22T00:14:55Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/df38092f9cb5db151f542b38643ec84ce63b617a/dynamics/Transparent%20Bus%20Compressor%20(AI%20Code).jsfx</source>
       </version>
+      <version name="2.0" author="citizenkeith - Claude AI" time="2026-03-07T02:11:08Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/dynamics/Transparent%20Bus%20Compressor%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="experiments">
+    <reapack name="ReaChoir Delay - Harmonized Delay.jsfx" type="effect" desc="ReaChoir - Harmonized Delay">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 ReaChoir - Harmonized Delay\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Tempo-synced delay with pitch-shifted harmonized echoes.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Port of igorski's Rechoir VST (https://github.com/igorski/rechoir)\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Features:\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Tempo-synced delay (quantized to 16th notes)\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Pitch shifting (\u177 ?1 octave)\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab 7 musical scales for harmonization\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Square wave LFOs (tempo-synced modulation)\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Independent stereo modulation (Odd/Even channels)\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Freeze mode with reverb\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Lowpass filter with resonance\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Bit reduction/decimator\sa180\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Original VST by igorski JSFX port by citizenkeith\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0.0" author="citizenkeith" time="2026-03-07T02:11:08Z">
+        <changelog><![CDATA[Initial release - Port of igorski's Rechoir VST to JSFX]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/experiments/ReaChoir%20Delay%20-%20Harmonized%20Delay.jsfx</source>
+      </version>
     </reapack>
   </category>
   <category name="midi">
     <reapack name="Probabilistic MIDI Note Generator (AI Code).jsfx" type="effect" desc="Probabilistic MIDI Note Generator">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Generative MIDI pattern generator. Outputs note-on/off events based on probabilistic pattern generation across 12 scales. Supports project tempo sync or internal BPM. Fully MIDI-spec compliant note-off messages.\par}
+}
+]]></description>
+      </metadata>
       <version name="1.0" author="citizenkeith - Claude AI" time="2026-02-22T00:14:55Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/df38092f9cb5db151f542b38643ec84ce63b617a/midi/Probabilistic%20MIDI%20Note%20Generator%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.0" author="citizenkeith" time="2026-03-07T02:11:08Z">
+        <changelog><![CDATA[v2.0
+  Slider labels changed to white for readability
+v1.1
+  Fixed pattern regeneration firing every block at step 0 (now uses flag)
+  Fixed step_length not updating when project tempo changes
+  Fixed note-off velocity (now sends 0, per MIDI spec)
+  Restored free-running current_time (runs without transport)
+  Fixed note duration default (now fraction of step, not raw samples)
+  Added note_count overflow recovery
+  Optimized note-off removal: swap-with-last instead of array shift
+  Added custom GUI: horizontal sliders, color-coded section headers]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/midi/Probabilistic%20MIDI%20Note%20Generator%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
   <category name="modulation">
     <reapack name="Tempo Tremolo (AI Code).jsfx" type="effect" desc="Tempo Tremolo">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Tempo-synced stereo tremolo with morphing wave shapes. Square, triangle, and sine waveforms with smooth morphing, tempo sync, and stereo phase offset.\par}
+}
+]]></description>
+      </metadata>
       <version name="1.0" author="citizenkeith" time="2026-02-22T00:16:40Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/5f929e2fea899cd328c6e36fa7c9239007c8d6b0/modulation/Tempo%20Tremolo%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.0" author="citizenkeith" time="2026-03-07T02:11:08Z">
+        <changelog><![CDATA[v2.0
+  Optimized DSP: smooth_coef in @init, per-sample rate smoothing,
+  morph_wave early-outs, independent phase_r increment,
+  note_div_values at safe base address, dead cache vars removed
+  Custom citizenkeith-family GUI
+v1.0
+  Initial release]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/modulation/Tempo%20Tremolo%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -205,10 +305,11 @@ v1.4
 \widowctrl\hyphauto
 
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Cloudbusting Reverb\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 An algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 A professional algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections.\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Credits\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 Based on the CloudSeed reverb algorithm by Valdemar Erlingsson (Ghost Note Audio). Original CloudSeed: https://github.com/GhostNoteAudio/CloudSeedCore\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 License\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 This plugin is released under the MIT License, matching the CloudSeed source.\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 CloudSeed original license: MIT License - Copyright (c) 2017 Valdemar Erlingsson\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 Cloudbusting Reverb JSFX port: MIT License - Copyright (c) 2026 citizenkeith\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so.\par}
@@ -217,6 +318,9 @@ v1.4
       </metadata>
       <version name="1.0" author="citizenkeith - Claude AI" time="2026-01-30T17:03:48Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/e5c97f8fa97345b6f071a70f20471a7464d8740e/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.5" author="citizenkeith - Claude AI" time="2026-03-07T02:11:08Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
     <reapack name="Cocteau Verb (AI Code).jsfx" type="effect" desc="Cocteau Verb">
@@ -232,22 +336,8 @@ v1.4
       <version name="1.0" author="citizenkeith and Claude AI" time="2026-01-30T17:03:48Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/e5c97f8fa97345b6f071a70f20471a7464d8740e/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
       </version>
-    </reapack>
-    <reapack name="Stargate Ambient Reverb (AI Code).jsfx" type="effect" desc="Stargate Ambient Reverb">
-      <metadata>
-        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
-{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
-\widowctrl\hyphauto
-
-{\pard \ql \f0 \sa180 \li0 \fi0 Diffuse delay lines that morph from simple delays to complex reverb based on diffusion control This JSFX released under GPLv3 license Optimized for lower memory usage\par}
-}
-]]></description>
-      </metadata>
-      <version name="1.0" author="citizenkeith / Claude AI" time="2025-10-29T18:50:44Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/e2e8cda50e48962e8871a83caf5a631dd6c2a4fb/reverb/Stargate%20Ambient%20Reverb%20(AI%20Code).jsfx</source>
-      </version>
-      <version name="1.1" author="citizenkeith / Claude AI" time="2025-10-30T17:25:32Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/efaa6eb519d9db13f19ab5d2d131b71f34bbb0c8/reverb/Stargate%20Ambient%20Reverb%20(AI%20Code).jsfx</source>
+      <version name="2.1" author="citizenkeith and Claude AI" time="2026-03-07T02:11:08Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -258,12 +348,32 @@ v1.4
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Emulation of EMS Synthi AKS Synthesizer This JSFX released under GPLv3 license\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Emulation of the EMS Synthi AKS modular synthesizer. Oscillator with drift, 4-pole ladder filter, ADSR envelope, ring modulator, Sample & Hold with selectable source routing, and MIDI input with pitch bend. Custom GUI: hand-drawn horizontal sliders in color-coded sections.\par}
 }
 ]]></description>
       </metadata>
       <version name="1.0" author="citizenkeith - Claudie AI" time="2025-07-25T17:33:22Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/7294f5754205f5e3f1de4dd140f5531f5396de1b/synth/SynthiAKS%20-%20Modular%20Analog%20Synthesizer%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.0" author="citizenkeith" time="2026-03-07T02:11:08Z">
+        <changelog><![CDATA[v2.0
+  Slider labels changed to white for readability
+  Added custom GUI with hand-drawn horizontal sliders and color-coded sections
+  Removed default REAPER slider GUI
+v1.2
+  Added MIDI note on/off: triggers envelope, sets oscillator pitch
+  Added MIDI pitch bend (+/- 2 semitones)
+  Added S&H source selector: Noise / External / Oscillator
+  Added custom GUI: horizontal sliders, color-coded section headers
+v1.1
+  Fixed ext_noinit (moved to options header)
+  Fixed ring modulator - now runs in @sample
+  Fixed VCA pin logic (unity when pin=0, envelope-controlled when pin>0)
+  Fixed Osc->Filter Cutoff pin now applied in cutoff calculation
+  Filter stability threshold raised from 2 to 10
+  Replaced inline 2*$pi with precomputed pi2 constant
+  Removed default GUI. Removed filter state from @serialize]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/synth/SynthiAKS%20-%20Modular%20Analog%20Synthesizer%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -302,6 +412,28 @@ v1.4
       </version>
       <version name="2.0a" author="citizenkeith - Claude AI" time="2026-02-25T05:11:22Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/043b83820bce325701d14d83a6747850d057ea53/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.1" author="citizenkeith" time="2026-03-07T02:11:08Z">
+        <changelog><![CDATA[v2.2
+  Fixed Noise and Head Bump not updating DSP when dragged (missing update_audio_vars() in @gfx)
+  Fixed Noise slider: now scales noise for all tape machine presets (was Basic Tape only)
+  Fixed Head Bump slider: now trims preset head bump value (was Basic Tape only)
+v2.1
+  Section boxes (I/O, Noise & Head Bump, Character) matching citizenkeith plugin family
+  Knob order: Stereo Width and Wow & Flutter swapped in Character section
+  Background and title styling updated to match Watkins/CocteauVerb
+  Removed GUI meters — using REAPER default meter
+  Added double-click to reset knobs, amber value readouts
+v2.0
+  Complete GUI overhaul with machine selector buttons
+  Added double-click to reset knobs to default values
+  Fixed head bump implementation (low shelf @ 90Hz)
+  Fixed Ampex ATR102 gain staging (was 1.7dB hot)
+  Added machine-specific high-frequency rolloff
+  Unity gain by default (0% input, 0dB output)
+  Conditional dimming of Noise and Head Bump knobs when presets active
+  5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
