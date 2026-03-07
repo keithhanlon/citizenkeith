@@ -1,10 +1,25 @@
 desc:Fidelio Channel Strip
-version:1.3
-author:citizenkeith and Claude AI
-about:Channel strip with transformer-style harmonic coloration, Neve style shelf,
-  Trident style HPF, plus a VCA compressor, expander and gate
-// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
+// @version 1.6
+// @author citizenkeith
 // @license GPL v3
+// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
+// @about
+//   Channel strip with transformer-style harmonic coloration, Neve-style shelf,
+//   Trident-style HPF, plus a VCA compressor, expander and gate.
+// @changelog
+//   v1.6
+//     Removed redundant output meter calculation in @sample
+//   v1.5
+//     Reduced window size: 700x828 -> 580x680
+//     Smaller knobs and tighter spacing
+//   v1.4
+//     Redesigned GUI: dark background, family-standard title style
+//     Section header colors match citizenkeith plugin family
+//     Dim knob labels, amber value readouts
+//     White VU meters
+//     C/E/G mode selector with per-mode colors
+//     Centered Polarity and SAT ON switches
+//     Compressor knobs repositioned for better spacing
 options:no_meter
 
 // Import UI library
@@ -188,7 +203,7 @@ local(norm, fill_h, seg_h, seg_y, seg_norm, t)
         // Green zone
         gfx_r = 0.15; gfx_g = 0.80; gfx_b = 0.25;
       ) : seg_norm < 0.8 ? (
-        // Green -> Yellow transition
+        // Green -> Yellow
         t = (seg_norm - 0.6) / 0.2;
         gfx_r = 0.15 + t * 0.75; gfx_g = 0.80; gfx_b = 0.25 - t * 0.25;
       ) : seg_norm < 0.93 ? (
@@ -231,7 +246,7 @@ function draw_hline(lx, ly, lw)
 function draw_label_at(lx, ly)
 local(lw, lh)
 (
-  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+  gfx_r = 0.71; gfx_g = 0.71; gfx_b = 0.75; gfx_a = 1;
   gfx_setfont(1, "Arial", 10);
   gfx_measurestr(#lbl, lw, lh);
   gfx_x = lx - lw/2;
@@ -242,7 +257,7 @@ local(lw, lh)
 function draw_value_at(vx, vy)
 local(vw, vh)
 (
-  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+  gfx_r = 1.0; gfx_g = 0.82; gfx_b = 0.44; gfx_a = 1;
   gfx_setfont(1, "Arial", 10);
   gfx_measurestr(#val, vw, vh);
   gfx_x = vx - vw/2;
@@ -799,12 +814,6 @@ spl1 *= dyn_gr_lin;
 // Capture for GR meter
 gr_display = -dyn_gr_smooth;
 
-// ---- Output level meter (post output gain, pre write) ----
-out_peak = max(abs(spl0 * output_gain_lin), abs(spl1 * output_gain_lin));
-out_meter_env = (out_peak > out_meter_env) ? out_peak : out_meter_coeff * out_meter_env;
-out_meter_db  = (out_meter_env > 0.000001) ? log(out_meter_env) * log2db : -120.0;
-out_meter_peak = max(out_meter_peak, out_meter_db);
-
 // ---- LF Mono Summing (1-pole) ----
 lfm_lowL = (lfm_tmpl = lfm_a0*spl0 - lfm_b1*lfm_tmpl);
 lfm_lowR = (lfm_tmpr = lfm_a0*spl1 - lfm_b1*lfm_tmpr);
@@ -851,7 +860,7 @@ spl1 *= output_gain_lin;
 // GFX
 // ============================================================
 
-@gfx 700 800
+@gfx 580 680
 
 // ============================================================
 // UI SETUP
@@ -862,8 +871,14 @@ control_start("main", "tron");
 ui_screen() == "main" ? (
 
 // Background fill
-gfx_r = 0.235; gfx_g = 0.235; gfx_b = 0.255; gfx_a = 1;
+gfx_r = 0.14; gfx_g = 0.14; gfx_b = 0.16; gfx_a = 1;
 gfx_rect(0, 0, gfx_w, gfx_h);
+
+// Plugin title
+gfx_r = 0.78; gfx_g = 0.78; gfx_b = 0.82; gfx_a = 1;
+gfx_setfont(1, "Trebuchet MS", 14, 'b');
+gfx_x = 12; gfx_y = 8;
+gfx_drawstr("FIDELIO CHANNEL STRIP");
 
 // Double-click detection — must run once per frame before knobs
 check_dbl_click();
@@ -872,12 +887,12 @@ check_dbl_click();
 // SECTION DIMENSIONS
 // ============================================================
 
-col_split = 350;
+col_split = 288;
 
-in_x  = 4;             in_y  = 4;                     in_w  = col_split - 8; in_h  = 302;
-eq_x  = 4;             eq_y  = in_y + in_h + 4;       eq_w  = col_split - 8; eq_h  = 800 - eq_y - 4;
-dyn_x = col_split + 4; dyn_y = 4;                     dyn_w = 700 - dyn_x - 4; dyn_h = 486;
-out_x = col_split + 4; out_y = dyn_y + dyn_h + 4;     out_w = dyn_w;         out_h = 800 - out_y - 4;
+in_x  = 4;             in_y  = 32;                    in_w  = col_split - 8; in_h  = 242;
+eq_x  = 4;             eq_y  = in_y + in_h + 4;       eq_w  = col_split - 8; eq_h  = gfx_h - eq_y - 4;
+dyn_x = col_split + 4; dyn_y = 32;                    dyn_w = 580 - dyn_x - 4; dyn_h = 392;
+out_x = col_split + 4; out_y = dyn_y + dyn_h + 4;     out_w = dyn_w;         out_h = gfx_h - out_y - 4;
 
 in_hdr = 22; eq_hdr = 22; dyn_hdr = 22; out_hdr = 22;
 meter_w = 18;
@@ -886,7 +901,7 @@ meter_w = 18;
 // SECTION BACKGROUNDS + BORDERS + HEADERS
 // ============================================================
 
-gfx_r = 0.16; gfx_g = 0.16; gfx_b = 0.18; gfx_a = 1;
+gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.14; gfx_a = 1;
 gfx_rect(in_x,  in_y,  in_w,  in_h);
 gfx_rect(eq_x,  eq_y,  eq_w,  eq_h);
 gfx_rect(dyn_x, dyn_y, dyn_w, dyn_h);
@@ -897,15 +912,15 @@ draw_section_border(eq_x,  eq_y,  eq_w,  eq_h);
 draw_section_border(dyn_x, dyn_y, dyn_w, dyn_h);
 draw_section_border(out_x, out_y, out_w, out_h);
 
-// Header bars
-gfx_r = 1.0000; gfx_g = 0.8275; gfx_b = 0.0000; gfx_a = 1; gfx_rect(in_x,  in_y,  in_w,  in_hdr);
-gfx_r = 0.3255; gfx_g = 0.6745; gfx_b = 0.8941; gfx_a = 1; gfx_rect(eq_x,  eq_y,  eq_w,  eq_hdr);
-gfx_r = 1.0000; gfx_g = 0.2980; gfx_b = 0.2980; gfx_a = 1; gfx_rect(dyn_x, dyn_y, dyn_w, dyn_hdr);
-gfx_r = 0.2471; gfx_g = 0.7137; gfx_b = 0.2471; gfx_a = 1; gfx_rect(out_x, out_y, out_w, out_hdr);
+// Header bars — family palette
+gfx_r = 0.80; gfx_g = 0.58; gfx_b = 0.08; gfx_a = 1; gfx_rect(in_x,  in_y,  in_w,  in_hdr);  // amber
+gfx_r = 0.12; gfx_g = 0.62; gfx_b = 0.88; gfx_a = 1; gfx_rect(eq_x,  eq_y,  eq_w,  eq_hdr);  // blue
+gfx_r = 0.82; gfx_g = 0.22; gfx_b = 0.14; gfx_a = 1; gfx_rect(dyn_x, dyn_y, dyn_w, dyn_hdr); // red
+gfx_r = 0.22; gfx_g = 0.72; gfx_b = 0.32; gfx_a = 1; gfx_rect(out_x, out_y, out_w, out_hdr); // green
 
 // Header text
 gfx_r = 0.08; gfx_g = 0.08; gfx_b = 0.08; gfx_a = 1;
-gfx_setfont(1, "Arial", 11);
+gfx_setfont(1, "Arial", 11, 'b');
 
 gfx_x = in_x  + 8; gfx_y = in_y  + 5; gfx_drawstr("INPUT");
 gfx_x = eq_x  + 8; gfx_y = eq_y  + 5; gfx_drawstr("EQ");
@@ -921,62 +936,62 @@ in_meter_h = 160;
 in_meter_y = in_y + in_hdr + (in_h - in_hdr - in_meter_h) / 2;
 
 // Gain knob (70px)
-in_gain_cx = in_x + 80;
-in_gain_cy = in_y + in_hdr + 88;
-ui_push_rect(in_gain_cx - 35, in_gain_cy - 35, 70, 70);
+in_gain_cx = in_x + 66;
+in_gain_cy = in_y + in_hdr + 68;
+ui_push_rect(in_gain_cx - 27, in_gain_cy - 27, 54, 54);
 slider1 = control_dial(slider1, -30, 30, 0);
 slider_automate(slider1);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(in_gain_cx-35, in_gain_cy-35, 70, 70) ? (slider1=0; slider_automate(slider1); update_coefficients(););
-strcpy(#lbl, "GAIN");  draw_label_at(in_gain_cx, in_gain_cy - 49);
-sprintf(#val, "%+.1f dB", slider1);  draw_value_at(in_gain_cx, in_gain_cy + 39);
+dbl_click_in_rect(in_gain_cx-27, in_gain_cy-27, 54, 54) ? (slider1=0; slider_automate(slider1); update_coefficients(););
+strcpy(#lbl, "GAIN");  draw_label_at(in_gain_cx, in_gain_cy - 38);
+sprintf(#val, "%+.1f dB", slider1);  draw_value_at(in_gain_cx, in_gain_cy + 31);
 
-// Polarity switch
-ui_push_rect(in_x + 178, in_y + in_hdr + 79, 44, 18);
+// Polarity switch — centered in right zone (between knob area and meter)
+ui_push_rect(in_x + 158, in_y + in_hdr + 59, 44, 18);
 slider2 = control_switch(slider2);
 slider_automate(slider2);
 update_coefficients();
 ui_pop();
-gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+gfx_r = 0.71; gfx_g = 0.71; gfx_b = 0.75; gfx_a = 1;
 gfx_setfont(1, "Arial", 10);
-gfx_x = in_x + 178; gfx_y = in_y + in_hdr + 65;
+gfx_x = in_x + 158; gfx_y = in_y + in_hdr + 45;
 gfx_drawstr("POLARITY");
 // Indicator dot
-slider2 == 1 ? (gfx_r=1.0;gfx_g=0.15;gfx_b=0.15) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
-gfx_a = 1; gfx_circle(in_x + 200, in_y + in_hdr + 109, 3, 1, 1);
+slider2 == 1 ? (gfx_r=0.15;gfx_g=0.85;gfx_b=0.30) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
+gfx_a = 1; gfx_circle(in_x + 180, in_y + in_hdr + 89, 3, 1, 1);
 
 // Saturation drive knob (70px) — inactive when SAT OFF
-in_sat_cx = in_x + 80;
-in_sat_cy = in_y + in_hdr + 218;
+in_sat_cx = in_x + 66;
+in_sat_cy = in_y + in_hdr + 166;
 slider3 == 1 ? (
-  ui_push_rect(in_sat_cx - 35, in_sat_cy - 35, 70, 70);
+  ui_push_rect(in_sat_cx - 27, in_sat_cy - 27, 54, 54);
   slider17 = control_dial(slider17, 0, 1, 0);
   slider_automate(slider17);
   update_coefficients();
   ui_pop();
-  dbl_click_in_rect(in_sat_cx-35, in_sat_cy-35, 70, 70) ? (slider17=0.3; slider_automate(slider17); update_coefficients(););
+  dbl_click_in_rect(in_sat_cx-27, in_sat_cy-27, 54, 54) ? (slider17=0.3; slider_automate(slider17); update_coefficients(););
   gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
 ) : (
-  draw_knob_inactive(in_sat_cx, in_sat_cy, 35, slider17, 0, 1);
+  draw_knob_inactive(in_sat_cx, in_sat_cy, 27, slider17, 0, 1);
   gfx_r = 0.38; gfx_g = 0.38; gfx_b = 0.40; gfx_a = 1;
 );
-strcpy(#lbl, "SATURATION");  draw_label_at(in_sat_cx, in_sat_cy - 49);
-sprintf(#val, "%.2f", slider17);  draw_value_at(in_sat_cx, in_sat_cy + 39);
+strcpy(#lbl, "SATURATION");  draw_label_at(in_sat_cx, in_sat_cy - 38);
+sprintf(#val, "%.2f", slider17);  draw_value_at(in_sat_cx, in_sat_cy + 31);
 
-// Sat On switch
-ui_push_rect(in_x + 178, in_y + in_hdr + 209, 44, 18);
+// Sat On switch — centered to match Polarity
+ui_push_rect(in_x + 158, in_y + in_hdr + 157, 44, 18);
 slider3 = control_switch(slider3);
 slider_automate(slider3);
 update_coefficients();
 ui_pop();
-gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+gfx_r = 0.71; gfx_g = 0.71; gfx_b = 0.75; gfx_a = 1;
 gfx_setfont(1, "Arial", 10);
-gfx_x = in_x + 178; gfx_y = in_y + in_hdr + 195;
+gfx_x = in_x + 158; gfx_y = in_y + in_hdr + 143;
 gfx_drawstr("SAT ON");
 // Indicator dot
-slider3 == 1 ? (gfx_r=1.0;gfx_g=0.15;gfx_b=0.15) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
-gfx_a = 1; gfx_circle(in_x + 200, in_y + in_hdr + 239, 3, 1, 1);
+slider3 == 1 ? (gfx_r=0.15;gfx_g=0.85;gfx_b=0.30) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
+gfx_a = 1; gfx_circle(in_x + 180, in_y + in_hdr + 187, 3, 1, 1);
 
 // Input meter
 draw_vmeter(in_meter_x, in_meter_y, meter_w, in_meter_h, in_meter_db, -60);
@@ -997,11 +1012,11 @@ gfx_drawstr(#val);
 // ============================================================
 
 eq_cy0 = eq_y + eq_hdr + 20;
-eq_cx_l = eq_x + 107;  // freq col
-eq_cx_r = eq_x + 227;  // gain col
+eq_cx_l = eq_x + 88;  // freq col
+eq_cx_r = eq_x + 188;  // gain col
 
 // HIGH SHELF (centered, 44px knob)
-hs_cy = eq_cy0 + 55;
+hs_cy = eq_cy0 + 44;
 ui_push_rect(eq_x + eq_w/2 - 22, hs_cy - 22, 44, 44);
 slider9 = control_dial(slider9, -16, 16, 0);
 slider_automate(slider9);
@@ -1011,45 +1026,46 @@ dbl_click_in_rect(eq_x+eq_w/2-22, hs_cy-22, 44, 44) ? (slider9=0; slider_automat
 strcpy(#lbl, "HIGH SHELF 16k");  draw_label_at(eq_x + eq_w/2, hs_cy - 36);
 sprintf(#val, "%+.1f dB", slider9);  draw_value_at(eq_x + eq_w/2, hs_cy + 26);
 
-draw_hline(eq_x + 47, eq_cy0 + 113, 240);
+draw_hline(eq_x + 20, eq_cy0 + 88, 220);
+draw_hline(eq_x + 20, eq_cy0 + 196, 220);
 
 // HI-MID (50px freq, 70px gain)
-hm_cy = eq_cy0 + 175;
-ui_push_rect(eq_cx_l - 22, hm_cy - 22, 44, 44);
+hm_cy = eq_cy0 + 140;
+ui_push_rect(eq_cx_l - 18, hm_cy - 18, 36, 36);
 slider8 = control_dial(slider8, 1000, 10000, log(10));
 slider_automate(slider8);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(eq_cx_l-22, hm_cy-22, 44, 44) ? (slider8=3000; slider_automate(slider8); update_coefficients(););
+dbl_click_in_rect(eq_cx_l-18, hm_cy-18, 36, 36) ? (slider8=3000; slider_automate(slider8); update_coefficients(););
 strcpy(#lbl, "HI FREQ");  draw_label_at(eq_cx_l, hm_cy - 36);
 sprintf(#val, "%.0f Hz", slider8);  draw_value_at(eq_cx_l, hm_cy + 26);
 
-ui_push_rect(eq_cx_r - 35, hm_cy - 35, 70, 70);
+ui_push_rect(eq_cx_r - 27, hm_cy - 27, 54, 54);
 slider7 = control_dial(slider7, -15, 15, 0);
 slider_automate(slider7);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(eq_cx_r-35, hm_cy-35, 70, 70) ? (slider7=0; slider_automate(slider7); update_coefficients(););
+dbl_click_in_rect(eq_cx_r-27, hm_cy-27, 54, 54) ? (slider7=0; slider_automate(slider7); update_coefficients(););
 strcpy(#lbl, "HIGH");  draw_label_at(eq_cx_r, hm_cy - 49);
 sprintf(#val, "%+.1f dB", slider7);  draw_value_at(eq_cx_r, hm_cy + 39);
 
 // LO-MID (50px freq, 70px gain)
-lm_cy = eq_cy0 + 315;
-ui_push_rect(eq_cx_l - 22, lm_cy - 22, 44, 44);
+lm_cy = eq_cy0 + 252;
+ui_push_rect(eq_cx_l - 18, lm_cy - 18, 36, 36);
 slider6 = control_dial(slider6, 200, 2000, log(10));
 slider_automate(slider6);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(eq_cx_l-22, lm_cy-22, 44, 44) ? (slider6=500; slider_automate(slider6); update_coefficients(););
+dbl_click_in_rect(eq_cx_l-18, lm_cy-18, 36, 36) ? (slider6=500; slider_automate(slider6); update_coefficients(););
 strcpy(#lbl, "LO FREQ");  draw_label_at(eq_cx_l, lm_cy - 36);
 sprintf(#val, "%.0f Hz", slider6);  draw_value_at(eq_cx_l, lm_cy + 26);
 
-ui_push_rect(eq_cx_r - 35, lm_cy - 35, 70, 70);
+ui_push_rect(eq_cx_r - 27, lm_cy - 27, 54, 54);
 slider5 = control_dial(slider5, -15, 15, 0);
 slider_automate(slider5);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(eq_cx_r-35, lm_cy-35, 70, 70) ? (slider5=0; slider_automate(slider5); update_coefficients(););
+dbl_click_in_rect(eq_cx_r-27, lm_cy-27, 54, 54) ? (slider5=0; slider_automate(slider5); update_coefficients(););
 strcpy(#lbl, "LOW");  draw_label_at(eq_cx_r, lm_cy - 49);
 sprintf(#val, "%+.1f dB", slider5);  draw_value_at(eq_cx_r, lm_cy + 39);
 
@@ -1060,12 +1076,12 @@ slider4 = control_switch(slider4);
 slider_automate(slider4);
 update_coefficients();
 ui_pop();
-gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+gfx_r = 0.71; gfx_g = 0.71; gfx_b = 0.75; gfx_a = 1;
 gfx_setfont(1, "Arial", 10);
 gfx_x = eq_x + eq_w/2 - 22; gfx_y = hpf_by - 14;
 gfx_drawstr("HPF 50Hz");
 // Indicator dot
-slider4 == 1 ? (gfx_r=1.0;gfx_g=0.15;gfx_b=0.15) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
+slider4 == 1 ? (gfx_r=0.15;gfx_g=0.85;gfx_b=0.30) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
 gfx_a = 1; gfx_circle(eq_x + eq_w/2, hpf_by + 32, 3, 1, 1);
 
 // ============================================================
@@ -1073,11 +1089,11 @@ gfx_a = 1; gfx_circle(eq_x + eq_w/2, hpf_by + 32, 3, 1, 1);
 // ============================================================
 
 gr_meter_x = dyn_x + dyn_w - meter_w - 16;
-gr_meter_h  = 200;
-gr_meter_y  = dyn_y + dyn_hdr + (320 - gr_meter_h) / 2;  // centered above gate divider
+gr_meter_h  = 160;
+gr_meter_y  = dyn_y + dyn_hdr + (260 - gr_meter_h) / 2;  // centered above gate divider
 
 // Mode selector
-mode_y  = dyn_y + dyn_hdr + 12;
+mode_y  = dyn_y + dyn_hdr + 10;
 mode_h  = 24;
 mode_w  = 82;
 mode_g  = 4;
@@ -1092,8 +1108,11 @@ loop(3,
   ui_push_rect(sw_x + i * sw_w, mode_y, sw_w, mode_h);
     i == slider15 ? (
       control_background_inset();
-    ) : control_background_enabled("none");
-    ui_color(255, 255, 255);
+      ui_color(255, 255, 255);
+    ) : (
+      control_background_enabled("none");
+      ui_color(255, 255, 255);
+    );
     ui_align(0.5, 0.5);
     ui_fontsize(9);
     i == 0 ? ui_text("COMPRESS") : i == 1 ? ui_text("EXPAND") : ui_text("GATE");
@@ -1109,81 +1128,81 @@ loop(3,
 );
 
 // Knob positions
-dyn_row1_y = dyn_y + dyn_hdr + 88;
-dyn_row2_y = dyn_y + dyn_hdr + 228;
-dyn_row3_y = dyn_y + dyn_hdr + 381;
-dyn_col1_x = dyn_x + 88;
-dyn_col2_x = dyn_x + 228;
+dyn_row1_y = dyn_y + dyn_hdr + 82;
+dyn_row2_y = dyn_y + dyn_hdr + 192;
+dyn_row3_y = dyn_y + dyn_hdr + 318;
+dyn_col1_x = dyn_x + 72;
+dyn_col2_x = dyn_x + 188;
 
 // Threshold
-ui_push_rect(dyn_col1_x - 35, dyn_row1_y - 35, 70, 70);
+ui_push_rect(dyn_col1_x - 27, dyn_row1_y - 27, 54, 54);
 slider10 = control_dial(slider10, -60, 0, 0);
 slider_automate(slider10);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(dyn_col1_x-35, dyn_row1_y-35, 70, 70) ? (slider10=0; slider_automate(slider10); update_coefficients(););
-strcpy(#lbl, "THRESHOLD");  draw_label_at(dyn_col1_x, dyn_row1_y - 49);
-sprintf(#val, "%.1f dB", slider10);  draw_value_at(dyn_col1_x, dyn_row1_y + 39);
+dbl_click_in_rect(dyn_col1_x-27, dyn_row1_y-27, 54, 54) ? (slider10=0; slider_automate(slider10); update_coefficients(););
+strcpy(#lbl, "THRESHOLD");  draw_label_at(dyn_col1_x, dyn_row1_y - 38);
+sprintf(#val, "%.1f dB", slider10);  draw_value_at(dyn_col1_x, dyn_row1_y + 31);
 
 // Ratio
-ui_push_rect(dyn_col2_x - 35, dyn_row1_y - 35, 70, 70);
+ui_push_rect(dyn_col2_x - 27, dyn_row1_y - 27, 54, 54);
 slider11 = control_dial(slider11, 1, 20, 0);
 slider_automate(slider11);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(dyn_col2_x-35, dyn_row1_y-35, 70, 70) ? (slider11=1; slider_automate(slider11); update_coefficients(););
-strcpy(#lbl, "RATIO");  draw_label_at(dyn_col2_x, dyn_row1_y - 49);
-sprintf(#val, "%.1f:1", slider11);  draw_value_at(dyn_col2_x, dyn_row1_y + 39);
+dbl_click_in_rect(dyn_col2_x-27, dyn_row1_y-27, 54, 54) ? (slider11=1; slider_automate(slider11); update_coefficients(););
+strcpy(#lbl, "RATIO");  draw_label_at(dyn_col2_x, dyn_row1_y - 38);
+sprintf(#val, "%.1f:1", slider11);  draw_value_at(dyn_col2_x, dyn_row1_y + 31);
 
 // Attack
-ui_push_rect(dyn_col1_x - 35, dyn_row2_y - 35, 70, 70);
+ui_push_rect(dyn_col1_x - 27, dyn_row2_y - 27, 54, 54);
 slider12 = control_dial(slider12, 0.1, 100, log(1000));
 slider_automate(slider12);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(dyn_col1_x-35, dyn_row2_y-35, 70, 70) ? (slider12=10; slider_automate(slider12); update_coefficients(););
-strcpy(#lbl, "ATTACK");  draw_label_at(dyn_col1_x, dyn_row2_y - 49);
-sprintf(#val, "%.1f ms", slider12);  draw_value_at(dyn_col1_x, dyn_row2_y + 39);
+dbl_click_in_rect(dyn_col1_x-27, dyn_row2_y-27, 54, 54) ? (slider12=10; slider_automate(slider12); update_coefficients(););
+strcpy(#lbl, "ATTACK");  draw_label_at(dyn_col1_x, dyn_row2_y - 38);
+sprintf(#val, "%.1f ms", slider12);  draw_value_at(dyn_col1_x, dyn_row2_y + 31);
 
 // Release
-ui_push_rect(dyn_col2_x - 35, dyn_row2_y - 35, 70, 70);
+ui_push_rect(dyn_col2_x - 27, dyn_row2_y - 27, 54, 54);
 slider13 = control_dial(slider13, 10, 1000, log(100));
 slider_automate(slider13);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(dyn_col2_x-35, dyn_row2_y-35, 70, 70) ? (slider13=100; slider_automate(slider13); update_coefficients(););
-strcpy(#lbl, "RELEASE");  draw_label_at(dyn_col2_x, dyn_row2_y - 49);
-sprintf(#val, "%.0f ms", slider13);  draw_value_at(dyn_col2_x, dyn_row2_y + 39);
+dbl_click_in_rect(dyn_col2_x-27, dyn_row2_y-27, 54, 54) ? (slider13=100; slider_automate(slider13); update_coefficients(););
+strcpy(#lbl, "RELEASE");  draw_label_at(dyn_col2_x, dyn_row2_y - 38);
+sprintf(#val, "%.0f ms", slider13);  draw_value_at(dyn_col2_x, dyn_row2_y + 31);
 
 // Divider between compress and gate controls
-draw_hline(dyn_x + 38, dyn_y + dyn_hdr + 320, 240);
+draw_hline(dyn_x + 20, dyn_y + dyn_hdr + 270, 200);
 
 // Gate Range + Gate Hold — active only in Gate mode
 dyn_mode == 2 ? (
   // Gate mode: fully interactive
-  ui_push_rect(dyn_col1_x - 22, dyn_row3_y - 22, 44, 44);
+  ui_push_rect(dyn_col1_x - 18, dyn_row3_y - 18, 36, 36);
   slider14 = control_dial(slider14, -60, 0, 0);
   slider_automate(slider14);
   update_coefficients();
   ui_pop();
-  dbl_click_in_rect(dyn_col1_x-22, dyn_row3_y-22, 44, 44) ? (slider14=-60; slider_automate(slider14); update_coefficients(););
-  ui_push_rect(dyn_col2_x - 22, dyn_row3_y - 22, 44, 44);
+  dbl_click_in_rect(dyn_col1_x-18, dyn_row3_y-18, 36, 36) ? (slider14=-60; slider_automate(slider14); update_coefficients(););
+  ui_push_rect(dyn_col2_x - 18, dyn_row3_y - 18, 36, 36);
   slider18 = control_dial(slider18, 0, 500, 0);
   slider_automate(slider18);
   update_coefficients();
   ui_pop();
-  dbl_click_in_rect(dyn_col2_x-22, dyn_row3_y-22, 44, 44) ? (slider18=100; slider_automate(slider18); update_coefficients(););
+  dbl_click_in_rect(dyn_col2_x-18, dyn_row3_y-18, 36, 36) ? (slider18=100; slider_automate(slider18); update_coefficients(););
   gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
 ) : (
   // Non-gate mode: draw static knob position, no interaction
-  draw_knob_inactive(dyn_col1_x, dyn_row3_y, 22, slider14, -60, 0);
-  draw_knob_inactive(dyn_col2_x, dyn_row3_y, 22, slider18, 0, 500);
+  draw_knob_inactive(dyn_col1_x, dyn_row3_y, 18, slider14, -60, 0);
+  draw_knob_inactive(dyn_col2_x, dyn_row3_y, 18, slider18, 0, 500);
   gfx_r = 0.38; gfx_g = 0.38; gfx_b = 0.40; gfx_a = 1;
 );
-strcpy(#lbl, "GATE RANGE");  draw_label_at(dyn_col1_x, dyn_row3_y - 36);
-sprintf(#val, "%.1f dB", slider14);  draw_value_at(dyn_col1_x, dyn_row3_y + 26);
-strcpy(#lbl, "GATE HOLD");  draw_label_at(dyn_col2_x, dyn_row3_y - 36);
-sprintf(#val, "%.0f ms", slider18);  draw_value_at(dyn_col2_x, dyn_row3_y + 26);
+strcpy(#lbl, "GATE RANGE");  draw_label_at(dyn_col1_x, dyn_row3_y - 28);
+sprintf(#val, "%.1f dB", slider14);  draw_value_at(dyn_col1_x, dyn_row3_y + 22);
+strcpy(#lbl, "GATE HOLD");  draw_label_at(dyn_col2_x, dyn_row3_y - 28);
+sprintf(#val, "%.0f ms", slider18);  draw_value_at(dyn_col2_x, dyn_row3_y + 22);
 
 // GR meter
 // GR meter — fills top-down, green->yellow->red
@@ -1217,50 +1236,50 @@ gfx_drawstr(#val);
 // ============================================================
 
 out_meter_x = out_x + out_w - meter_w - 16;
-out_meter_h = 160;
+out_meter_h = 130;
 out_meter_y = out_y + out_hdr + (out_h - out_hdr - out_meter_h) / 2;
 
 out_avail_w = out_w - meter_w - 24;
 out_col1_x  = out_x + out_avail_w * 0.28;
 out_col2_x  = out_x + out_avail_w * 0.72;
-out_row1_y  = out_y + out_hdr + 80;
-out_row2_y  = out_y + out_hdr + 210;
+out_row1_y  = out_y + out_hdr + 62;
+out_row2_y  = out_y + out_hdr + 166;
 out_r2c1_x  = out_x + out_avail_w * 0.28;
 out_r2c3_x  = out_x + out_avail_w * 0.72;
 
 // LF Mono freq knob
 out_lem_cx = out_col1_x;
 out_lem_cy = out_row1_y;
-ui_push_rect(out_lem_cx - 22, out_lem_cy - 22, 44, 44);
+ui_push_rect(out_lem_cx - 18, out_lem_cy - 18, 36, 36);
 slider19 = control_dial(slider19, 0, 300, 0);
 slider_automate(slider19);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(out_lem_cx-22, out_lem_cy-22, 44, 44) ? (slider19=0; slider_automate(slider19); update_coefficients(););
-strcpy(#lbl, "LF MONO");  draw_label_at(out_lem_cx, out_lem_cy - 36);
-sprintf(#val, "%.0f Hz", slider19);  draw_value_at(out_lem_cx, out_lem_cy + 26);
+dbl_click_in_rect(out_lem_cx-18, out_lem_cy-18, 36, 36) ? (slider19=0; slider_automate(slider19); update_coefficients(););
+strcpy(#lbl, "LF MONO");  draw_label_at(out_lem_cx, out_lem_cy - 28);
+sprintf(#val, "%.0f Hz", slider19);  draw_value_at(out_lem_cx, out_lem_cy + 22);
 
 // Output gain knob
 out_knob_cx = out_col2_x;
 out_knob_cy = out_row1_y;
-ui_push_rect(out_knob_cx - 35, out_knob_cy - 35, 70, 70);
+ui_push_rect(out_knob_cx - 27, out_knob_cy - 27, 54, 54);
 slider16 = control_dial(slider16, -30, 30, 0);
 slider_automate(slider16);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(out_knob_cx-35, out_knob_cy-35, 70, 70) ? (slider16=0; slider_automate(slider16); update_coefficients(););
-strcpy(#lbl, "OUTPUT");  draw_label_at(out_knob_cx, out_knob_cy - 49);
-sprintf(#val, "%+.1f dB", slider16);  draw_value_at(out_knob_cx, out_knob_cy + 39);
+dbl_click_in_rect(out_knob_cx-27, out_knob_cy-27, 54, 54) ? (slider16=0; slider_automate(slider16); update_coefficients(););
+strcpy(#lbl, "OUTPUT");  draw_label_at(out_knob_cx, out_knob_cy - 38);
+sprintf(#val, "%+.1f dB", slider16);  draw_value_at(out_knob_cx, out_knob_cy + 31);
 
 // Stereo Width knob
-ui_push_rect(out_r2c1_x - 22, out_row2_y - 22, 44, 44);
+ui_push_rect(out_r2c1_x - 18, out_row2_y - 18, 36, 36);
 slider20 = control_dial(slider20, 0, 200, 0);
 slider_automate(slider20);
 update_coefficients();
 ui_pop();
-dbl_click_in_rect(out_r2c1_x-22, out_row2_y-22, 44, 44) ? (slider20=100; slider_automate(slider20); update_coefficients(););
-strcpy(#lbl, "STEREO WIDTH");  draw_label_at(out_r2c1_x, out_row2_y - 36);
-sprintf(#val, "%.0f%%", slider20);  draw_value_at(out_r2c1_x, out_row2_y + 26);
+dbl_click_in_rect(out_r2c1_x-18, out_row2_y-18, 36, 36) ? (slider20=100; slider_automate(slider20); update_coefficients(););
+strcpy(#lbl, "STEREO WIDTH");  draw_label_at(out_r2c1_x, out_row2_y - 28);
+sprintf(#val, "%.0f%%", slider20);  draw_value_at(out_r2c1_x, out_row2_y + 22);
 
 // Stereo/Mono switch
 out_mono_x = out_r2c3_x - 22;
@@ -1270,14 +1289,14 @@ slider21 = control_switch(slider21);
 slider_automate(slider21);
 update_coefficients();
 ui_pop();
-gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+gfx_r = 0.71; gfx_g = 0.71; gfx_b = 0.75; gfx_a = 1;
 gfx_setfont(1, "Arial", 10);
 strcpy(#mono_lbl, slider21 == 0 ? "STEREO" : "MONO");
 gfx_measurestr(#mono_lbl, mono_lw, mono_lh);
 gfx_x = out_r2c3_x - mono_lw/2; gfx_y = out_mono_y - 14;
 gfx_drawstr(#mono_lbl);
 // Indicator dot
-slider21 == 1 ? (gfx_r=1.0;gfx_g=0.15;gfx_b=0.15) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
+slider21 == 1 ? (gfx_r=0.15;gfx_g=0.85;gfx_b=0.30) : (gfx_r=0.22;gfx_g=0.22;gfx_b=0.26);
 gfx_a = 1; gfx_circle(out_r2c3_x, out_mono_y + 32, 3, 1, 1);
 
 draw_vmeter(out_meter_x, out_meter_y, meter_w, out_meter_h, out_meter_db, -60);
@@ -1292,14 +1311,6 @@ gfx_drawstr(#val);
 (mouse_cap & 1) && (mouse_x >= out_meter_x) && (mouse_x < out_meter_x + meter_w) && (mouse_y >= out_meter_y + out_meter_h + 4) && (mouse_y < out_meter_y + out_meter_h + 16) ? (
   out_meter_peak = -60.0;
 );
-
-// ============================================================
-// PLUGIN NAME
-// ============================================================
-gfx_r = 0.38; gfx_g = 0.38; gfx_b = 0.42; gfx_a = 1;
-gfx_setfont(1, "Arial", 10);
-gfx_x = gfx_w/2 - 45; gfx_y = gfx_h - 13;
-gfx_drawstr("Fidelio Channel Strip");
 
 mouse_cap_last = mouse_cap;
 
