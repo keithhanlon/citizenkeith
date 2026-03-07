@@ -1,27 +1,25 @@
 desc: Tycho Delay TMA-1
-version: 2.0
-author: citizenkeith
-about:
-  Good quality tape-style delay with optimized memory layout and ping pong.
-  Based on work by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault.
-  Ping pong functionality inspired by Stillwell. Memory layout optimized by Claude AI.
-  Released under GPLv3 license.
-changelog:
-  # v2.0
-  + Complete GUI overhaul using citizenkeith-ui-lib
-  + Sync on/off toggle — preserves last sync value when toggled off
-  + Removed Off option from sync selector; dedicated SYNC button added
-  + Red readout for active sync value
-  + Fixed ui_setup memory overlap causing periodic clicks and GUI flashing
-  + Cleaned up dead code from troubleshooting
-  # v1.0
-  + Initial release with cubic interpolation delay buffer
-  + Catmull-Rom interpolation for smooth delay time changes
-  + Ping pong stereo with crossfade
-  + Delay loop lowpass filter and saturation
-  + Tempo sync with 28 note values
-// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
+// @version 2.5
+// @author citizenkeith
 // @license GPL v3
+// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
+// @about
+//   Good quality tape-style delay with optimized memory layout and ping pong.
+//   Based on work by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault.
+//   Ping pong functionality inspired by Stillwell. Memory layout optimized by Claude AI.
+// @changelog
+//   v2.1
+//     Redesigned GUI: section boxes (I/O, Delay, Character) matching citizenkeith plugin family
+//     Dark background, family-standard title style
+//     Double-click to reset knobs, amber value readouts
+//     Sync selector integrated into Delay section
+//   v2.0
+//     Complete GUI overhaul using citizenkeith-ui-lib
+//     Sync on/off toggle with dedicated SYNC button
+//     Fixed ui_setup memory overlap causing periodic clicks
+//   v1.0
+//     Initial release with Catmull-Rom interpolation delay buffer
+//     Ping pong stereo, tempo sync, tape saturation
 
 import citizenkeith-ui-lib.jsfx-inc
 
@@ -118,6 +116,64 @@ function draw_value_at(cx, cy) (
   gfx_x = cx - val_w/2;
   gfx_y = cy;
   gfx_drawstr(#val);
+);
+
+function draw_section_box(bx, by, bw, bh, hr, hg, hb, header_text)
+local(tw, th, hdr_h)
+(
+  hdr_h = 22;
+  gfx_r=0.12; gfx_g=0.12; gfx_b=0.14; gfx_a=1;
+  gfx_rect(bx, by, bw, bh);
+  gfx_r=hr; gfx_g=hg; gfx_b=hb; gfx_a=1;
+  gfx_rect(bx, by, bw, hdr_h);
+  gfx_r=0.08; gfx_g=0.08; gfx_b=0.08; gfx_a=1;
+  gfx_setfont(1, "Arial", 11, 'b');
+  gfx_measurestr(header_text, tw, th);
+  gfx_x = bx + 8; gfx_y = by + hdr_h/2 - th/2;
+  gfx_drawstr(header_text);
+  gfx_r=0.28; gfx_g=0.28; gfx_b=0.32; gfx_a=1;
+  gfx_rect(bx,      by,      bw, 1);
+  gfx_rect(bx,      by+bh-1, bw, 1);
+  gfx_rect(bx,      by,      1,  bh);
+  gfx_rect(bx+bw-1, by,      1,  bh+1);
+);
+
+function draw_knob_label(lx, ly)
+local(lw, lh)
+(
+  gfx_r=0.71; gfx_g=0.71; gfx_b=0.75; gfx_a=1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#lbl, lw, lh);
+  gfx_x = lx - lw/2; gfx_y = ly;
+  gfx_drawstr(#lbl);
+);
+
+dbl_click_time = 0;
+dbl_click_x = dbl_click_y = -1;
+
+function check_dbl_click()
+(
+  mouse_cap & 1 && !(mouse_cap_last & 1) ? (
+    this_click_time = time_precise();
+    this_click_time - dbl_click_time < 0.4 ? (
+      dbl_clicked = 1;
+    ) : (
+      dbl_clicked = 0;
+    );
+    dbl_click_time = this_click_time;
+    dbl_click_x = mouse_x;
+    dbl_click_y = mouse_y;
+  ) : (
+    dbl_clicked = 0;
+  );
+  mouse_cap_last = mouse_cap;
+);
+
+function dbl_click_in_rect(rx, ry, rw, rh)
+(
+  dbl_clicked &&
+  dbl_click_x >= rx && dbl_click_x < rx+rw &&
+  dbl_click_y >= ry && dbl_click_y < ry+rh;
 );
 
 function draw_knob_inactive(cx, cy, radius, value, vmin, vmax) local(ratio, angle, x1, y1, x2, y2) (
@@ -483,202 +539,202 @@ output_aa_filter.bq_lp_stereo(output0, output1);
 spl0 = output_aa_filter.left;
 spl1 = output_aa_filter.right;
 
-@gfx 672 600
+@gfx 650 242
 
 control_start("main", "tron");
 
 ui_screen() == "main" ? (
 
-// Background
-gfx_r = 0.235; gfx_g = 0.235; gfx_b = 0.255; gfx_a = 1;
+// ---- Background ----
+gfx_r=0.14; gfx_g=0.14; gfx_b=0.16; gfx_a=1;
 gfx_rect(0, 0, gfx_w, gfx_h);
 
-// Title
-gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
-gfx_setfont(1, "Trebuchet MS", 28);
-gfx_measurestr("Tycho Tape Delay TMA-1", title_w, title_h);
-gfx_x = (gfx_w - title_w) / 2;
-gfx_y = 20;
-gfx_drawstr("Tycho Tape Delay TMA-1");
+// ---- Plugin title ----
+gfx_r=0.78; gfx_g=0.78; gfx_b=0.82; gfx_a=1;
+gfx_setfont(1, "Trebuchet MS", 14, 'b');
+gfx_x=12; gfx_y=8;
+gfx_drawstr("TYCHO TAPE DELAY TMA-1");
 
-// Divider lines
-gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.32; gfx_a = 1;
-gfx_rect(40, 230, 592, 1);
-gfx_rect(40, 410, 592, 1);
+check_dbl_click();
 
-// Knob positions
-row1_y = 140;
-row2_y = 320;
-row3_y = 500;
-col1_x = 120;
-col2_x = 320;
-col3_x = 520;
+// ============================================================
+// LAYOUT CONSTANTS
+// Window: 650 × 242
+// Sections: all y=34, h=200
+//   I/O:        x=8,   w=200  (3 knobs)
+//   DELAY:      x=216, w=226  (3 knobs + sync widget below)
+//   CHARACTER:  x=450, w=192  (2 knobs)
+// knob_cy = 34 + 22(hdr) + 26(gap) + 22(radius) = 104... using 110 for breathing room
+// Sync widget: y=158, centered in DELAY section (x=262..396)
+// ============================================================
+
+sect_y   = 34;
+sect_h   = 200;
+knob_cy  = 110;
+
+// Knob centers — I/O (equal thirds of 200px)
+io_cx1 =  47;   // Input
+io_cx2 = 108;   // Output
+io_cx3 = 169;   // Mix
+
+// Knob centers — DELAY (equal thirds of 226px)
+dl_cx1 = 262;   // Delay
+dl_cx2 = 329;   // Feedback
+dl_cx3 = 397;   // Ping Pong
+
+// Sync widget (centered in DELAY section at x=329)
+sync_box_w   = 48;
+sync_box_h   = 32;
+sync_btn_w   = 28;
+sync_gap     = 4;
+sync_ctr_x   = 329;
+sync_box_x   = sync_ctr_x - (sync_box_w + sync_gap + sync_btn_w) / 2;
+sync_btn_x   = sync_box_x + sync_box_w + sync_gap;
+sync_box_y   = 168;
+sync_lbl_y   = sync_box_y - 15;
+arrow_h      = 10;
+
+// Knob centers — CHARACTER (equal thirds of 192px, 2 knobs)
+ch_cx1 = 507;   // Saturation
+ch_cx2 = 585;   // Low Pass
 
 delay_is_synced = sync_on;
 
-// ROW 1: INPUT, OUTPUT, MIX
+// ============================================================
+// SECTION 1: I/O (blue)
+// ============================================================
+draw_section_box(8, sect_y, 200, sect_h, 0.12, 0.62, 0.88, "I/O");
 
 // INPUT
-ui_push_rect(col1_x - 35, row1_y - 35, 70, 70);
-new_val = control_dial(slider20, -90, 15, 0, 0);
-(ui_drag() || ui_click()) ? slider20 = new_val;
+ui_push_rect(io_cx1-22, knob_cy-22, 44, 44);
+  ui_automate(slider20, control_dial(slider20, -90, 15, 0, 0));
 ui_pop();
-strcpy(#lbl, "INPUT");  draw_label_at(col1_x, row1_y - 49);
-sprintf(#val, "%+.1f dB", slider20);  draw_value_at(col1_x, row1_y + 39);
+dbl_click_in_rect(io_cx1-22, knob_cy-22, 44, 44) ? (slider20 = 0; slider_automate(slider20););
+strcpy(#lbl, "INPUT"); draw_knob_label(io_cx1, knob_cy-36);
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1; gfx_setfont(1, "Arial", 9);
+sprintf(#val, "%+.1f dB", slider20);
+gfx_measurestr(#val, tw, th); gfx_x=io_cx1-tw/2; gfx_y=knob_cy+25; gfx_drawstr(#val);
 
 // OUTPUT
-ui_push_rect(col2_x - 35, row1_y - 35, 70, 70);
-new_val = control_dial(slider50, -30, 30, 0, 0);
-(ui_drag() || ui_click()) ? slider50 = new_val;
+ui_push_rect(io_cx2-22, knob_cy-22, 44, 44);
+  ui_automate(slider50, control_dial(slider50, -30, 30, 0, 0));
 ui_pop();
-strcpy(#lbl, "OUTPUT");  draw_label_at(col2_x, row1_y - 49);
-sprintf(#val, "%+.1f dB", slider50);  draw_value_at(col2_x, row1_y + 39);
+dbl_click_in_rect(io_cx2-22, knob_cy-22, 44, 44) ? (slider50 = 0; slider_automate(slider50););
+strcpy(#lbl, "OUTPUT"); draw_knob_label(io_cx2, knob_cy-36);
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1; gfx_setfont(1, "Arial", 9);
+sprintf(#val, "%+.1f dB", slider50);
+gfx_measurestr(#val, tw, th); gfx_x=io_cx2-tw/2; gfx_y=knob_cy+25; gfx_drawstr(#val);
 
 // MIX
-ui_push_rect(col3_x - 35, row1_y - 35, 70, 70);
-new_val = control_dial(slider12, 0, 1, 0, 0.5);
-(ui_drag() || ui_click()) ? slider12 = new_val;
+ui_push_rect(io_cx3-22, knob_cy-22, 44, 44);
+  ui_automate(slider12, control_dial(slider12, 0, 1, 0, 0.5));
 ui_pop();
-strcpy(#lbl, "MIX");  draw_label_at(col3_x, row1_y - 49);
-sprintf(#val, "%.0f%%", slider12 * 100);  draw_value_at(col3_x, row1_y + 39);
+dbl_click_in_rect(io_cx3-22, knob_cy-22, 44, 44) ? (slider12 = 0.5; slider_automate(slider12););
+strcpy(#lbl, "MIX"); draw_knob_label(io_cx3, knob_cy-36);
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1; gfx_setfont(1, "Arial", 9);
+sprintf(#val, "%.0f%%", slider12*100);
+gfx_measurestr(#val, tw, th); gfx_x=io_cx3-tw/2; gfx_y=knob_cy+25; gfx_drawstr(#val);
 
-// ROW 2: DELAY, FEEDBACK, PING PONG
+// ============================================================
+// SECTION 2: DELAY (red, tall — sync widget in lower area)
+// ============================================================
+draw_section_box(216, sect_y, 226, sect_h, 0.82, 0.22, 0.14, "DELAY");
 
-// DELAY (grayed out when synced)
+// DELAY knob (grayed when synced)
 delay_is_synced ? (
-  draw_knob_inactive(col1_x, row2_y, 35, slider10, 1, 80000);
-  gfx_r = 0.38; gfx_g = 0.38; gfx_b = 0.40; gfx_a = 1;
+  draw_knob_inactive(dl_cx1, knob_cy, 22, slider10, 1, 80000);
+  gfx_r=0.50; gfx_g=0.50; gfx_b=0.55;
 ) : (
-  ui_push_rect(col1_x - 35, row2_y - 35, 70, 70);
-  new_val = control_dial(slider10, 1, 80000, log(1000), 400);
-  (ui_drag() || ui_click()) ? slider10 = new_val;
+  ui_push_rect(dl_cx1-22, knob_cy-22, 44, 44);
+    ui_automate(slider10, control_dial(slider10, 1, 80000, log(1000), 400));
   ui_pop();
-  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+  dbl_click_in_rect(dl_cx1-22, knob_cy-22, 44, 44) ? (slider10 = 400; slider_automate(slider10););
+  gfx_r=0.71; gfx_g=0.71; gfx_b=0.75;
 );
-strcpy(#lbl, "DELAY");  draw_label_at(col1_x, row2_y - 49);
-slider10 >= 1000 ? (
-  sprintf(#val, "%.2f s", slider10 / 1000);
-) : (
-  sprintf(#val, "%.0f ms", slider10);
-);
-draw_value_at(col1_x, row2_y + 39);
+gfx_a=1; gfx_setfont(1, "Arial", 10);
+strcpy(#lbl, "DELAY"); gfx_measurestr(#lbl, lw, lh); gfx_x=dl_cx1-lw/2; gfx_y=knob_cy-36; gfx_drawstr(#lbl);
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a= delay_is_synced ? 0.4 : 1.0; gfx_setfont(1, "Arial", 9);
+slider10 >= 1000 ? sprintf(#val, "%.2f s", slider10/1000) : sprintf(#val, "%.0f ms", slider10);
+gfx_measurestr(#val, tw, th); gfx_x=dl_cx1-tw/2; gfx_y=knob_cy+25; gfx_drawstr(#val);
 
 // FEEDBACK
-ui_push_rect(col2_x - 35, row2_y - 35, 70, 70);
-new_val = control_dial(slider21, -90, 15, 0, -4);
-(ui_drag() || ui_click()) ? slider21 = new_val;
+ui_push_rect(dl_cx2-22, knob_cy-22, 44, 44);
+  ui_automate(slider21, control_dial(slider21, -90, 15, 0, -4));
 ui_pop();
-strcpy(#lbl, "FEEDBACK");  draw_label_at(col2_x, row2_y - 49);
-sprintf(#val, "%.1f dB", slider21);  draw_value_at(col2_x, row2_y + 39);
+dbl_click_in_rect(dl_cx2-22, knob_cy-22, 44, 44) ? (slider21 = -4; slider_automate(slider21););
+strcpy(#lbl, "FEEDBACK"); draw_knob_label(dl_cx2, knob_cy-36);
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1; gfx_setfont(1, "Arial", 9);
+sprintf(#val, "%.1f dB", slider21);
+gfx_measurestr(#val, tw, th); gfx_x=dl_cx2-tw/2; gfx_y=knob_cy+25; gfx_drawstr(#val);
 
 // PING PONG
-ui_push_rect(col3_x - 35, row2_y - 35, 70, 70);
-new_val = control_dial(slider37, 0, 100, 0, 0);
-(ui_drag() || ui_click()) ? slider37 = new_val;
+ui_push_rect(dl_cx3-22, knob_cy-22, 44, 44);
+  ui_automate(slider37, control_dial(slider37, 0, 100, 0, 0));
 ui_pop();
-strcpy(#lbl, "PING PONG");  draw_label_at(col3_x, row2_y - 49);
-sprintf(#val, "%.0f%%", slider37);  draw_value_at(col3_x, row2_y + 39);
+dbl_click_in_rect(dl_cx3-22, knob_cy-22, 44, 44) ? (slider37 = 0; slider_automate(slider37););
+strcpy(#lbl, "PING PONG"); draw_knob_label(dl_cx3, knob_cy-36);
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1; gfx_setfont(1, "Arial", 9);
+sprintf(#val, "%.0f%%", slider37);
+gfx_measurestr(#val, tw, th); gfx_x=dl_cx3-tw/2; gfx_y=knob_cy+25; gfx_drawstr(#val);
 
-// ROW 3: SATURATION, LOW PASS, DELAY SYNC
+// ---- DELAY SYNC label ----
+gfx_r=0.71; gfx_g=0.71; gfx_b=0.75; gfx_a=1;
+gfx_setfont(1, "Arial", 10);
+strcpy(#lbl, "DELAY SYNC");
+gfx_measurestr(#lbl, lw, lh);
+gfx_x = sync_ctr_x - lw/2; gfx_y = sync_lbl_y;
+gfx_drawstr(#lbl);
 
-// SATURATION
-ui_push_rect(col1_x - 35, row3_y - 35, 70, 70);
-new_val = control_dial(slider35, 1, 100, 0, 1);
-(ui_drag() || ui_click()) ? slider35 = new_val;
-ui_pop();
-strcpy(#lbl, "SATURATION");  draw_label_at(col1_x, row3_y - 49);
-sprintf(#val, "%.0f%%", slider35);  draw_value_at(col1_x, row3_y + 39);
-
-// LOW PASS
-ui_push_rect(col2_x - 35, row3_y - 35, 70, 70);
-new_val = control_dial(slider30, 1000, 15000, 0, 10000);
-(ui_drag() || ui_click()) ? slider30 = new_val;
-ui_pop();
-strcpy(#lbl, "LOW PASS");  draw_label_at(col2_x, row3_y - 49);
-slider30 >= 1000 ? (
-  sprintf(#val, "%.1f kHz", slider30 / 1000);
-) : (
-  sprintf(#val, "%.0f Hz", slider30);
-);
-draw_value_at(col2_x, row3_y + 39);
-
-// DELAY SYNC selector + SYNC ON button
-// Layout: selector box on left, ON button on right, centered together
-sync_box_w = 80;
-sync_box_h = 60;
-sync_btn_w = 48;
-sync_gap = 6;
-sync_total_w = sync_box_w + sync_gap + sync_btn_w;
-sync_box_x = col3_x - sync_total_w/2;
-sync_box_y = row3_y - sync_box_h/2;
-sync_btn_x = sync_box_x + sync_box_w + sync_gap;
-arrow_h = 20;
-
-// Sync selector box — dimmed when sync is off
+// ---- Sync selector box ----
 sync_on ? (
-  gfx_r = 0.16; gfx_g = 0.16; gfx_b = 0.18;
+  gfx_r=0.16; gfx_g=0.16; gfx_b=0.18;
 ) : (
-  gfx_r = 0.12; gfx_g = 0.12; gfx_b = 0.13;
+  gfx_r=0.12; gfx_g=0.12; gfx_b=0.13;
 );
-gfx_a = 1;
+gfx_a=1;
 gfx_rect(sync_box_x, sync_box_y, sync_box_w, sync_box_h);
+gfx_r=0.28; gfx_g=0.28; gfx_b=0.32; gfx_a=1;
+gfx_rect(sync_box_x,            sync_box_y,            sync_box_w, 1);
+gfx_rect(sync_box_x,            sync_box_y+sync_box_h, sync_box_w, 1);
+gfx_rect(sync_box_x,            sync_box_y,            1, sync_box_h);
+gfx_rect(sync_box_x+sync_box_w, sync_box_y,            1, sync_box_h+1);
 
-gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.32; gfx_a = 1;
-gfx_rect(sync_box_x, sync_box_y, sync_box_w, 1);
-gfx_rect(sync_box_x, sync_box_y + sync_box_h, sync_box_w, 1);
-gfx_rect(sync_box_x, sync_box_y, 1, sync_box_h);
-gfx_rect(sync_box_x + sync_box_w, sync_box_y, 1, sync_box_h + 1);
-
-// Up/down arrows only active when sync is on
+// ---- Up/down arrows ----
 sync_on ? (
   ui_push_rect(sync_box_x, sync_box_y, sync_box_w, arrow_h);
-  ui_click() ? (
-    slider11 = min(28, slider11 + 1);
-    sliderchange(slider11);
-  );
+    ui_click() ? (slider11 = min(28, slider11+1); sliderchange(slider11););
   ui_pop();
-  ui_push_rect(sync_box_x, sync_box_y + sync_box_h - arrow_h, sync_box_w, arrow_h);
-  ui_click() ? (
-    slider11 = max(1, slider11 - 1);
-    sliderchange(slider11);
-  );
+  ui_push_rect(sync_box_x, sync_box_y+sync_box_h-arrow_h, sync_box_w, arrow_h);
+    ui_click() ? (slider11 = max(1, slider11-1); sliderchange(slider11););
   ui_pop();
-  gfx_r = 0.55; gfx_g = 0.55; gfx_b = 0.58;
+  gfx_r=0.55; gfx_g=0.55; gfx_b=0.58;
 ) : (
-  gfx_r = 0.30; gfx_g = 0.30; gfx_b = 0.32;
+  gfx_r=0.30; gfx_g=0.30; gfx_b=0.32;
 );
-gfx_a = 1;
-gfx_triangle(sync_box_x + sync_box_w/2, sync_box_y + 5,
-             sync_box_x + sync_box_w/2 - 8, sync_box_y + 15,
-             sync_box_x + sync_box_w/2 + 8, sync_box_y + 15);
-gfx_triangle(sync_box_x + sync_box_w/2, sync_box_y + sync_box_h - 5,
-             sync_box_x + sync_box_w/2 - 8, sync_box_y + sync_box_h - 15,
-             sync_box_x + sync_box_w/2 + 8, sync_box_y + sync_box_h - 15);
+gfx_a=1;
+gfx_triangle(sync_box_x+sync_box_w/2,   sync_box_y+3,
+             sync_box_x+sync_box_w/2-6, sync_box_y+9,
+             sync_box_x+sync_box_w/2+6, sync_box_y+9);
+gfx_triangle(sync_box_x+sync_box_w/2,   sync_box_y+sync_box_h-3,
+             sync_box_x+sync_box_w/2-6, sync_box_y+sync_box_h-9,
+             sync_box_x+sync_box_w/2+6, sync_box_y+sync_box_h-9);
 
-// Sync value text
-sync_on ? (
-  gfx_r = 0.9; gfx_g = 0.2; gfx_b = 0.2;
-) : (
-  gfx_r = 0.35; gfx_g = 0.35; gfx_b = 0.37;
-);
-gfx_a = 1;
-gfx_setfont(1, "Arial", 14);
+// ---- Sync value text ----
+sync_on ? (gfx_r=0.9; gfx_g=0.2; gfx_b=0.2;) : (gfx_r=0.35; gfx_g=0.35; gfx_b=0.37;);
+gfx_a=1;
+gfx_setfont(1, "Arial", 10);
 sprintf(#sync_val, "%s", get_sync_name(slider11));
 gfx_measurestr(#sync_val, sync_w, sync_h);
-gfx_x = sync_box_x + (sync_box_w - sync_w) / 2;
-gfx_y = sync_box_y + (sync_box_h - sync_h) / 2;
+gfx_x = sync_box_x + (sync_box_w - sync_w)/2;
+gfx_y = sync_box_y + (sync_box_h - sync_h)/2;
 gfx_drawstr(#sync_val);
 
-// SYNC ON tab-style button
+// ---- SYNC ON button ----
 ui_push_rect(sync_btn_x, sync_box_y, sync_btn_w, sync_box_h);
-  sync_on ? (
-    control_background_inset();
-  ) : (
-    control_background_enabled("none");
-  );
+  sync_on ? control_background_inset() : control_background_enabled("none");
   ui_color(255, 255, 255);
   ui_align(0.5, 0.5);
-  ui_fontsize(9);
+  ui_fontsize(7);
   ui_text("SYNC");
   sync_on ? control_finish_inset() : control_finish_enabled("none");
   ui_click() ? (
@@ -689,13 +745,36 @@ ui_push_rect(sync_btn_x, sync_box_y, sync_btn_w, sync_box_h);
       new_sync_time = calculate_sync_time(slider11);
       abs(new_sync_time - slider10) > 0.5 ? (
         slider10 = new_sync_time;
-        target_delay_samples = min(floor(srate * 0.001 * slider10), max_delay_samples - 4);
+        target_delay_samples = min(floor(srate*0.001*slider10), max_delay_samples-4);
         oslider10 = slider10;
       );
     );
   );
 ui_pop();
 
-strcpy(#lbl, "DELAY SYNC");  draw_label_at(col3_x, row3_y - 49);
+// ============================================================
+// SECTION 3: CHARACTER (amber)
+// ============================================================
+draw_section_box(450, sect_y, 192, sect_h, 0.80, 0.58, 0.08, "CHARACTER");
 
-); // end ui_screen
+// SATURATION
+ui_push_rect(ch_cx1-22, knob_cy-22, 44, 44);
+  ui_automate(slider35, control_dial(slider35, 1, 100, 0, 1));
+ui_pop();
+dbl_click_in_rect(ch_cx1-22, knob_cy-22, 44, 44) ? (slider35 = 1; slider_automate(slider35););
+strcpy(#lbl, "SATURATION"); draw_knob_label(ch_cx1, knob_cy-36);
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1; gfx_setfont(1, "Arial", 9);
+sprintf(#val, "%.0f%%", slider35);
+gfx_measurestr(#val, tw, th); gfx_x=ch_cx1-tw/2; gfx_y=knob_cy+25; gfx_drawstr(#val);
+
+// LOW PASS
+ui_push_rect(ch_cx2-22, knob_cy-22, 44, 44);
+  ui_automate(slider30, control_dial(slider30, 1000, 15000, 0, 10000));
+ui_pop();
+dbl_click_in_rect(ch_cx2-22, knob_cy-22, 44, 44) ? (slider30 = 10000; slider_automate(slider30););
+strcpy(#lbl, "LOW PASS"); draw_knob_label(ch_cx2, knob_cy-36);
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1; gfx_setfont(1, "Arial", 9);
+slider30 >= 1000 ? sprintf(#val, "%.1f kHz", slider30/1000) : sprintf(#val, "%.0f Hz", slider30);
+gfx_measurestr(#val, tw, th); gfx_x=ch_cx2-tw/2; gfx_y=knob_cy+25; gfx_drawstr(#val);
+
+) : ui_system();

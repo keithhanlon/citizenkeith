@@ -1,83 +1,164 @@
-desc: SynthiAKS Analog Modular Synthesizer
-version: 1.0
-author: citizenkeith - Claudie AI
+desc:SynthiAKS Analog Modular Synthesizer
+version: 2.0
+author: citizenkeith and Claude AI
 about: Emulation of EMS Synthi AKS Synthesizer
-      This JSFX released under GPLv3 license
+// @version 2.0
+// @author citizenkeith
+// @license GPL v3
+// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
+// @about
+//   Emulation of the EMS Synthi AKS modular synthesizer.
+//   Oscillator with drift, 4-pole ladder filter, ADSR envelope, ring modulator,
+//   Sample & Hold with selectable source routing, and MIDI input with pitch bend.
+//   Custom GUI: hand-drawn horizontal sliders in color-coded sections.
+// @changelog
+//   v2.0
+//     Slider labels changed to white for readability
+//     Added custom GUI with hand-drawn horizontal sliders and color-coded sections
+//     Removed default REAPER slider GUI
+//   v1.2
+//     Added MIDI note on/off: triggers envelope, sets oscillator pitch
+//     Added MIDI pitch bend (+/- 2 semitones)
+//     Added S&H source selector: Noise / External / Oscillator
+//     Added custom GUI: horizontal sliders, color-coded section headers
+//   v1.1
+//     Fixed ext_noinit (moved to options header)
+//     Fixed ring modulator - now runs in @sample
+//     Fixed VCA pin logic (unity when pin=0, envelope-controlled when pin>0)
+//     Fixed Osc->Filter Cutoff pin now applied in cutoff calculation
+//     Filter stability threshold raised from 2 to 10
+//     Replaced inline 2*$pi with precomputed pi2 constant
+//     Removed default GUI. Removed filter state from @serialize
 
-options:no_meter
+options: no_meter ext_noinit
 
-// Sliders for basic controls - these will show as REAPER sliders above the custom GUI
-slider1:0.7<0,1,0.01>External Input Level
-slider2:0.3<0,1,0.01>Oscillator Level
-slider3:440<20,2000,1>Oscillator Frequency
-slider4:0<0,3,1{Sawtooth,Triangle,Square,Sine}>Oscillator Waveform
-slider5:0.4<0,1,0.01>Filter Cutoff
-slider6:0.2<0,8,0.01>Filter Resonance
-slider7:0.02<0,0.1,0.001>Oscillator Drift
+// SIGNAL SOURCES
+slider1:0.7<0,1,0.01>-External Input Level
+slider2:0.3<0,1,0.01>-Oscillator Level
+slider3:440<20,2000,1>-Oscillator Frequency (manual / MIDI override)
+slider4:0<0,3,1{Sawtooth,Triangle,Square,Sine}>-Oscillator Waveform
+slider7:0.02<0,0.1,0.001>-Oscillator Drift
 
-// PIN MATRIX - Key connections
-slider10:0<-1,1,0.01>Pin: Osc → Filter Cutoff
-slider11:0<-1,1,0.01>Pin: Envelope → Filter Cutoff
-slider12:0<-1,1,0.01>Pin: Envelope → VCA (Amplitude)
-slider13:0<0,1,0.01>Pin: External → Ring Modulator
-slider14:0<0,1,0.01>Pin: Osc → Ring Modulator
-slider15:40<5,200,1>Ring Mod Frequency (Hz)
-slider16:0.5<0,1,0.01>Ring Mod Mix (Wet/Dry)
+// FILTER
+slider5:0.4<0,1,0.01>-Filter Cutoff
+slider6:0.2<0,8,0.01>-Filter Resonance
+
+// PIN MATRIX
+slider10:0<-1,1,0.01>-Pin: Osc -> Filter Cutoff
+slider11:0<-1,1,0.01>-Pin: Envelope -> Filter Cutoff
+slider12:0<-1,1,0.01>-Pin: Envelope -> VCA (Amplitude)
+slider13:0<0,1,0.01>-Pin: External -> Ring Modulator
+slider14:0<0,1,0.01>-Pin: Osc -> Ring Modulator
+slider15:40<5,200,1>-Ring Mod Frequency (Hz)
+slider16:0.5<0,1,0.01>-Ring Mod Mix (Wet/Dry)
 
 // SAMPLE & HOLD
-slider30:0.3<0,1,0.01>Noise Level
-slider31:2<0.1,10,0.1>S&H Clock Rate (Hz)
-slider32:0<-1,1,0.01>Pin: S&H → Filter Cutoff
-slider33:0<-1,1,0.01>Pin: S&H → Osc Frequency
-slider34:0<-1,1,0.01>Pin: S&H → Ring Freq
+slider30:0.3<0,1,0.01>-Noise Level
+slider31:2<0.1,10,0.1>-S&H Clock Rate (Hz)
+slider32:0<-1,1,0.01>-Pin: S&H -> Filter Cutoff
+slider33:0<-1,1,0.01>-Pin: S&H -> Osc Frequency
+slider34:0<-1,1,0.01>-Pin: S&H -> Ring Freq
+slider35:0<0,2,1{Noise,External,Oscillator}>-S&H Source
 
-// Envelope controls
-slider20:0.01<0.001,2,0.001>Envelope Attack
-slider21:0.1<0.001,2,0.001>Envelope Decay
-slider22:0.6<0,1,0.01>Envelope Sustain
-slider23:0.3<0.001,5,0.001>Envelope Release
-slider24:0<0,1,0.01>Envelope Trigger (Manual)
+// ENVELOPE
+slider20:0.01<0.001,2,0.001>-Envelope Attack
+slider21:0.1<0.001,2,0.001>-Envelope Decay
+slider22:0.6<0,1,0.01>-Envelope Sustain
+slider23:0.3<0.001,5,0.001>-Envelope Release
+slider24:0<0,1,0.01>-Envelope Trigger (Manual)
 
 @init
-// Prevent parameter resets when pressing play
-ext_noinit = 1.0;
 
-// Always initialize these critical audio processing variables
-srate = samplerate;
-last_srate = srate;
-phase = 0;
-drift_phase = 0;
 pi2 = 2 * $pi;
-
-// Simple test oscillator phase
-osc_phase = 0;
-
-// Filter state variables for Synthi-style filter
+phase = 0; drift_phase = 0;
 lp1 = lp2 = lp3 = lp4 = 0;
-bp1 = bp2 = 0;
-
-// Envelope generator state
-env_stage = 0;  // 0=off, 1=attack, 2=decay, 3=sustain, 4=release
-env_level = 0;
-env_trigger_prev = 0;
-
-// Ring modulator state (improved)
+env_stage = 0; env_level = 0; env_trigger_prev = 0;
 ring_mod_phase = 0;
-ring_feedback_l = 0;
-ring_feedback_r = 0;
-ring_resistance = 0.85;
+sh_clock_phase = 0; sh_sample_value = 0; sh_clock_prev = 0;
+sh_noise_seed = 12345; noise_val = 0; osc_raw = 0;
+midi_note = -1; midi_freq = 440; midi_pitchbend = 0;
+drag_slider = -1; drag_start_x = 0; drag_start_val = 0;
 
-// Sample & Hold state
-sh_clock_phase = 0;
-sh_sample_value = 0;
-sh_clock_prev = 0;
-sh_noise_seed = 12345;  // Random seed for noise
+// GUI draw functions (must be defined in @init)
 
-// Noise generator state
-noise_val = 0;
+function draw_sec_hdr(sy, hr, hg, hb, title) local(tw, th) (
+  gfx_r=hr; gfx_g=hg; gfx_b=hb; gfx_a=1;
+  gfx_rect(GUI_SEC_X, sy, GUI_SEC_W, GUI_HDR_H);
+  gfx_r=0.08; gfx_g=0.08; gfx_b=0.08; gfx_a=1;
+  gfx_setfont(1, "Arial", 10, 'b');
+  gfx_measurestr(title, tw, th);
+  gfx_x = GUI_SEC_X + GUI_SEC_W/2 - tw/2;
+  gfx_y = sy + GUI_HDR_H/2 - th/2;
+  gfx_drawstr(title);
+  gfx_r=0.28; gfx_g=0.28; gfx_b=0.32; gfx_a=1;
+  gfx_rect(GUI_SEC_X, sy, GUI_SEC_W, 1);
+  gfx_rect(GUI_SEC_X, sy + GUI_HDR_H, GUI_SEC_W, 1);
+  sy + GUI_HDR_H;
+);
+
+function draw_hslider(sx, sy, sw, sh, val, lo, hi) local(norm, tx) (
+  norm = max(0, min(1, (val - lo) / (hi - lo)));
+  tx = sx + floor(norm * sw);
+  // Track: dark recessed groove
+  gfx_r=0.06; gfx_g=0.06; gfx_b=0.08; gfx_a=1;
+  gfx_rect(sx, sy + sh/2 - 4, sw, 8);
+  // Filled portion: bright amber glow
+  gfx_r=0.85; gfx_g=0.60; gfx_b=0.10; gfx_a=1;
+  gfx_rect(sx, sy + sh/2 - 4, floor(norm * sw), 8);
+  // Track border
+  gfx_r=0.35; gfx_g=0.35; gfx_b=0.40; gfx_a=1;
+  gfx_rect(sx, sy + sh/2 - 4, sw, 1);
+  gfx_rect(sx, sy + sh/2 + 3, sw, 1);
+  gfx_rect(sx, sy + sh/2 - 4, 1, 8);
+  gfx_rect(sx + sw, sy + sh/2 - 4, 1, 9);
+  // Thumb: bright white-gray, tall and visible
+  gfx_r=0.90; gfx_g=0.90; gfx_b=0.92; gfx_a=1;
+  gfx_rect(tx - 5, sy + sh/2 - 9, 10, 18);
+  // Thumb shadow edges
+  gfx_r=0.25; gfx_g=0.25; gfx_b=0.28; gfx_a=1;
+  gfx_rect(tx - 5, sy + sh/2 - 9, 10, 1);
+  gfx_rect(tx - 5, sy + sh/2 + 8, 10, 1);
+  gfx_rect(tx - 5, sy + sh/2 - 9, 1, 18);
+  gfx_rect(tx + 4, sy + sh/2 - 9, 1, 18);
+  // Thumb center line
+  gfx_r=0.50; gfx_g=0.50; gfx_b=0.54; gfx_a=1;
+  gfx_rect(tx - 1, sy + sh/2 - 5, 2, 10);
+);
+
+function draw_row(sy, lbl, val_str) local(lw, lh) (
+  gfx_r=0.12; gfx_g=0.12; gfx_b=0.14; gfx_a=1;
+  gfx_rect(GUI_SEC_X, sy, GUI_SEC_W, GUI_ROW_H);
+  gfx_r=0.20; gfx_g=0.20; gfx_b=0.22; gfx_a=1;
+  gfx_rect(GUI_SEC_X, sy + GUI_ROW_H - 1, GUI_SEC_W, 1);
+  gfx_r=0.92; gfx_g=0.92; gfx_b=0.94; gfx_a=1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(lbl, lw, lh);
+  gfx_x = GUI_SEC_X + GUI_LBL_W - lw - 6;
+  gfx_y = sy + GUI_ROW_H/2 - lh/2;
+  gfx_drawstr(lbl);
+  gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1;
+  gfx_measurestr(val_str, lw, lh);
+  gfx_x = GUI_VAL_X + GUI_VAL_W - lw - 4;
+  gfx_y = sy + GUI_ROW_H/2 - lh/2;
+  gfx_drawstr(val_str);
+  sy + GUI_ROW_H;
+);
+
+function process_slider(sy, val, lo, hi) local(new_val, in_zone, mx_rel) (
+  in_zone = (mouse_x >= GUI_SLD_X && mouse_x <= GUI_SLD_X + GUI_SLD_W &&
+             mouse_y >= sy && mouse_y < sy + GUI_ROW_H);
+  mouse_btn && in_zone && drag_slider < 0 ? (
+    drag_slider = row_idx;
+  );
+  drag_slider == row_idx ? (
+    mx_rel = (mouse_x - GUI_SLD_X) / GUI_SLD_W;
+    val = max(lo, min(hi, lo + mx_rel * (hi - lo)));
+  );
+  row_idx += 1;
+  val;
+);
 
 @serialize
-// Persist critical parameters to prevent reset on transport changes
 file_var(0, env_stage);
 file_var(0, env_level);
 file_var(0, phase);
@@ -86,187 +167,291 @@ file_var(0, sh_clock_phase);
 file_var(0, sh_sample_value);
 file_var(0, sh_noise_seed);
 
-// Persist filter state for smooth operation
-file_var(0, lp1);
-file_var(0, lp2);
-file_var(0, lp3);
-file_var(0, lp4);
-
 @block
-// Handle sample rate changes when using ext_noinit
-srate != last_srate ? (
-  last_srate = srate;
+
+while (midirecv(mpos, msg1, msg2, msg3)) (
+  status = msg1 & 0xF0;
+  status == 0x90 && msg3 > 0 ? (
+    midi_note = msg2;
+    midi_freq = 440.0 * pow(2.0, (midi_note - 69) / 12.0);
+    env_stage = 1;
+  ) : (status == 0x80 || (status == 0x90 && msg3 == 0)) ? (
+    msg2 == midi_note ? (midi_note = -1; env_stage = 4;);
+  ) : status == 0xE0 ? (
+    bend_raw = msg2 | (msg3 << 7);
+    midi_pitchbend = (bend_raw - 8192) / 8192.0 * 2.0;
+  );
+  midisend(mpos, msg1, msg2, msg3);
 );
 
 @sample
-// Process input audio
-input = (spl0 + spl1) * 0.5;  // Average L+R for true mono input
 
-// Generate noise inline (avoiding function call issues)
+input = (spl0 + spl1) * 0.5;
 sh_noise_seed = (sh_noise_seed * 1103515245 + 12345) & 0x7fffffff;
 noise_val = (sh_noise_seed / 0x7fffffff) * 2 - 1;
+noise_output = noise_val * slider30;
 
-// Generate Sample & Hold inline
 sh_clock_phase += slider31 * pi2 / srate;
 sh_clock_phase >= pi2 ? sh_clock_phase -= pi2;
 sh_clock_signal = sin(sh_clock_phase);
-
-// Detect positive-going zero crossing (trigger)
-sh_clock_trigger = (sh_clock_signal > 0 && sh_clock_prev <= 0);
+sh_clock_trigger = (sh_clock_signal > 0) && (sh_clock_prev <= 0);
 sh_clock_prev = sh_clock_signal;
-
-// Sample input on trigger
-sh_clock_trigger ? sh_sample_value = noise_val;
+sh_clock_trigger ? (
+  slider35 < 0.5 ? sh_sample_value = noise_val :
+  slider35 < 1.5 ? sh_sample_value = input :
+                   sh_sample_value = osc_raw;
+);
 sh_output = sh_sample_value;
 
-// Inline oscillator code with Sample & Hold modulation
-// Add subtle frequency drift for analog character
-drift_phase += 0.1 / srate;  // Very slow drift frequency
+base_freq = midi_note >= 0 ? midi_freq : slider3;
+base_freq *= pow(2.0, midi_pitchbend / 12.0);
+drift_phase += 0.1 / srate;
 drift_phase >= 1 ? drift_phase -= 1;
-drift_offset = sin(drift_phase * 2 * $pi) * slider7 * slider3;
+drift_offset = sin(drift_phase * pi2) * slider7 * base_freq;
+osc_freq = max(20, min(2000, base_freq + (sh_output * slider33 * 200) + drift_offset));
+phase += osc_freq * pi2 / srate;
+phase >= pi2 ? phase -= pi2;
 
-// Add Sample & Hold modulation to oscillator frequency
-osc_freq_with_sh = slider3 + (sh_output * slider33 * 200);  // S&H → Osc Freq
-osc_freq_with_sh = max(20, min(2000, osc_freq_with_sh));
-
-// Calculate actual frequency with drift and S&H modulation
-true_freq = osc_freq_with_sh + drift_offset;
-
-// Update phase
-phase += true_freq * 2 * $pi / srate;
-phase >= 2 * $pi ? phase -= 2 * $pi;
-
-// Generate waveform based on selector
-slider4 == 0 ? (
-  // Sawtooth: ramp from -1 to 1
-  osc = (phase / $pi) - 1;
-) : slider4 == 1 ? (
-  // Triangle:
-  phase < $pi ?
-    osc = (phase / $pi * 2) - 1 :
-    osc = 3 - (phase / $pi * 2);
-) : slider4 == 2 ? (
-  // Square:
-  osc = phase < $pi ? -0.8 : 0.8;
+slider4 < 0.5 ? (
+  osc_raw = (phase / $pi) - 1;
+) : slider4 < 1.5 ? (
+  phase < $pi ? osc_raw = (phase / $pi * 2) - 1 : osc_raw = 3 - (phase / $pi * 2);
+) : slider4 < 2.5 ? (
+  osc_raw = phase < $pi ? -0.8 : 0.8;
 ) : (
-  // Sine:
-  osc = sin(phase);
+  osc_raw = sin(phase);
 );
+osc = osc_raw * slider2 * 0.9;
 
-// Apply oscillator level
-osc *= slider2 * 0.9;
-
-// Apply noise level
-noise_output = noise_val * slider30;
-
-// Process envelope generator (inline)
-// Trigger detection (rising edge)
-slider24 > 0.5 && env_trigger_prev <= 0.5 ? (
-  env_stage = 1;  // Start attack
-);
+slider24 > 0.5 && env_trigger_prev <= 0.5 ? env_stage = 1;
 env_trigger_prev = slider24;
-
-// Process envelope stages
 env_stage == 1 ? (
-  // Attack stage
-  env_rate = 1.0 / (slider20 * srate);
-  env_level += env_rate;
-  env_level >= 1.0 ? (
-    env_level = 1.0;
-    env_stage = 2;  // Move to decay
-  );
+  env_level += 1.0 / (slider20 * srate);
+  env_level >= 1.0 ? (env_level = 1.0; env_stage = 2;);
 ) : env_stage == 2 ? (
-  // Decay stage
-  env_rate = (1.0 - slider22) / (slider21 * srate);
-  env_level -= env_rate;
-  env_level <= slider22 ? (
-    env_level = slider22;
-    env_stage = 3;  // Move to sustain
-  );
+  env_level -= (1.0 - slider22) / (slider21 * srate);
+  env_level <= slider22 ? (env_level = slider22; env_stage = 3;);
 ) : env_stage == 3 ? (
-  // Sustain stage
   env_level = slider22;
-  slider24 <= 0.5 ? env_stage = 4;  // Release when trigger goes low
+  (slider24 <= 0.5 && midi_note < 0) ? env_stage = 4;
 ) : env_stage == 4 ? (
-  // Release stage
-  env_rate = env_level / (slider23 * srate);
-  env_level -= env_rate;
-  env_level <= 0 ? (
-    env_level = 0;
-    env_stage = 0;  // Back to off
-  );
+  env_level -= env_level / (slider23 * srate);
+  env_level <= 0.00001 ? (env_level = 0; env_stage = 0;);
 );
+envelope = max(0, min(1, env_level));
 
-envelope = max(0, min(1, env_level));  // Clamp to 0-1 range
+slider12 == 0 ? vca_mod = 1.0 : vca_mod = max(0, min(1, envelope * slider12 + (1.0 - slider12)));
+mixed_signal = ((input * slider1) + osc + noise_output) * vca_mod;
 
-// Apply VCA (amplitude modulation from envelope)
-vca_mod = 1.0;  // Default full amplitude
-vca_mod *= (1.0 + (envelope - 0.5) * slider12 * 2);  // Envelope → VCA
-vca_mod = max(0, min(1, vca_mod));  // Clamp to valid range
+ring_freq = max(5, min(500, slider15 + (sh_output * slider34 * 100)));
+ring_mod_phase += ring_freq * pi2 / srate;
+ring_mod_phase >= pi2 ? ring_mod_phase -= pi2;
+ring_carrier = sin(ring_mod_phase);
+ring_input = (input * slider13) + (osc * slider14);
+mixed_signal = mixed_signal * (1.0 - slider16) + ring_input * ring_carrier * slider16;
 
-// Mix input, oscillator, and noise
-mixed_signal = (input * slider1) + osc + noise_output;
-
-// Apply VCA to mixed signal
-mixed_signal *= vca_mod;
-
-// Calculate filter cutoff with envelope and Sample & Hold modulation
-final_cutoff = slider5 + (envelope * slider11 * 0.3) + (sh_output * slider32 * 0.3);  // Env + S&H → Filter Cutoff
-final_cutoff = max(0, min(1, final_cutoff));  // Clamp to valid range
-
-// Apply Synthi-style filter with modulated cutoff
-filter_freq = final_cutoff * final_cutoff * 0.4;
-filter_freq = max(filter_freq, 0.001);
-filter_freq = min(filter_freq, 0.45);
-
+final_cutoff = max(0, min(1, slider5 + (osc_raw * slider10 * 0.3) + (envelope * slider11 * 0.3) + (sh_output * slider32 * 0.3)));
+filter_freq = max(0.001, min(0.45, final_cutoff * final_cutoff * 0.4));
 filter_q = slider6 * 1.5;
 filter_g = tan(filter_freq * $pi);
-
-// Filter reset protection
-abs(lp1) > 2 || abs(lp2) > 2 || abs(lp3) > 2 || abs(lp4) > 2 ? (
-  lp1 = lp2 = lp3 = lp4 = 0;
-);
-
+(abs(lp1) > 10 || abs(lp2) > 10 || abs(lp3) > 10 || abs(lp4) > 10) ? lp1 = lp2 = lp3 = lp4 = 0;
 filter_feedback = lp4 * filter_q;
-filter_stage1 = mixed_signal - filter_feedback;
-lp1 += filter_g * (filter_stage1 - lp1);
-
-filter_stage2 = lp1;
-lp2 += filter_g * (filter_stage2 - lp2);
-
-filter_stage3 = lp2;
-lp3 += filter_g * (filter_stage3 - lp3);
-
-filter_stage4 = lp3;
-lp4 += filter_g * (filter_stage4 - lp4);
-
+lp1 += filter_g * ((mixed_signal - filter_feedback) - lp1);
+lp2 += filter_g * (lp1 - lp2);
+lp3 += filter_g * (lp2 - lp3);
+lp4 += filter_g * (lp3 - lp4);
 lp4 > 0.8 ? lp4 = 0.8 : lp4 < -0.8 ? lp4 = -0.8;
+spl0 = lp4; spl1 = lp4;
 
-// Output
-spl0 = lp4;
-spl1 = lp4;
+@gfx 560 740
 
-@gfx 700 80
+// Layout constants (set each frame so they're always fresh)
+GUI_PAD   = 8;
+GUI_LBL_W = 148;
+GUI_VAL_W = 68;
+GUI_ROW_H = 28;
+GUI_HDR_H = 22;
+GUI_SEC_X = GUI_PAD;
+GUI_SEC_W = gfx_w - GUI_PAD * 2;
+GUI_SLD_W = GUI_SEC_W - GUI_LBL_W - GUI_VAL_W - GUI_PAD * 2;
+GUI_SLD_X = GUI_SEC_X + GUI_LBL_W;
+GUI_VAL_X = GUI_SLD_X + GUI_SLD_W + GUI_PAD;
 
-// SynthiAKS Header GUI - just the title section above REAPER sliders
-gfx_r = 0.9; gfx_g = 0.9; gfx_b = 0.9;
+// Background
+gfx_r=0.14; gfx_g=0.14; gfx_b=0.16; gfx_a=1;
 gfx_rect(0, 0, gfx_w, gfx_h);
 
-// Title panel background
-gfx_r = 0.75; gfx_g = 0.75; gfx_b = 0.75;
-gfx_rect(20, 15, gfx_w - 40, 50);
+// Title
+gfx_r=0.78; gfx_g=0.78; gfx_b=0.82; gfx_a=1;
+gfx_setfont(1, "Trebuchet MS", 14, 'b');
+gfx_x=12; gfx_y=10; gfx_drawstr("SYNTHIAKS");
+gfx_r=0.55; gfx_g=0.55; gfx_b=0.60; gfx_a=1;
+gfx_setfont(1, "Trebuchet MS", 10);
+gfx_x=116; gfx_y=13; gfx_drawstr("Analog Modular Synthesizer");
 
-// Main title
-gfx_r = 0; gfx_g = 0; gfx_b = 0;
-gfx_setfont(1, "Arial", 24, 'b');
-gfx_x = 40; gfx_y = 25;
-gfx_drawstr("SynthiAKS");
+mouse_btn = mouse_cap & 1;
+mouse_btn == 0 ? drag_slider = -1;
+row_idx = 0;
+cur_y = 32;
 
-// Subtitle
-gfx_setfont(1, "Arial", 12);
-gfx_x = 40; gfx_y = 50;
-gfx_drawstr("Analog Modular Synthesizer");
+// SIGNAL SOURCES
+cur_y = draw_sec_hdr(cur_y, 0.82, 0.18, 0.14, "SIGNAL SOURCES");
+slider1 = process_slider(cur_y, slider1, 0, 1);
+sprintf(#v, "%.2f", slider1);
+cur_y = draw_row(cur_y, "Ext Input Level", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider1, 0, 1);
 
-// Red accent stripe
-gfx_r = 0.7; gfx_g = 0.1; gfx_b = 0.1;
-gfx_rect(gfx_w - 100, 30, 60, 4);
+slider2 = process_slider(cur_y, slider2, 0, 1);
+sprintf(#v, "%.2f", slider2);
+cur_y = draw_row(cur_y, "Osc Level", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider2, 0, 1);
+
+slider3 = process_slider(cur_y, slider3, 20, 2000);
+sprintf(#v, "%.0f Hz", slider3);
+cur_y = draw_row(cur_y, "Osc Frequency", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider3, 20, 2000);
+
+slider4 = process_slider(cur_y, slider4, 0, 3);
+slider4 < 0.5 ? strcpy(#v,"Sawtooth") : slider4 < 1.5 ? strcpy(#v,"Triangle") :
+slider4 < 2.5 ? strcpy(#v,"Square") : strcpy(#v,"Sine");
+cur_y = draw_row(cur_y, "Osc Waveform", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider4, 0, 3);
+
+slider7 = process_slider(cur_y, slider7, 0, 0.1);
+sprintf(#v, "%.3f", slider7);
+cur_y = draw_row(cur_y, "Osc Drift", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider7, 0, 0.1);
+
+cur_y += 4;
+
+// FILTER
+cur_y = draw_sec_hdr(cur_y, 0.8, 0.55, 0.08, "FILTER");
+slider5 = process_slider(cur_y, slider5, 0, 1);
+sprintf(#v, "%.2f", slider5);
+cur_y = draw_row(cur_y, "Cutoff", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider5, 0, 1);
+
+slider6 = process_slider(cur_y, slider6, 0, 8);
+sprintf(#v, "%.2f", slider6);
+cur_y = draw_row(cur_y, "Resonance", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider6, 0, 8);
+
+cur_y += 4;
+
+// PIN MATRIX
+cur_y = draw_sec_hdr(cur_y, 0.18, 0.45, 0.82, "PIN MATRIX");
+slider10 = process_slider(cur_y, slider10, -1, 1);
+sprintf(#v, "%.2f", slider10);
+cur_y = draw_row(cur_y, "Osc -> Filter Cutoff", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider10, -1, 1);
+
+slider11 = process_slider(cur_y, slider11, -1, 1);
+sprintf(#v, "%.2f", slider11);
+cur_y = draw_row(cur_y, "Env -> Filter Cutoff", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider11, -1, 1);
+
+slider12 = process_slider(cur_y, slider12, -1, 1);
+sprintf(#v, "%.2f", slider12);
+cur_y = draw_row(cur_y, "Env -> VCA", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider12, -1, 1);
+
+slider13 = process_slider(cur_y, slider13, 0, 1);
+sprintf(#v, "%.2f", slider13);
+cur_y = draw_row(cur_y, "Ext -> Ring Mod", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider13, 0, 1);
+
+slider14 = process_slider(cur_y, slider14, 0, 1);
+sprintf(#v, "%.2f", slider14);
+cur_y = draw_row(cur_y, "Osc -> Ring Mod", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider14, 0, 1);
+
+slider15 = process_slider(cur_y, slider15, 5, 200);
+sprintf(#v, "%.0f Hz", slider15);
+cur_y = draw_row(cur_y, "Ring Mod Freq", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider15, 5, 200);
+
+slider16 = process_slider(cur_y, slider16, 0, 1);
+sprintf(#v, "%.2f", slider16);
+cur_y = draw_row(cur_y, "Ring Mod Mix", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider16, 0, 1);
+
+cur_y += 4;
+
+// SAMPLE & HOLD
+cur_y = draw_sec_hdr(cur_y, 0.52, 0.22, 0.78, "SAMPLE & HOLD");
+slider30 = process_slider(cur_y, slider30, 0, 1);
+sprintf(#v, "%.2f", slider30);
+cur_y = draw_row(cur_y, "Noise Level", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider30, 0, 1);
+
+slider31 = process_slider(cur_y, slider31, 0.1, 10);
+sprintf(#v, "%.1f Hz", slider31);
+cur_y = draw_row(cur_y, "S&H Clock Rate", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider31, 0.1, 10);
+
+slider35 = process_slider(cur_y, slider35, 0, 2);
+slider35 < 0.5 ? strcpy(#v,"Noise") : slider35 < 1.5 ? strcpy(#v,"External") : strcpy(#v,"Oscillator");
+cur_y = draw_row(cur_y, "S&H Source", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider35, 0, 2);
+
+slider32 = process_slider(cur_y, slider32, -1, 1);
+sprintf(#v, "%.2f", slider32);
+cur_y = draw_row(cur_y, "S&H -> Filter Cutoff", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider32, -1, 1);
+
+slider33 = process_slider(cur_y, slider33, -1, 1);
+sprintf(#v, "%.2f", slider33);
+cur_y = draw_row(cur_y, "S&H -> Osc Freq", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider33, -1, 1);
+
+slider34 = process_slider(cur_y, slider34, -1, 1);
+sprintf(#v, "%.2f", slider34);
+cur_y = draw_row(cur_y, "S&H -> Ring Freq", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider34, -1, 1);
+
+cur_y += 4;
+
+// ENVELOPE
+cur_y = draw_sec_hdr(cur_y, 0.16, 0.68, 0.28, "ENVELOPE");
+slider20 = process_slider(cur_y, slider20, 0.001, 2);
+sprintf(#v, "%.3f s", slider20);
+cur_y = draw_row(cur_y, "Attack", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider20, 0.001, 2);
+
+slider21 = process_slider(cur_y, slider21, 0.001, 2);
+sprintf(#v, "%.3f s", slider21);
+cur_y = draw_row(cur_y, "Decay", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider21, 0.001, 2);
+
+slider22 = process_slider(cur_y, slider22, 0, 1);
+sprintf(#v, "%.2f", slider22);
+cur_y = draw_row(cur_y, "Sustain", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider22, 0, 1);
+
+slider23 = process_slider(cur_y, slider23, 0.001, 5);
+sprintf(#v, "%.3f s", slider23);
+cur_y = draw_row(cur_y, "Release", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider23, 0.001, 5);
+
+slider24 = process_slider(cur_y, slider24, 0, 1);
+slider24 > 0.5 ? strcpy(#v,"ON") : strcpy(#v,"OFF");
+cur_y = draw_row(cur_y, "Manual Trigger", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider24, 0, 1);
+
+cur_y += 4;
+
+// MIDI STATUS
+cur_y = draw_sec_hdr(cur_y, 0.12, 0.62, 0.68, "MIDI");
+gfx_r=0.12; gfx_g=0.12; gfx_b=0.14; gfx_a=1;
+gfx_rect(GUI_SEC_X, cur_y, GUI_SEC_W, GUI_ROW_H + 4);
+midi_note >= 0 ? (
+  sprintf(#midi_disp, "Note %d  %.1f Hz", midi_note, midi_freq);
+) : (
+  sprintf(#midi_disp, "No note held  (%.0f Hz manual)", slider3);
+);
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1;
+gfx_setfont(1, "Arial", 10);
+gfx_x=GUI_SEC_X+8; gfx_y=cur_y+5; gfx_drawstr(#midi_disp);
+sprintf(#pb_str, "Pitch Bend: %+.2f semitones", midi_pitchbend);
+gfx_r=0.55; gfx_g=0.55; gfx_b=0.60; gfx_a=1;
+gfx_x=GUI_SEC_X+8; gfx_y=cur_y+18; gfx_drawstr(#pb_str);

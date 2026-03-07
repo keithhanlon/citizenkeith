@@ -1,0 +1,387 @@
+desc:FM Radio Compressor
+tags: dynamics upward-compression mastering loudness
+version: 1.1
+author: citizenkeith
+about:
+  Upward compressor inspired by analog FM radio processing and Rogue Amoeba Magic Boost.
+  Boosts quiet passages while leaving loud peaks untouched.
+  Program-dependent release avoids pumping artifacts.
+  Lookahead prevents transient overshoot on gain reduction.
+  Sidechain high-pass filter (150Hz) keeps bass from driving gain decisions.
+  Automatic makeup gain scales with sensitivity.
+// @version 1.1
+// @author citizenkeith
+// @license GPL v3
+// @provides FM Radio Compressor.jsfx
+// @about
+//   Upward compressor inspired by analog FM radio processing.
+//   Boosts quiet passages while leaving loud peaks untouched.
+// @changelog
+//   v1.1
+//     Added custom GUI: horizontal sliders, boost meter bar
+//     Removed default REAPER slider UI
+//     Sidechain HPF raised to 150Hz for better bass control
+//     Level-dependent sensitivity taper replaces hard gate floor
+//     Automatic makeup gain baked into sensitivity scaling
+//     Pre-charge fix eliminates startup distortion spike
+//   v1.0
+//     Initial release
+//     Upward compression with lookahead circular buffer
+//     Program-dependent three-tier release
+//     Soft limiter (x/1+|x|) output safety stage
+//     PDC reported to REAPER for phase alignment
+
+slider1:10<5,10,0.5>-Lookahead (ms)
+slider2:5<1,10,1>-Sensitivity
+slider3:0<0,30,0.1>-Gain Boost dB [monitor]
+
+// -----------------------------------------------------------------------
+@init
+
+MAX_DELAY  = 8192;   // circular buffer — enough for 10ms at 192kHz
+buf_l      = 0;
+buf_r      = MAX_DELAY;
+buf_pos    = 0;
+
+env_follow = 0;
+comp_gain  = 1.0;
+hpf_l      = 0;
+hpf_r      = 0;
+hpf_l_prev = 0;
+hpf_r_prev = 0;
+
+drag_slider  = -1;
+drag_start_x = 0;
+drag_start_val = 0;
+row_idx = 0;
+
+// -----------------------------------------------------------------------
+// GUI draw functions — defined in @init per JSFX requirement
+
+function draw_sec_hdr(sy, hr, hg, hb, title) local(tw, th) (
+  gfx_r=hr; gfx_g=hg; gfx_b=hb; gfx_a=1;
+  gfx_rect(GUI_SEC_X, sy, GUI_SEC_W, GUI_HDR_H);
+  gfx_r=0.08; gfx_g=0.08; gfx_b=0.08; gfx_a=1;
+  gfx_setfont(1, "Arial", 10, 'b');
+  gfx_measurestr(title, tw, th);
+  gfx_x = GUI_SEC_X + GUI_SEC_W/2 - tw/2;
+  gfx_y = sy + GUI_HDR_H/2 - th/2;
+  gfx_drawstr(title);
+  gfx_r=0.28; gfx_g=0.28; gfx_b=0.32; gfx_a=1;
+  gfx_rect(GUI_SEC_X, sy, GUI_SEC_W, 1);
+  gfx_rect(GUI_SEC_X, sy + GUI_HDR_H, GUI_SEC_W, 1);
+  sy + GUI_HDR_H;
+);
+
+function draw_hslider(sx, sy, sw, sh, val, lo, hi) local(norm, tx) (
+  norm = max(0, min(1, (val - lo) / (hi - lo)));
+  tx = sx + floor(norm * sw);
+  gfx_r=0.06; gfx_g=0.06; gfx_b=0.08; gfx_a=1;
+  gfx_rect(sx, sy + sh/2 - 4, sw, 8);
+  gfx_r=0.85; gfx_g=0.60; gfx_b=0.10; gfx_a=1;
+  gfx_rect(sx, sy + sh/2 - 4, floor(norm * sw), 8);
+  gfx_r=0.35; gfx_g=0.35; gfx_b=0.40; gfx_a=1;
+  gfx_rect(sx, sy + sh/2 - 4, sw, 1);
+  gfx_rect(sx, sy + sh/2 + 3, sw, 1);
+  gfx_rect(sx, sy + sh/2 - 4, 1, 8);
+  gfx_rect(sx + sw, sy + sh/2 - 4, 1, 9);
+  gfx_r=0.90; gfx_g=0.90; gfx_b=0.92; gfx_a=1;
+  gfx_rect(tx - 5, sy + sh/2 - 9, 10, 18);
+  gfx_r=0.25; gfx_g=0.25; gfx_b=0.28; gfx_a=1;
+  gfx_rect(tx - 5, sy + sh/2 - 9, 10, 1);
+  gfx_rect(tx - 5, sy + sh/2 + 8, 10, 1);
+  gfx_rect(tx - 5, sy + sh/2 - 9, 1, 18);
+  gfx_rect(tx + 4, sy + sh/2 - 9, 1, 18);
+  gfx_r=0.50; gfx_g=0.50; gfx_b=0.54; gfx_a=1;
+  gfx_rect(tx - 1, sy + sh/2 - 5, 2, 10);
+);
+
+function draw_row(sy, lbl, val_str) local(lw, lh) (
+  gfx_r=0.12; gfx_g=0.12; gfx_b=0.14; gfx_a=1;
+  gfx_rect(GUI_SEC_X, sy, GUI_SEC_W, GUI_ROW_H);
+  gfx_r=0.20; gfx_g=0.20; gfx_b=0.22; gfx_a=1;
+  gfx_rect(GUI_SEC_X, sy + GUI_ROW_H - 1, GUI_SEC_W, 1);
+  gfx_r=0.92; gfx_g=0.92; gfx_b=0.94; gfx_a=1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(lbl, lw, lh);
+  gfx_x = GUI_SEC_X + GUI_LBL_W - lw - 6;
+  gfx_y = sy + GUI_ROW_H/2 - lh/2;
+  gfx_drawstr(lbl);
+  gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1;
+  gfx_measurestr(val_str, lw, lh);
+  gfx_x = GUI_VAL_X + GUI_VAL_W - lw - 4;
+  gfx_y = sy + GUI_ROW_H/2 - lh/2;
+  gfx_drawstr(val_str);
+  sy + GUI_ROW_H;
+);
+
+function process_slider(sy, val, lo, hi) local(new_val, in_zone, mx_rel) (
+  in_zone = (mouse_x >= GUI_SLD_X && mouse_x <= GUI_SLD_X + GUI_SLD_W &&
+             mouse_y >= sy && mouse_y < sy + GUI_ROW_H);
+  mouse_btn && in_zone && drag_slider < 0 ? (
+    drag_slider = row_idx;
+  );
+  drag_slider == row_idx ? (
+    mx_rel = (mouse_x - GUI_SLD_X) / GUI_SLD_W;
+    val = max(lo, min(hi, lo + mx_rel * (hi - lo)));
+  );
+  row_idx += 1;
+  val;
+);
+
+// -----------------------------------------------------------------------
+
+function db2lin(db)     ( pow(10.0, db * 0.05) );
+function lin2db(x)      ( x > 0.0000001 ? 20.0 * log10(x) : -140.0 );
+function clamp(v,lo,hi) ( max(lo, min(hi, v)) );
+
+function update_params()
+local(sens_t)
+(
+  // Lookahead in samples
+  la_samps = clamp(floor(slider1 * 0.001 * srate), 1, MAX_DELAY - 1);
+
+  // Sensitivity (1-10) maps:
+  //   threshold: -24dB (subtle) to -12dB (aggressive)
+  //   ratio:      2:1  (subtle) to  5:1  (aggressive)
+  sens_t    = (slider2 - 1.0) / 9.0;           // 0.0 .. 1.0
+  thresh_db = -24.0 + sens_t * 12.0;           // -24 .. -12 dB
+  ratio     = 2.0   + sens_t * 3.0;            // 2:1 .. 5:1
+
+  // Automatic makeup gain: scales with sensitivity
+  // Sensitivity 1 → +1dB, Sensitivity 5 → +3.2dB, Sensitivity 10 → +6dB
+  makeup_gain = db2lin(1.0 + sens_t * 5.0);  knee_lo   = thresh_db - 6.0;
+
+  // Sidechain high-pass filter at 90Hz — prevents bass frequencies from
+  // driving gain decisions. Audio path is unaffected; only the envelope
+  // follower sees the filtered signal.
+  hpf_coef  = exp(-2.0 * $pi * 150.0 / srate);
+
+  // Fixed attack: 40ms — slow enough to be inaudible on program material
+  atk_coef  = exp(-1.0 / (0.040 * srate));
+
+  // Program-dependent release coefficients
+  // Three tiers based on size of incoming level jump:
+  //   small  (<6dB)  → 350ms — lazy drift, completely transparent
+  //   medium (6-15dB)→ 150ms — smooth but responsive
+  //   large  (>15dB) → 30ms  — fast safety snap for loud transients
+  rel_slow  = exp(-1.0 / (0.350 * srate));
+  rel_mid   = exp(-1.0 / (0.150 * srate));
+  rel_fast  = exp(-1.0 / (0.030 * srate));
+);
+
+update_params();
+
+// Pre-charge gain state to just below threshold at startup.
+// Starting near-silence produced an astronomical initial comp_gain
+// causing a brief distortion spike on the first samples.
+// Starting 12dB below threshold gives a gentle, immediate boost
+// without the spike.
+env_follow = db2lin(thresh_db - 12.0);
+comp_gain  = db2lin((thresh_db - lin2db(env_follow)) * (1.0 - 1.0 / ratio));
+
+// -----------------------------------------------------------------------
+@slider
+
+update_params();
+
+// -----------------------------------------------------------------------
+@sample
+
+// --- Write current (future) samples into lookahead buffer ---
+buf_l[buf_pos] = spl0;
+buf_r[buf_pos] = spl1;
+
+// --- Read the delayed output signal ---
+rd = buf_pos - la_samps;
+rd < 0 ? rd += MAX_DELAY;
+dry_l = buf_l[rd];
+dry_r = buf_r[rd];
+
+// --- Sidechain high-pass filter ---
+// Bass frequencies are removed from the detection signal only.
+// The audio path (dry_l/dry_r) is completely untouched.
+hpf_l = hpf_coef * (hpf_l + spl0 - hpf_l_prev);
+hpf_r = hpf_coef * (hpf_r + spl1 - hpf_r_prev);
+hpf_l_prev = spl0;
+hpf_r_prev = spl1;
+
+// --- Peak envelope follower on current (lookahead) samples ---
+// Running ahead of the output signal lets us prepare gain moves
+// before the audio actually arrives at the output.
+sc = max(abs(hpf_l), abs(hpf_r));
+sc > env_follow ? (
+  env_follow = atk_coef * env_follow + (1.0 - atk_coef) * sc;
+) : (
+  env_follow = rel_slow * env_follow + (1.0 - rel_slow) * sc;
+);
+
+// --- Upward compression: compute target gain boost (dB) ---
+// Signal above threshold  → no boost
+// Signal in soft knee     → partial boost (quadratic blend)
+// Signal below knee       → full upward compression
+// level_scale tapers sensitivity to zero as signal approaches silence,
+// preventing the compressor from hypercompressing noise and fade-outs.
+env_db     = lin2db(env_follow);
+level_scale = clamp((env_db - (-50.0)) / 20.0, 0.0, 1.0);
+
+env_db >= thresh_db ? (
+  target_db = 0.0;
+) : env_db >= knee_lo ? (
+  t_knee    = (thresh_db - env_db) / 6.0;
+  full_db   = (thresh_db - env_db) * (1.0 - 1.0 / ratio);
+  target_db = full_db * t_knee * t_knee * level_scale;
+) : (
+  target_db = (thresh_db - env_db) * (1.0 - 1.0 / ratio) * level_scale;
+);
+
+target_lin = db2lin(target_db);
+
+// --- Program-dependent release ---
+// When gain needs to come DOWN (loud content incoming), pick release speed
+// based on how large the level jump is.
+// When gain needs to go UP (quiet passage), always use slow attack.
+target_lin > comp_gain ? (
+  // Boosting — use attack coefficient
+  comp_gain = atk_coef * comp_gain + (1.0 - atk_coef) * target_lin;
+) : (
+  // Reducing boost — measure jump size and pick release tier
+  jump_db = lin2db(comp_gain) - lin2db(target_lin);
+  jump_db > 15.0 ? (
+    rel_coef = rel_fast;
+  ) : jump_db > 6.0 ? (
+    rel_coef = rel_mid;
+  ) : (
+    rel_coef = rel_slow;
+  );
+  comp_gain = rel_coef * comp_gain + (1.0 - rel_coef) * target_lin;
+);
+
+// --- Apply boost and makeup gain ---
+out_l = dry_l * comp_gain * makeup_gain;
+out_r = dry_r * comp_gain * makeup_gain;
+
+// --- Soft limiter: x/(1+|x|) prevents digital clipping as a safety net ---
+// Gentle soft-knee curve, barely audible on well-mastered material.
+out_l = out_l / (1.0 + abs(out_l));
+out_r = out_r / (1.0 + abs(out_r));
+
+spl0 = out_l;
+spl1 = out_r;
+
+// --- Update gain boost readout slider ---
+slider3 = lin2db(comp_gain);
+
+// --- Advance buffer ---
+buf_pos = (buf_pos + 1) % MAX_DELAY;
+
+// --- Report lookahead to REAPER for Plugin Delay Compensation ---
+// Keeps this plugin in phase-sync on the mix bus or in a mastering chain.
+pdc_delay  = la_samps;
+pdc_bot_ch = 0;
+pdc_top_ch = 2;
+
+// Re-bake params every sample block (citizenkeith pattern)
+update_params();
+
+// -----------------------------------------------------------------------
+@gfx 560 160
+
+// Layout constants
+GUI_PAD   = 8;
+GUI_LBL_W = 148;
+GUI_VAL_W = 68;
+GUI_ROW_H = 28;
+GUI_HDR_H = 22;
+GUI_SEC_X = GUI_PAD;
+GUI_SEC_W = gfx_w - GUI_PAD * 2;
+GUI_SLD_W = GUI_SEC_W - GUI_LBL_W - GUI_VAL_W - GUI_PAD * 2;
+GUI_SLD_X = GUI_SEC_X + GUI_LBL_W;
+GUI_VAL_X = GUI_SLD_X + GUI_SLD_W + GUI_PAD;
+
+// Background
+gfx_r=0.14; gfx_g=0.14; gfx_b=0.16; gfx_a=1;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+// Title
+gfx_r=0.78; gfx_g=0.78; gfx_b=0.82; gfx_a=1;
+gfx_setfont(1, "Trebuchet MS", 14, 'b');
+gfx_x=12; gfx_y=8; gfx_drawstr("FM RADIO COMPRESSOR");
+gfx_r=0.55; gfx_g=0.55; gfx_b=0.60; gfx_a=1;
+gfx_setfont(1, "Trebuchet MS", 10);
+gfx_x=210; gfx_y=11; gfx_drawstr("upward compressor + lookahead");
+
+mouse_btn = mouse_cap & 1;
+mouse_btn == 0 ? drag_slider = -1;
+row_idx = 0;
+cur_y = 32;
+
+// CONTROLS section
+cur_y = draw_sec_hdr(cur_y, 0.18, 0.45, 0.82, "CONTROLS");
+
+slider1 = process_slider(cur_y, slider1, 5, 10);
+sprintf(#v, "%.1f ms", slider1);
+cur_y = draw_row(cur_y, "Lookahead", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider1, 5, 10);
+
+slider2 = process_slider(cur_y, slider2, 1, 10);
+sprintf(#v, "%.0f", slider2);
+cur_y = draw_row(cur_y, "Sensitivity", #v);
+draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider2, 1, 10);
+
+cur_y += 4;
+
+// GR METER
+meter_x = GUI_SEC_X;
+meter_y = cur_y;
+meter_w = GUI_SEC_W;
+meter_h = 18;
+max_boost = 24.0;
+
+// Meter background
+gfx_r=0.06; gfx_g=0.06; gfx_b=0.08; gfx_a=1;
+gfx_rect(meter_x, meter_y, meter_w, meter_h);
+gfx_r=0.35; gfx_g=0.35; gfx_b=0.40; gfx_a=1;
+gfx_rect(meter_x, meter_y, meter_w, 1);
+gfx_rect(meter_x, meter_y + meter_h, meter_w, 1);
+
+// Meter fill — green below 6dB, amber 6–12dB, orange above 12dB
+bar_t = clamp(slider3 / max_boost, 0.0, 1.0);
+bar_w = floor(bar_t * meter_w);
+slider3 < 6 ? (
+  gfx_r=0.16; gfx_g=0.68; gfx_b=0.28; gfx_a=1;
+) : slider3 < 12 ? (
+  gfx_r=0.85; gfx_g=0.60; gfx_b=0.10; gfx_a=1;
+) : (
+  gfx_r=0.85; gfx_g=0.32; gfx_b=0.10; gfx_a=1;
+);
+gfx_rect(meter_x, meter_y + 1, bar_w, meter_h - 1);
+
+// Tick marks at 6, 12, 18 dB
+gfx_r=0.28; gfx_g=0.28; gfx_b=0.32; gfx_a=1;
+tick_i = 1;
+loop(3,
+  tick_x = meter_x + floor(tick_i * 6.0 / max_boost * meter_w);
+  gfx_rect(tick_x, meter_y + 1, 1, meter_h - 1);
+  tick_i += 1;
+);
+
+// BOOST label (left) and dB readout (right)
+gfx_r=0.08; gfx_g=0.08; gfx_b=0.10; gfx_a=0.7;
+gfx_rect(meter_x + 2, meter_y + 2, 44, 14);
+gfx_r=0.55; gfx_g=0.55; gfx_b=0.60; gfx_a=1;
+gfx_setfont(1, "Arial", 9, 'b');
+gfx_x=meter_x + 5; gfx_y=meter_y + 4;
+gfx_drawstr("BOOST");
+
+sprintf(#gr_str, "+%.1f dB", slider3);
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1;
+gfx_setfont(1, "Arial", 9);
+gfx_measurestr(#gr_str, tw, th);
+gfx_x = meter_x + meter_w - tw - 5;
+gfx_y = meter_y + 4;
+gfx_drawstr(#gr_str);
+
+// Re-bake DSP params every gfx frame so slider drags take effect immediately
+update_params();
+

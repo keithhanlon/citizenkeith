@@ -1,0 +1,650 @@
+desc:Analog Warmth Compressor
+author:citizenkeith
+version:2.0
+
+// @version 2.0
+// @author citizenkeith
+// @license GPL v3
+// @provides citizenkeith-ui-lib.jsfx-inc
+// @about
+//   VintageWarmer-inspired compressor with optional 2x oversampling via
+//   a 63-tap halfband FIR filter. Soft/medium/hard slider6, parallel slider8,
+//   stereo-linked detection, Watkins-style GUI.
+// @changelog
+//   2.0 - Fixed fir_coeffs memory collision at address 0; replaced shift-register
+//         delay lines with circular buffers (31x fewer memory moves per sample);
+//         exploited halfband FIR symmetry (33->17 multiplies per filter call);
+//         stereo-linked gain detection prevents stereo image shift under compression;
+//         pre-calculated thresh_db, slider2 bounds, ratio_term in @slider (removed log()
+//         from inner loop); replaced non-oversampling linear-interpolation path with
+//         clean single-pass; GUI layout constants moved to @init (computed once, not
+//         per frame); named slider variables used throughout @gfx (fixes incorrect
+//         knob positions on first insert); exp() instead of 10^x for dB conversions;
+//         memset() for buffer init; added Watkins-style GUI
+//   1.1 - Initial release
+
+import citizenkeith-ui-lib.jsfx-inc
+
+slider1:0<-24,24,0.1>-Drive (dB)
+slider2:50<0,100,0.1>-Knee (%)
+slider3:50<0,100,0.1>-Speed
+slider4:1<0.1,5,0.01>-Release (x)
+slider5:0<-24,0,0.1>-Ceiling (dB)
+slider6:0<0,100,0.1>-Saturation (%)
+slider7:1<0,2,1{Soft,Medium,Hard}>-Saturation Type
+slider8:100<0,100,1>-Mix (%)
+slider9:0<-24,24,0.1>-Output (dB)
+slider10:1<0,1,1{Bypassed,Active}>-Oversampling
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+
+// ── Memory map ───────────────────────────────────────────────────────────────
+// 0–499        : reserved (address 0 = audio data — never write here)
+// 600–615      : fir_sym_val  (16 symmetric pair coefficients)
+// 700–715      : fir_sym_lo   (16 lower tap indices)
+// 800–815      : fir_sym_hi   (16 upper tap indices)
+// 1000–1062    : up_delay_l   circular buffer (63 samples)
+// 1100–1162    : up_delay_r
+// 1200–1262    : down_delay_l
+// 1300–1362    : down_delay_r
+// 8192+        : ui-lib workspace
+
+fir_taps        = 63;
+fir_sym_pairs   = 16;   // 16 symmetric pairs + 1 center tap
+fir_center_idx  = 31;   // tap index of center (value 0.5)
+
+fir_sym_val = 600;
+fir_sym_lo  = 700;
+fir_sym_hi  = 800;
+
+up_delay_l   = 1000;
+up_delay_r   = 1100;
+down_delay_l = 1200;
+down_delay_r = 1300;
+
+// ── Symmetric halfband FIR pairs ─────────────────────────────────────────────
+// Halfband filter is symmetric: coeff[i] == coeff[N-1-i].
+// FIR sum = 0.5*buf[center] + sum_i( val[i] * (buf[lo[i]] + buf[hi[i]]) )
+// Reduces per-call multiplies from 33 to 17.
+
+fir_sym_val[0]=-0.000015258789; fir_sym_lo[0]=0;  fir_sym_hi[0]=62;
+fir_sym_val[1]=0.000061035156;  fir_sym_lo[1]=2;  fir_sym_hi[1]=60;
+fir_sym_val[2]=-0.00014648438;  fir_sym_lo[2]=4;  fir_sym_hi[2]=58;
+fir_sym_val[3]=0.00027465820;   fir_sym_lo[3]=6;  fir_sym_hi[3]=56;
+fir_sym_val[4]=-0.00046386719;  fir_sym_lo[4]=8;  fir_sym_hi[4]=54;
+fir_sym_val[5]=0.00073242188;   fir_sym_lo[5]=10; fir_sym_hi[5]=52;
+fir_sym_val[6]=-0.0011108398;   fir_sym_lo[6]=12; fir_sym_hi[6]=50;
+fir_sym_val[7]=0.0016174316;    fir_sym_lo[7]=14; fir_sym_hi[7]=48;
+fir_sym_val[8]=-0.0023193359;   fir_sym_lo[8]=16; fir_sym_hi[8]=46;
+fir_sym_val[9]=0.0032958984;    fir_sym_lo[9]=18; fir_sym_hi[9]=44;
+fir_sym_val[10]=-0.0046997070;  fir_sym_lo[10]=20; fir_sym_hi[10]=42;
+fir_sym_val[11]=0.0068969727;   fir_sym_lo[11]=22; fir_sym_hi[11]=40;
+fir_sym_val[12]=-0.010803223;   fir_sym_lo[12]=24; fir_sym_hi[12]=38;
+fir_sym_val[13]=0.019348145;    fir_sym_lo[13]=26; fir_sym_hi[13]=36;
+fir_sym_val[14]=-0.045532227;   fir_sym_lo[14]=28; fir_sym_hi[14]=34;
+fir_sym_val[15]=0.29943848;     fir_sym_lo[15]=30; fir_sym_hi[15]=32;
+
+// ── Clear circular buffers ────────────────────────────────────────────────────
+memset(up_delay_l,   0, fir_taps);
+memset(up_delay_r,   0, fir_taps);
+memset(down_delay_l, 0, fir_taps);
+memset(down_delay_r, 0, fir_taps);
+
+up_head_l = up_head_r = down_head_l = down_head_r = 0;
+
+// ── Latency reporting ─────────────────────────────────────────────────────────
+// pdc_delay set conditionally in @slider based on oversampling state
+pdc_bot_ch = 0;
+pdc_top_ch = 2;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+env_l           = 0;
+smooth_gain     = 1.0;
+gain_smooth_inv = 0.05;   // 1.0 - gain_smooth_coeff (0.95)
+
+// ── GUI helper functions ──────────────────────────────────────────────────────
+
+function draw_section_box(bx, by, bw, bh, hr, hg, hb, header_text)
+local(tw, th)
+(
+  gfx_r=0.13; gfx_g=0.13; gfx_b=0.15; gfx_a=1; gfx_rect(bx, by, bw, bh);
+  gfx_r=hr;   gfx_g=hg;   gfx_b=hb;   gfx_a=1; gfx_rect(bx, by, bw, 22);
+  gfx_r=0.08; gfx_g=0.08; gfx_b=0.08; gfx_a=1;
+  gfx_setfont(1, "Arial", 11, 'b');
+  gfx_measurestr(header_text, tw, th);
+  gfx_x=bx+bw/2-tw/2; gfx_y=by+11-th/2; gfx_drawstr(header_text);
+  gfx_r=0.30; gfx_g=0.30; gfx_b=0.34; gfx_a=1;
+  gfx_rect(bx,    by,    bw, 1); gfx_rect(bx, by+bh, bw, 1);
+  gfx_rect(bx,    by,    1, bh); gfx_rect(bx+bw, by, 1, bh+1);
+);
+
+// Vertical GR meter — fills from top downward as compression increases
+// mlevel = positive dB of GR (0 = no compression), mfloor = scale max (e.g. 24)
+function draw_vmeter(mx, my, mw, mh, mlevel, mfloor)
+local(norm, fill_h, seg_y, seg_norm, t)
+(
+  gfx_r=0.06; gfx_g=0.06; gfx_b=0.08; gfx_a=1; gfx_rect(mx, my, mw, mh);
+  norm   = max(0, min(1, mlevel / mfloor));
+  fill_h = floor(norm * mh);
+  fill_h > 0 ? (
+    seg_y = my + mh - fill_h;
+    loop(fill_h,
+      seg_norm = 1.0 - (seg_y - my) / mh;
+      seg_norm < 0.6 ? (
+        gfx_r=0.15; gfx_g=0.80; gfx_b=0.25;
+      ) : seg_norm < 0.8 ? (
+        t=(seg_norm-0.6)/0.2; gfx_r=0.15+t*0.75; gfx_g=0.80; gfx_b=0.25-t*0.25;
+      ) : seg_norm < 0.93 ? (
+        t=(seg_norm-0.8)/0.13; gfx_r=0.90; gfx_g=0.80-t*0.35; gfx_b=0.0;
+      ) : (
+        t=(seg_norm-0.93)/0.07; gfx_r=0.95; gfx_g=0.45-t*0.35; gfx_b=0.0;
+      );
+      gfx_a=1; gfx_rect(mx, seg_y, mw, 1);
+      seg_y+=1;
+    );
+  );
+  gfx_r=0.28; gfx_g=0.28; gfx_b=0.32; gfx_a=1;
+  gfx_rect(mx, my, mw, 1); gfx_rect(mx, my+mh, mw, 1);
+  gfx_rect(mx, my, 1, mh); gfx_rect(mx+mw, my, 1, mh+1);
+);
+
+function draw_label_at(lx, ly) local(lw, lh)
+(
+  gfx_r=0.68; gfx_g=0.68; gfx_b=0.72; gfx_a=1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#lbl, lw, lh);
+  gfx_x=lx-lw/2; gfx_y=ly; gfx_drawstr(#lbl);
+);
+
+function draw_value_at(vx, vy) local(vw, vh)
+(
+  gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#val, vw, vh);
+  gfx_x=vx-vw/2; gfx_y=vy; gfx_drawstr(#val);
+);
+
+function draw_switch_label(cx, ly, label) local(lw, lh)
+(
+  gfx_r=1.0; gfx_g=1.0; gfx_b=1.0; gfx_a=1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(label, lw, lh);
+  gfx_x=cx-lw/2; gfx_y=ly; gfx_drawstr(label);
+);
+
+function check_dbl_click() local(mx, my, now, dt)
+(
+  mx=mouse_x; my=mouse_y; now=time_precise();
+  (mouse_cap & 1) && !(mouse_cap_last & 1) ? (
+    dt = now - dbl_click_time;
+    (dt < 0.4) && (dt > 0.05) && (abs(mx-dbl_click_x)<8) && (abs(my-dbl_click_y)<8) ? (
+      dbl_click_fired=1; dbl_click_cx=mx; dbl_click_cy=my;
+    ) : ( dbl_click_fired=0; );
+    dbl_click_time=now; dbl_click_x=mx; dbl_click_y=my;
+  ) : ( dbl_click_fired=0; );
+);
+
+function dbl_click_in_rect(rx, ry, rw, rh)
+(
+  dbl_click_fired &&
+  (dbl_click_cx>=rx) && (dbl_click_cx<rx+rw) &&
+  (dbl_click_cy>=ry) && (dbl_click_cy<ry+rh)
+);
+
+// ── GUI layout constants (computed once, not per frame) ───────────────────────
+gui_w   = 620;
+gui_h   = 374;
+gui_pad = 8;
+gui_gap = 8;
+gui_kr  = 22;
+
+gui_row1_y  = 38;
+gui_row1_h  = 160;
+gui_row1_cy = gui_row1_y + 22 + 60;
+
+gui_row2_y  = gui_row1_y + gui_row1_h + gui_gap;
+gui_row2_h  = 160;
+gui_row2_cy = gui_row2_y + 22 + 60;
+
+// Row 1: COMPRESS (5 knobs) + GR METER section
+gui_gr_sec_w  = 80;
+gui_comp_x    = gui_pad;
+gui_comp_w    = gui_w - gui_pad*2 - gui_gr_sec_w - gui_gap;
+gui_comp_cw   = gui_comp_w / 5;
+gui_ck1 = gui_comp_x + gui_comp_cw * 0.5;
+gui_ck2 = gui_comp_x + gui_comp_cw * 1.5;
+gui_ck3 = gui_comp_x + gui_comp_cw * 2.5;
+gui_ck4 = gui_comp_x + gui_comp_cw * 3.5;
+gui_ck5 = gui_comp_x + gui_comp_cw * 4.5;
+
+// GR meter section (row 1, right of COMPRESS)
+gui_gr_sec_x  = gui_comp_x + gui_comp_w + gui_gap;
+gui_gr_mw     = 18;
+gui_gr_mx     = gui_gr_sec_x + (gui_gr_sec_w - gui_gr_mw) / 2 + 10;
+gui_gr_my     = gui_row1_y + 28;
+gui_gr_mh     = gui_row1_h - 48;
+
+// Row 2
+gui_warmth_x      = gui_pad;
+gui_warmth_w      = floor((gui_w - gui_pad*2) * 0.42);
+gui_warmth_sat_cx = gui_warmth_x + gui_warmth_w * 0.28;
+gui_warmth_sw_cx  = gui_warmth_x + gui_warmth_w * 0.70;
+
+gui_out_x     = gui_warmth_x + gui_warmth_w + gui_gap;
+gui_out_w     = gui_w - gui_pad - gui_out_x;
+gui_out_cw    = gui_out_w / 3;
+gui_out_k1    = gui_out_x + gui_out_cw * 0.5;
+gui_out_k2    = gui_out_x + gui_out_cw * 1.5;
+gui_out_sw_cx = gui_out_x + gui_out_cw * 2.5;
+
+gui_sat_tab_w   = floor((gui_warmth_w - gui_warmth_w*0.46) / 3);
+gui_sat_sw_totw = gui_sat_tab_w * 3;
+gui_sat_sw_h    = 20;
+gui_sat_sw_x0   = gui_warmth_sw_cx - gui_sat_sw_totw/2;
+gui_sat_sw_y0   = gui_row2_cy - gui_sat_sw_h/2;
+
+gui_os_sw_w = gui_out_cw - 8;
+gui_os_sw_h = 20;
+gui_os_sw_x = gui_out_sw_cx - gui_os_sw_w/2;
+gui_os_sw_y = gui_row2_cy - gui_os_sw_h/2;
+
+// ── Double-click state ────────────────────────────────────────────────────────
+dbl_click_time  = 0;
+dbl_click_x     = dbl_click_y = 0;
+dbl_click_fired = 0;
+dbl_click_cx    = dbl_click_cy = 0;
+mouse_cap_last  = 0;
+
+// ── ui-lib setup ──────────────────────────────────────────────────────────────
+ui_setup(8192);
+
+// ── DSP working variable initialization ──────────────────────────────────────
+// Neutral values until @slider fires on first load
+drive_gain  = 1.0;
+sat_amount  = 0.0;
+mix_wet     = 1.0;
+mix_dry     = 0.0;
+output_gain = 1.0;
+
+
+// ── DSP Functions ─────────────────────────────────────────────────────────────
+
+// Symmetric halfband FIR on circular buffer
+// 17 multiplies per call (vs 33 naive) by exploiting filter symmetry
+function fir_filter_circ(buf, head) local(output, i, base, lo_idx, hi_idx)
+(
+  base = head - 1;                  // clean base; wrap manually below
+  base < 0 ? base += fir_taps;
+
+  // Center tap: index 31, coefficient 0.5
+  lo_idx = base - fir_center_idx;
+  lo_idx < 0 ? lo_idx += fir_taps;
+  output = buf[lo_idx] * 0.5;
+
+  i = 0;
+  loop(fir_sym_pairs,
+    lo_idx = base - fir_sym_lo[i];
+    lo_idx < 0 ? lo_idx += fir_taps;
+    hi_idx = base - fir_sym_hi[i];
+    hi_idx < 0 ? hi_idx += fir_taps;
+    output += (buf[lo_idx] + buf[hi_idx]) * fir_sym_val[i];
+    i += 1;
+  );
+  output;
+);
+
+// Write into circular buffer, return new head
+// Branch-based wrap is cheaper than % for a single increment
+function circ_write(buf, head, sample)
+(
+  buf[head] = sample;
+  head + 1 >= fir_taps ? 0 : head + 1;
+);
+
+// Fast tanh
+function tanh_fast(x) local(e2x)
+(
+  x > 5 ? 1.0 : x < -5 ? -1.0 : (
+    e2x = exp(x * 2);
+    (e2x - 1) / (e2x + 1)
+  );
+);
+
+// Soft-knee compressor
+// thresh_db, knee_start_db, knee_end_db, knee_width_db, ratio_term pre-calc in @slider
+function soft_knee_compress(input_level) local(input_db, overshoot, gain_db)
+(
+  input_db = log(max(input_level, 0.0000001)) * 8.685889638;
+
+  input_db <= knee_start_db ? (
+    1.0;
+  ) : input_db >= knee_end_db ? (
+    gain_db = -(input_db - thresh_db) * ratio_term;
+    exp(gain_db * 0.11512925465);
+  ) : (
+    overshoot = input_db - knee_start_db;
+    gain_db   = -overshoot * overshoot * ratio_term / (2.0 * knee_width_db);
+    exp(gain_db * 0.11512925465);
+  );
+);
+
+// Envelope follower
+function envelope_follower(env, input, atk, rel)
+(
+  input > env ?
+    env + (input - env) * (1.0 - atk) :
+    env + (input - env) * (1.0 - rel);
+);
+
+// Speed percentage to filter coefficient
+function speed_to_coeff(speed_val, sr)
+(
+  exp(-1.0 / ((0.1 + speed_val * 0.999) * sr * 0.001));
+);
+
+// Saturation shapes
+LOG2DB = 8.685889638;
+function gain2db(gain) ( log(max(gain, 0.0000001)) * LOG2DB; );
+
+function saturate_soft(x, amount) local(driven)
+(
+  driven = x * (1.0 + amount * 2.0);
+  tanh_fast(driven) / (1.0 + amount * 0.5);
+);
+
+function saturate_medium(x, amount) local(driven, ax, output)
+(
+  driven = x * (1.0 + amount * 3.0);
+  ax = abs(driven);
+  ax < 0.33 ? (
+    output = driven;
+  ) : ax < 1.0 ? (
+    output = sign(driven) * (0.33 + (ax - 0.33) * 0.5);
+  ) : (
+    output = sign(driven) * min(0.665 + (ax - 1.0) * 0.1, 0.95);
+  );
+  output / (1.0 + amount * 0.3);
+);
+
+function saturate_hard(x, amount) local(driven, ax, output)
+(
+  driven = x * (1.0 + amount * 4.0);
+  ax = abs(driven);
+  ax < 0.5 ? (
+    output = driven;
+  ) : ax < 1.0 ? (
+    output = sign(driven) * (0.5 + (ax - 0.5) * 0.3);
+  ) : (
+    output = sign(driven) * 0.65;
+  );
+  output / (1.0 + amount * 0.2);
+);
+
+function apply_saturation(x, amount, type)
+(
+  amount == 0 ? x :
+  type == 0 ? saturate_soft(x, amount) :
+  type == 1 ? saturate_medium(x, amount) :
+              saturate_hard(x, amount);
+);
+
+
+function update_params()
+(
+  drive_gain  = exp(slider1 * 0.11512925465);
+  output_gain = exp(slider9 * 0.11512925465);
+  sat_amount  = slider6 / 100.0;
+  mix_wet     = slider8 / 100.0;
+  mix_dry     = 1.0 - mix_wet;
+
+  thresh_db = slider5;
+
+  slider2 < 10 ? (
+    knee_width_db     = 0.05 + slider2 * 0.045;
+    compression_ratio = 200 - slider2 * 15;
+  ) : slider2 < 50 ? (
+    knee_norm         = (slider2 - 10) / 40;
+    knee_width_db     = 0.5 + knee_norm * 7.5;
+    compression_ratio = 50 - knee_norm * 44;
+  ) : (
+    knee_norm         = (slider2 - 50) / 50;
+    knee_width_db     = 8 + knee_norm * 22;
+    compression_ratio = 6 - knee_norm * 4;
+  );
+
+  knee_start_db   = thresh_db - knee_width_db * 0.5;
+  knee_end_db     = thresh_db + knee_width_db * 0.5;
+  ratio_term      = 1.0 - 1.0 / compression_ratio;
+
+  oversample_rate = slider10 ? srate * 2 : srate;
+  attack_coeff    = speed_to_coeff(slider3, oversample_rate);
+  release_coeff   = speed_to_coeff(slider3 * slider4, oversample_rate);
+);
+
+
+@slider
+update_params();
+pdc_delay = slider10 ? (fir_taps - 1) : 0;
+
+@sample
+
+dry_l = spl0;
+dry_r = spl1;
+
+slider10 ? (
+  // ── 2x OVERSAMPLING PATH ─────────────────────────────────────────────────
+  os = 0;
+  loop(2,
+    up_head_l = circ_write(up_delay_l, up_head_l, os == 0 ? spl0 : 0);
+    up_head_r = circ_write(up_delay_r, up_head_r, os == 0 ? spl1 : 0);
+
+    driven_l = fir_filter_circ(up_delay_l, up_head_l) * (2.0 * drive_gain);
+    driven_r = fir_filter_circ(up_delay_r, up_head_r) * (2.0 * drive_gain);
+
+    proc_l = apply_saturation(driven_l, sat_amount, slider7);
+    proc_r = apply_saturation(driven_r, sat_amount, slider7);
+
+    env_l = envelope_follower(env_l, max(abs(proc_l), abs(proc_r)), attack_coeff, release_coeff);
+    smooth_gain += (soft_knee_compress(env_l) - smooth_gain) * gain_smooth_inv;
+
+    proc_l *= smooth_gain;
+    proc_r *= smooth_gain;
+
+    down_head_l = circ_write(down_delay_l, down_head_l, proc_l);
+    down_head_r = circ_write(down_delay_r, down_head_r, proc_r);
+
+    os == 1 ? (
+      wet_l = fir_filter_circ(down_delay_l, down_head_l);
+      wet_r = fir_filter_circ(down_delay_r, down_head_r);
+    );
+
+    os += 1;
+  );
+
+) : (
+  // ── SINGLE-PASS PATH ─────────────────────────────────────────────────────
+  driven_l = spl0 * drive_gain;
+  driven_r = spl1 * drive_gain;
+
+  wet_l = apply_saturation(driven_l, sat_amount, slider7);
+  wet_r = apply_saturation(driven_r, sat_amount, slider7);
+
+  env_l = envelope_follower(env_l, max(abs(wet_l), abs(wet_r)), attack_coeff, release_coeff);
+  smooth_gain += (soft_knee_compress(env_l) - smooth_gain) * gain_smooth_inv;
+
+  wet_l *= smooth_gain;
+  wet_r *= smooth_gain;
+);
+
+spl0 = (dry_l * mix_dry + wet_l * mix_wet) * output_gain;
+spl1 = (dry_r * mix_dry + wet_r * mix_wet) * output_gain;
+
+
+@gfx 620 374
+
+control_start("main", "tron");
+
+ui_screen() == "main" ? (
+
+gfx_r=0.14; gfx_g=0.14; gfx_b=0.16; gfx_a=1;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+
+
+check_dbl_click();
+
+// Short aliases for frequently-used layout constants
+kr      = gui_kr;
+row1_cy = gui_row1_cy;
+row2_cy = gui_row2_cy;
+
+// ── Plugin title ──────────────────────────────────────────────────────────────
+gfx_r=0.78; gfx_g=0.78; gfx_b=0.82; gfx_a=1;
+gfx_setfont(1, "Trebuchet MS", 14, 'b');
+gfx_x=12; gfx_y=8; gfx_drawstr("ANALOG WARMTH COMPRESSOR");
+
+// ── ROW 1: COMPRESS (red) ─────────────────────────────────────────────────────
+draw_section_box(gui_comp_x, gui_row1_y, gui_comp_w, gui_row1_h, 0.82, 0.22, 0.14, "COMPRESS");
+
+// DRIVE
+ui_push_rect(gui_ck1-kr, row1_cy-kr, kr*2, kr*2);
+  ui_automate(slider1, control_dial(slider1, -24, 24, 0, 0));
+ui_pop();
+dbl_click_in_rect(gui_ck1-kr, row1_cy-kr, kr*2, kr*2) ? (slider1=0; ui_automate(slider1, slider1););
+strcpy(#lbl, "DRIVE"); draw_label_at(gui_ck1, row1_cy-kr-14);
+sprintf(#val, "%.1f dB", slider1); draw_value_at(gui_ck1, row1_cy+kr+4);
+
+// KNEE
+ui_push_rect(gui_ck2-kr, row1_cy-kr, kr*2, kr*2);
+  ui_automate(slider5, control_dial(slider5, -24, 0, 0, 0));
+ui_pop();
+dbl_click_in_rect(gui_ck2-kr, row1_cy-kr, kr*2, kr*2) ? (slider5=0; ui_automate(slider5, slider5););
+strcpy(#lbl, "CEILING"); draw_label_at(gui_ck2, row1_cy-kr-14);
+sprintf(#val, "%.1f dB", slider5); draw_value_at(gui_ck2, row1_cy+kr+4);
+
+// SPEED
+ui_push_rect(gui_ck3-kr, row1_cy-kr, kr*2, kr*2);
+  ui_automate(slider3, control_dial(slider3, 0, 100, 0, 50));
+ui_pop();
+dbl_click_in_rect(gui_ck3-kr, row1_cy-kr, kr*2, kr*2) ? (slider3=50; ui_automate(slider3, slider3););
+strcpy(#lbl, "SPEED"); draw_label_at(gui_ck3, row1_cy-kr-14);
+sprintf(#val, "%.0f", slider3); draw_value_at(gui_ck3, row1_cy+kr+4);
+
+// RELEASE
+ui_push_rect(gui_ck4-kr, row1_cy-kr, kr*2, kr*2);
+  ui_automate(slider4, control_dial(slider4, 0.1, 5, 0, 1));
+ui_pop();
+dbl_click_in_rect(gui_ck4-kr, row1_cy-kr, kr*2, kr*2) ? (slider4=1; ui_automate(slider4, slider4););
+strcpy(#lbl, "RELEASE"); draw_label_at(gui_ck4, row1_cy-kr-14);
+sprintf(#val, "%.2fx", slider4); draw_value_at(gui_ck4, row1_cy+kr+4);
+
+// CEILING
+ui_push_rect(gui_ck5-kr, row1_cy-kr, kr*2, kr*2);
+  ui_automate(slider2, control_dial(slider2, 0, 100, 0, 50));
+ui_pop();
+dbl_click_in_rect(gui_ck5-kr, row1_cy-kr, kr*2, kr*2) ? (slider2=50; ui_automate(slider2, slider2););
+strcpy(#lbl, "KNEE"); draw_label_at(gui_ck5, row1_cy-kr-14);
+sprintf(#val, "%.0f%%", slider2); draw_value_at(gui_ck5, row1_cy+kr+4);
+
+// ── ROW 2A: WARMTH (amber) ────────────────────────────────────────────────────
+// GR METER section (amber, row 1 right)
+draw_section_box(gui_gr_sec_x, gui_row1_y, gui_gr_sec_w, gui_row1_h, 0.80, 0.58, 0.08, "GR");
+
+gr_db_display = -gain2db(smooth_gain);
+gr_db_display = max(0, min(24, gr_db_display));
+draw_vmeter(gui_gr_mx, gui_gr_my, gui_gr_mw, gui_gr_mh, gr_db_display, 24);
+
+// Scale labels
+gfx_setfont(1,"Arial",8);
+i=0;
+loop(5,
+  db_mark = i * 6;
+  mark_y  = gui_gr_my + gui_gr_mh * (db_mark / 24);
+  gfx_r=0.28; gfx_g=0.28; gfx_b=0.32; gfx_a=1;
+  gfx_line(gui_gr_mx-4, mark_y, gui_gr_mx, mark_y);
+  gfx_r=0.55; gfx_g=0.55; gfx_b=0.58; gfx_a=1;
+  sprintf(#mark_lbl, "%d", -db_mark);
+  gfx_measurestr(#mark_lbl, mlw, mlh);
+  gfx_x = gui_gr_mx - 6 - mlw; gfx_y = mark_y - mlh/2;
+  gfx_drawstr(#mark_lbl);
+  i+=1;
+);
+
+// Numeric readout
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1;
+gfx_setfont(1,"Arial",10);
+sprintf(#gr_val, "%.1f", gr_db_display);
+gfx_measurestr(#gr_val, mlw, mlh);
+gfx_x = gui_gr_sec_x + gui_gr_sec_w/2 - mlw/2;
+gfx_y = gui_gr_my + gui_gr_mh + 5;
+gfx_drawstr(#gr_val);
+
+draw_section_box(gui_warmth_x, gui_row2_y, gui_warmth_w, gui_row2_h, 0.80, 0.58, 0.08, "WARMTH");
+
+// SATURATION
+ui_push_rect(gui_warmth_sat_cx-kr, row2_cy-kr, kr*2, kr*2);
+  ui_automate(slider6, control_dial(slider6, 0, 100, 0, 0));
+ui_pop();
+dbl_click_in_rect(gui_warmth_sat_cx-kr, row2_cy-kr, kr*2, kr*2) ? (slider6=0; ui_automate(slider6, slider6););
+strcpy(#lbl, "SATURATION"); draw_label_at(gui_warmth_sat_cx, row2_cy-kr-14);
+sprintf(#val, "%.0f%%", slider6); draw_value_at(gui_warmth_sat_cx, row2_cy+kr+4);
+
+// SAT TYPE — 3-way tab switch
+draw_switch_label(gui_warmth_sw_cx, row2_cy-kr-14, "SAT TYPE");
+
+sw_i = 0;
+loop(3,
+  ui_push_rect(gui_sat_sw_x0 + sw_i*gui_sat_tab_w + 1, gui_sat_sw_y0, gui_sat_tab_w - 2, gui_sat_sw_h);
+    sw_i == slider7 ? control_background_inset() : control_background_enabled("none");
+    ui_color(255, 255, 255); ui_align(0.5, 0.5); ui_fontsize(8);
+    sw_i == 0 ? ui_text("SOFT") : sw_i == 1 ? ui_text("MED") : ui_text("HARD");
+    sw_i == slider7 ? control_finish_inset() : control_finish_enabled("none");
+    ui_click() ? (slider7=sw_i; ui_automate(slider7, slider7););
+  ui_pop();
+  sw_i += 1;
+);
+
+slider7 == 0 ? strcpy(#val, "SOFT") : slider7 == 1 ? strcpy(#val, "MEDIUM") : strcpy(#val, "HARD");
+draw_value_at(gui_warmth_sw_cx, row2_cy+kr+4);
+
+// ── ROW 2B: OUTPUT (green) ────────────────────────────────────────────────────
+draw_section_box(gui_out_x, gui_row2_y, gui_out_w, gui_row2_h, 0.22, 0.72, 0.32, "OUTPUT");
+
+// MIX
+ui_push_rect(gui_out_k1-kr, row2_cy-kr, kr*2, kr*2);
+  ui_automate(slider8, control_dial(slider8, 0, 100, 0, 100));
+ui_pop();
+dbl_click_in_rect(gui_out_k1-kr, row2_cy-kr, kr*2, kr*2) ? (slider8=100; ui_automate(slider8, slider8););
+strcpy(#lbl, "MIX"); draw_label_at(gui_out_k1, row2_cy-kr-14);
+sprintf(#val, "%.0f%%", slider8); draw_value_at(gui_out_k1, row2_cy+kr+4);
+
+// OUTPUT
+ui_push_rect(gui_out_k2-kr, row2_cy-kr, kr*2, kr*2);
+  ui_automate(slider9, control_dial(slider9, -24, 24, 0, 0));
+ui_pop();
+dbl_click_in_rect(gui_out_k2-kr, row2_cy-kr, kr*2, kr*2) ? (slider9=0; ui_automate(slider9, slider9););
+strcpy(#lbl, "OUTPUT"); draw_label_at(gui_out_k2, row2_cy-kr-14);
+sprintf(#val, "%.1f dB", slider9); draw_value_at(gui_out_k2, row2_cy+kr+4);
+
+// OVERSAMPLING toggle
+draw_switch_label(gui_out_sw_cx, row2_cy-kr-14, "OVERSAMPLE");
+
+ui_push_rect(gui_os_sw_x, gui_os_sw_y, gui_os_sw_w, gui_os_sw_h);
+  ui_automate(slider10, control_switch(slider10));
+ui_pop();
+
+slider10 ? (gfx_r=0.22; gfx_g=0.72; gfx_b=0.32;) : (gfx_r=0.55; gfx_g=0.55; gfx_b=0.55;);
+gfx_a=1; gfx_setfont(1,"Arial",10);
+strcpy(#os_lbl, slider10 ? "ACTIVE" : "BYPASSED");
+gfx_measurestr(#os_lbl, os_lw, os_lh);
+gfx_x=gui_out_sw_cx-os_lw/2; gfx_y=row2_cy+gui_os_sw_h/2+4; gfx_drawstr(#os_lbl);
+
+update_params();
+mouse_cap_last = mouse_cap;
+
+) : ui_system();

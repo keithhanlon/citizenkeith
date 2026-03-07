@@ -1,10 +1,10 @@
 desc: Cloudbusting Reverb
-version: 1.0
+version: 2.5
 author: citizenkeith - Claude AI
 about:
   # Cloudbusting Reverb
   
-  An algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, 
+  A professional algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion,
   per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections.
   
   ## Credits
@@ -12,30 +12,64 @@ about:
   Original CloudSeed: https://github.com/GhostNoteAudio/CloudSeedCore
   
   ## License
+  This plugin is released under the MIT License, matching the CloudSeed source.
+  
   CloudSeed original license:
   MIT License - Copyright (c) 2017 Valdemar Erlingsson
   
   Cloudbusting Reverb JSFX port:
   MIT License - Copyright (c) 2026 citizenkeith
   
-  Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
-  and associated documentation files (the "Software"), to deal in the Software without restriction, 
-  including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+  and associated documentation files (the "Software"), to deal in the Software without restriction,
+  including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
   and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so.
 
-slider1:size=0.7<0.1,2.0,0.01>Size
-slider2:decay=0.85<0,0.995,0.001>Decay
-slider3:diffusion=0.7<0,0.85,0.01>Diffusion
-slider4:diffusionStages=4<0,8,1>Diffusion Stages
-slider5:modDepth=0.3<0,1,0.01>Mod Depth
-slider6:modRate=0.25<0.01,2,0.01>Mod Rate (Hz)
-slider7:damping=0<0,1,0.01>Damping
-slider8:lowCut=20<20,500,1>Low Cut (Hz)
-slider9:highCut=20000<1000,20000,1>High Cut (Hz)
-slider10:predelay=0<0,200,1>Pre-delay (ms)
-slider11:earlyMix=0.5<0,1,0.01>Early Reflections
-slider12:mix=0.5<0,1,0.01>Mix
-slider13:outputLevel=1.0<0,2,0.01>Output Level
+// ReaPack metadata
+// @version 2.5
+// @author citizenkeith
+// @license MIT
+// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
+// @about
+//   Professional algorithmic reverb based on the CloudSeed algorithm.
+//   Parallel comb filters with per-comb LFO modulation, cascaded allpass diffusion,
+//   RT60-based decay control, high-frequency damping, input EQ, pre-delay,
+//   early reflections, and custom citizenkeith-family GUI.
+// @changelog
+//   v2.5
+//     Custom GUI — citizenkeith family design (dark theme, color-coded sections)
+//     All sliders hidden from default REAPER slider view
+//     Double-click any knob to reset to default value
+//     Amber value readouts below each knob
+//     Optimized memory layout (13x reduction: 2.6M -> 197K floats)
+//     Fixed ui-lib memory overlap causing right channel corruption
+//     Renamed s1/s2 interpolation vars to avoid ui-lib collision
+//   v2.0
+//     RT60-based Decay slider (0.3s-15s) replacing raw feedback coefficient
+//     Per-comb decay coefficients for perceptually uniform decay across filter lengths
+//     Single master LFO phase replacing 8 independent phases
+//     Delay recalculations moved to dirty-flag block (only on size change)
+//     ER tap and level constants moved to @init
+//   v1.0
+//     Initial release
+//     Parallel comb filters, allpass diffusion, LFO modulation, damping,
+//     input HP/LP filtering, pre-delay, early reflections
+
+import citizenkeith-ui-lib.jsfx-inc
+
+slider1:size=0.7<0.1,2.0,0.01>-Size
+slider2:rt60=2.0<0.3,15.0,0.1>-Decay (s)
+slider3:diffusion=0.7<0,0.85,0.01>-Diffusion
+slider4:diffusionStages=4<0,8,1>-Diffusion Stages
+slider5:modDepth=0.3<0,1,0.01>-Mod Depth
+slider6:modRate=0.25<0.01,2,0.01>-Mod Rate (Hz)
+slider7:damping=0<0,1,0.01>-Damping
+slider8:lowCut=20<20,500,1>-Low Cut (Hz)
+slider9:highCut=20000<1000,20000,1>-High Cut (Hz)
+slider10:predelay=0<0,200,1>-Pre-delay (ms)
+slider11:earlyMix=0.5<0,1,0.01>-Early Reflections
+slider12:mix=0.5<0,1,0.01>-Mix
+slider13:outputLevel=1.0<0,2,0.01>-Output Level
 
 in_pin:left input
 in_pin:right input
@@ -44,8 +78,11 @@ out_pin:right output
 
 @init
 
-// Power-of-2 buffer size
-bufsize = 131072;
+// Power-of-2 buffer sizes
+// Max allpass delay: srate * 0.0677 * size_max(2.0) = ~6500 samples -> 8192
+// Max comb delay: srate * 0.03 * 2.0 * 1.618 * 1.0313 + 50mod = ~4856 samples -> 8192
+ap_bufsize   = 8192;
+comb_bufsize = 8192;
 
 // Pre-delay buffer (16384 = ~340ms at 48kHz)
 predelay_bufsize = 16384;
@@ -54,34 +91,34 @@ predelay_R = predelay_L + predelay_bufsize;
 
 // Allpass diffusion buffers
 ap1_L = predelay_R + predelay_bufsize;
-ap2_L = ap1_L + bufsize;
-ap3_L = ap2_L + bufsize;
-ap4_L = ap3_L + bufsize;
-ap5_L = ap4_L + bufsize;
-ap6_L = ap5_L + bufsize;
-ap7_L = ap6_L + bufsize;
-ap8_L = ap7_L + bufsize;
+ap2_L = ap1_L + ap_bufsize;
+ap3_L = ap2_L + ap_bufsize;
+ap4_L = ap3_L + ap_bufsize;
+ap5_L = ap4_L + ap_bufsize;
+ap6_L = ap5_L + ap_bufsize;
+ap7_L = ap6_L + ap_bufsize;
+ap8_L = ap7_L + ap_bufsize;
 
-ap1_R = ap8_L + bufsize;
-ap2_R = ap1_R + bufsize;
-ap3_R = ap2_R + bufsize;
-ap4_R = ap3_R + bufsize;
-ap5_R = ap4_R + bufsize;
-ap6_R = ap5_R + bufsize;
-ap7_R = ap6_R + bufsize;
-ap8_R = ap7_R + bufsize;
+ap1_R = ap8_L + ap_bufsize;
+ap2_R = ap1_R + ap_bufsize;
+ap3_R = ap2_R + ap_bufsize;
+ap4_R = ap3_R + ap_bufsize;
+ap5_R = ap4_R + ap_bufsize;
+ap6_R = ap5_R + ap_bufsize;
+ap7_R = ap6_R + ap_bufsize;
+ap8_R = ap7_R + ap_bufsize;
 
 // Comb filter buffers
-comb1_L = ap8_R + bufsize;
-comb2_L = comb1_L + bufsize;
-comb3_L = comb2_L + bufsize;
-comb4_L = comb3_L + bufsize;
-comb1_R = comb4_L + bufsize;
-comb2_R = comb1_R + bufsize;
-comb3_R = comb2_R + bufsize;
-comb4_R = comb3_R + bufsize;
+comb1_L = ap8_R + ap_bufsize;
+comb2_L = comb1_L + comb_bufsize;
+comb3_L = comb2_L + comb_bufsize;
+comb4_L = comb3_L + comb_bufsize;
+comb1_R = comb4_L + comb_bufsize;
+comb2_R = comb1_R + comb_bufsize;
+comb3_R = comb2_R + comb_bufsize;
+comb4_R = comb3_R + comb_bufsize;
 
-mem_end = comb4_R + bufsize;
+mem_end = comb4_R + comb_bufsize;
 
 // Zero all buffers
 memset(0, 0, mem_end);
@@ -96,15 +133,36 @@ ap5_pos_R = ap6_pos_R = ap7_pos_R = ap8_pos_R = 0;
 comb1_pos_L = comb2_pos_L = comb3_pos_L = comb4_pos_L = 0;
 comb1_pos_R = comb2_pos_R = comb3_pos_R = comb4_pos_R = 0;
 
-// LFO phases - spread evenly across 2π for maximum decorrelation
-lfo_phase_1L = 0;
-lfo_phase_2L = (2 * $pi) / 8 * 1;
-lfo_phase_3L = (2 * $pi) / 8 * 2;
-lfo_phase_4L = (2 * $pi) / 8 * 3;
-lfo_phase_1R = (2 * $pi) / 8 * 4;
-lfo_phase_2R = (2 * $pi) / 8 * 5;
-lfo_phase_3R = (2 * $pi) / 8 * 6;
-lfo_phase_4R = (2 * $pi) / 8 * 7;
+// Early reflection tap delays (fixed — do not depend on any slider)
+er_tap1 = (srate * 0.013) | 0;
+er_tap2 = (srate * 0.019) | 0;
+er_tap3 = (srate * 0.023) | 0;
+er_tap4 = (srate * 0.029) | 0;
+er_tap5 = (srate * 0.037) | 0;
+er_tap6 = (srate * 0.043) | 0;
+er_tap7 = (srate * 0.053) | 0;
+er_tap8 = (srate * 0.061) | 0;
+
+// Early reflection levels (fixed decay envelope)
+er_level1 = 0.8;
+er_level2 = 0.7;
+er_level3 = 0.6;
+er_level4 = 0.5;
+er_level5 = 0.4;
+er_level6 = 0.3;
+er_level7 = 0.25;
+er_level8 = 0.2;
+
+// LFO: single master phase; per-comb offsets spread evenly across 2π
+lfo_phase = 0;
+lfo_offset_1L = 0;
+lfo_offset_2L = (2 * $pi) / 8 * 1;
+lfo_offset_3L = (2 * $pi) / 8 * 2;
+lfo_offset_4L = (2 * $pi) / 8 * 3;
+lfo_offset_1R = (2 * $pi) / 8 * 4;
+lfo_offset_2R = (2 * $pi) / 8 * 5;
+lfo_offset_3R = (2 * $pi) / 8 * 6;
+lfo_offset_4R = (2 * $pi) / 8 * 7;
 
 // Parameter smoothing to prevent zipper noise
 size_smooth = 0.7; // Initialize to default
@@ -132,42 +190,148 @@ lp_x1_R = lp_x2_R = lp_y1_R = lp_y2_R = 0;
 function allpass(buffer, pos, delay_samples, g, input) 
   local(read_pos, delayed, output)
 (
-  read_pos = (pos - delay_samples) & (bufsize - 1);
+  read_pos = (pos - delay_samples) & (ap_bufsize - 1);
   delayed = buffer[read_pos];
   output = -g * input + delayed;
   buffer[pos] = input + g * output;
   output;
 );
 
+ui_setup(mem_end);
+
+// ============================================================
+// GFX HELPER FUNCTIONS (must be in @init)
+// ============================================================
+
+// Draw a section box with colored header bar + border
+function draw_section_box(bx, by, bw, bh, hr, hg, hb, header_text)
+local(tw, th)
+(
+  gfx_r = 0.13; gfx_g = 0.13; gfx_b = 0.15; gfx_a = 1;
+  gfx_rect(bx, by, bw, bh);
+  gfx_r = hr; gfx_g = hg; gfx_b = hb; gfx_a = 1;
+  gfx_rect(bx, by, bw, 22);
+  gfx_r = 0.08; gfx_g = 0.08; gfx_b = 0.08; gfx_a = 1;
+  gfx_setfont(1, "Arial", 11, 'b');
+  gfx_measurestr(header_text, tw, th);
+  gfx_x = bx + bw/2 - tw/2;
+  gfx_y = by + 11 - th/2;
+  gfx_drawstr(header_text);
+  gfx_r = 0.30; gfx_g = 0.30; gfx_b = 0.34; gfx_a = 1;
+  gfx_rect(bx,      by,      bw, 1);
+  gfx_rect(bx,      by + bh, bw, 1);
+  gfx_rect(bx,      by,      1,  bh);
+  gfx_rect(bx + bw, by,      1,  bh + 1);
+);
+
+// Draw knob label (uses global #lbl)
+function draw_label_at(lx, ly)
+local(lw, lh)
+(
+  gfx_r = 0.68; gfx_g = 0.68; gfx_b = 0.72; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#lbl, lw, lh);
+  gfx_x = lx - lw/2;
+  gfx_y = ly;
+  gfx_drawstr(#lbl);
+);
+
+// Draw knob value (uses global #val, amber color)
+function draw_value_at(vx, vy)
+local(vw, vh)
+(
+  gfx_r = 1.0; gfx_g = 0.82; gfx_b = 0.44; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#val, vw, vh);
+  gfx_x = vx - vw/2;
+  gfx_y = vy;
+  gfx_drawstr(#val);
+);
+
+// Draw inactive (non-interactive) knob
+function draw_knob_inactive(cx, cy, r, val, vmin, vmax)
+local(norm, angle, start_a, end_a, px, py, i, a, track_r)
+(
+  start_a = $pi * 0.75;
+  end_a   = $pi * 2.25;
+  norm    = max(0, min(1, (val - vmin) / (vmax - vmin)));
+  angle   = start_a + norm * (end_a - start_a);
+  gfx_r = 0.16; gfx_g = 0.16; gfx_b = 0.18; gfx_a = 1;
+  gfx_circle(cx, cy, r - 2, 1, 1);
+  track_r = r - 5;
+  i = 0;
+  loop(270,
+    a = start_a + i * $pi / 180;
+    gfx_r = 0.22; gfx_g = 0.22; gfx_b = 0.24; gfx_a = 1;
+    gfx_circle(cx + cos(a)*track_r, cy + sin(a)*track_r, 1.2, 1, 1);
+    i += 1;
+  );
+  i = 0;
+  loop(floor(norm * 270),
+    a = start_a + i * $pi / 180;
+    gfx_r = 0.28; gfx_g = 0.32; gfx_b = 0.38; gfx_a = 1;
+    gfx_circle(cx + cos(a)*track_r, cy + sin(a)*track_r, 1.2, 1, 1);
+    i += 1;
+  );
+  px = cx + cos(angle) * (r * 0.45);
+  py = cy + sin(angle) * (r * 0.45);
+  gfx_r = 0.40; gfx_g = 0.40; gfx_b = 0.44; gfx_a = 1;
+  gfx_circle(px, py, 2.5, 1, 1);
+);
+
+// Double-click detection (run once per frame)
+function check_dbl_click()
+local(mx, my, now, dt)
+(
+  mx  = mouse_x;
+  my  = mouse_y;
+  now = time_precise();
+  (mouse_cap & 1) && !(mouse_cap_last & 1) ? (
+    dt = now - dbl_click_time;
+    (dt < 0.4) && (dt > 0.05) && (abs(mx - dbl_click_x) < 8) && (abs(my - dbl_click_y) < 8) ? (
+      dbl_click_fired = 1;
+      dbl_click_cx    = mx;
+      dbl_click_cy    = my;
+    ) : (
+      dbl_click_fired = 0;
+    );
+    dbl_click_time = now;
+    dbl_click_x    = mx;
+    dbl_click_y    = my;
+  ) : (
+    dbl_click_fired = 0;
+  );
+);
+
+function dbl_click_in_rect(rx, ry, rw, rh)
+(
+  dbl_click_fired &&
+  (dbl_click_cx >= rx) && (dbl_click_cx < rx + rw) &&
+  (dbl_click_cy >= ry) && (dbl_click_cy < ry + rh)
+);
+
 @slider
 
 // Modulation parameters (calculated from sliders)
 lfo_increment = 2 * $pi * modRate / srate;
-mod_amount_samples = modDepth * 50; // Max ±50 samples (~1ms at 48kHz) - increased from 20
+mod_amount_samples = modDepth * 50;
 
 // Pre-delay in samples
-predelay_samples = (predelay * 0.001 * srate) | 0; // Convert ms to samples
+predelay_samples = (predelay * 0.001 * srate) | 0;
 
-// Early reflection tap delays (in samples, prime-based for natural sound)
-// These are relative to the pre-delay point
-er_tap1 = (srate * 0.013) | 0;  // 13ms
-er_tap2 = (srate * 0.019) | 0;  // 19ms  
-er_tap3 = (srate * 0.023) | 0;  // 23ms
-er_tap4 = (srate * 0.029) | 0;  // 29ms
-er_tap5 = (srate * 0.037) | 0;  // 37ms
-er_tap6 = (srate * 0.043) | 0;  // 43ms
-er_tap7 = (srate * 0.053) | 0;  // 53ms
-er_tap8 = (srate * 0.061) | 0;  // 61ms
-
-// Early reflection levels (decay envelope)
-er_level1 = 0.8;
-er_level2 = 0.7;
-er_level3 = 0.6;
-er_level4 = 0.5;
-er_level5 = 0.4;
-er_level6 = 0.3;
-er_level7 = 0.25;
-er_level8 = 0.2;
+// Per-comb decay coefficients calculated from RT60
+// Formula: coeff = 10^(-3 * delay_samples / (RT60 * srate))
+// Each comb gets its own coefficient so decay is perceptually uniform across delays
+// Calculated at size=1; re-scaled per sample using size_smooth ratio
+rt60_safe = max(0.1, rt60);
+decay_c1L = 10 ^ (-3 * (srate * 0.03 * 1.000) / (rt60_safe * srate));
+decay_c2L = 10 ^ (-3 * (srate * 0.03 * 1.193) / (rt60_safe * srate));
+decay_c3L = 10 ^ (-3 * (srate * 0.03 * 1.414) / (rt60_safe * srate));
+decay_c4L = 10 ^ (-3 * (srate * 0.03 * 1.618) / (rt60_safe * srate));
+decay_c1R = 10 ^ (-3 * (srate * 0.03 * 1.000 * 1.0313) / (rt60_safe * srate));
+decay_c2R = 10 ^ (-3 * (srate * 0.03 * 1.193 * 1.0313) / (rt60_safe * srate));
+decay_c3R = 10 ^ (-3 * (srate * 0.03 * 1.414 * 1.0313) / (rt60_safe * srate));
+decay_c4R = 10 ^ (-3 * (srate * 0.03 * 1.618 * 1.0313) / (rt60_safe * srate));
 
 // Input high-pass filter (Low Cut)
 freq_hp = max(20, min(lowCut, 500));
@@ -201,53 +365,55 @@ lp_b2 /= lp_a0;
 lp_a1 /= lp_a0;
 lp_a2 /= lp_a0;
 
-// Damping coefficient (one-pole lowpass)
-// Only calculated if damping > 0
-damp_coeff = damping > 0 ? damping * 0.5 : 0;
+// Damping coefficient is smoothed per-sample in @sample
 
 @sample
 
 // Smooth the Size parameter to prevent zipper noise when adjusting
+size_smooth_prev = size_smooth;
 size_smooth += size_coeff * (size - size_smooth);
 
-// Smooth the damping coefficient to prevent clicks during automation
-damp_coeff_target = damping * 0.5;
-damp_coeff_smooth += damp_smooth_coeff * (damp_coeff_target - damp_coeff_smooth);
-damp_coeff = damp_coeff_smooth;
+// Recalculate delay times only when size_smooth has meaningfully changed
+abs(size_smooth - size_smooth_prev) > 0.00001 ? (
+  base_delay = srate * 0.03 * size_smooth;
+  comb1_delay = (base_delay * 1.000);
+  comb2_delay = (base_delay * 1.193);
+  comb3_delay = (base_delay * 1.414);
+  comb4_delay = (base_delay * 1.618);
+  comb1_delay_R = (comb1_delay * 1.0313);
+  comb2_delay_R = (comb2_delay * 1.0313);
+  comb3_delay_R = (comb3_delay * 1.0313);
+  comb4_delay_R = (comb4_delay * 1.0313);
 
-// Smooth diffusion stages to prevent clicks when changing stage count
-stages_smooth += stages_coeff * (diffusionStages - stages_smooth);
+  ap1_delay = (srate * 0.0050 * size_smooth) | 0;
+  ap2_delay = (srate * 0.0117 * size_smooth) | 0;
+  ap3_delay = (srate * 0.0197 * size_smooth) | 0;
+  ap4_delay = (srate * 0.0293 * size_smooth) | 0;
+  ap5_delay = (srate * 0.0373 * size_smooth) | 0;
+  ap6_delay = (srate * 0.0431 * size_smooth) | 0;
+  ap7_delay = (srate * 0.0593 * size_smooth) | 0;
+  ap8_delay = (srate * 0.0677 * size_smooth) | 0;
 
-// Calculate delay times using smoothed size
-// Comb filter base delays
-base_delay = srate * 0.03 * size_smooth;
-comb1_delay = (base_delay * 1.000);
-comb2_delay = (base_delay * 1.193);
-comb3_delay = (base_delay * 1.414);
-comb4_delay = (base_delay * 1.618);
-comb1_delay_R = (comb1_delay * 1.0313);
-comb2_delay_R = (comb2_delay * 1.0313);
-comb3_delay_R = (comb3_delay * 1.0313);
-comb4_delay_R = (comb4_delay * 1.0313);
+  ap1_delay_R = (ap1_delay * 1.021) | 0;
+  ap2_delay_R = (ap2_delay * 1.021) | 0;
+  ap3_delay_R = (ap3_delay * 1.021) | 0;
+  ap4_delay_R = (ap4_delay * 1.021) | 0;
+  ap5_delay_R = (ap5_delay * 1.021) | 0;
+  ap6_delay_R = (ap6_delay * 1.021) | 0;
+  ap7_delay_R = (ap7_delay * 1.021) | 0;
+  ap8_delay_R = (ap8_delay * 1.021) | 0;
 
-// Allpass diffusion delays
-ap1_delay = (srate * 0.0050 * size_smooth) | 0;
-ap2_delay = (srate * 0.0117 * size_smooth) | 0;
-ap3_delay = (srate * 0.0197 * size_smooth) | 0;
-ap4_delay = (srate * 0.0293 * size_smooth) | 0;
-ap5_delay = (srate * 0.0373 * size_smooth) | 0;
-ap6_delay = (srate * 0.0431 * size_smooth) | 0;
-ap7_delay = (srate * 0.0593 * size_smooth) | 0;
-ap8_delay = (srate * 0.0677 * size_smooth) | 0;
-
-ap1_delay_R = (ap1_delay * 1.021) | 0;
-ap2_delay_R = (ap2_delay * 1.021) | 0;
-ap3_delay_R = (ap3_delay * 1.021) | 0;
-ap4_delay_R = (ap4_delay * 1.021) | 0;
-ap5_delay_R = (ap5_delay * 1.021) | 0;
-ap6_delay_R = (ap6_delay * 1.021) | 0;
-ap7_delay_R = (ap7_delay * 1.021) | 0;
-ap8_delay_R = (ap8_delay * 1.021) | 0;
+  // Size-adjusted decay coefficients (8 exponentiations, only when size changes)
+  size_inv = 1.0 / max(0.01, size_smooth);
+  s_decay_c1L = decay_c1L ^ size_inv;
+  s_decay_c2L = decay_c2L ^ size_inv;
+  s_decay_c3L = decay_c3L ^ size_inv;
+  s_decay_c4L = decay_c4L ^ size_inv;
+  s_decay_c1R = decay_c1R ^ size_inv;
+  s_decay_c2R = decay_c2R ^ size_inv;
+  s_decay_c3R = decay_c3R ^ size_inv;
+  s_decay_c4R = decay_c4R ^ size_inv;
+);
 
 // Input filtering (HP then LP)
 // High-pass left
@@ -274,11 +440,16 @@ lp_y2_R = lp_y1_R; lp_y1_R = lp_out_R;
 inL = lp_out_L;
 inR = lp_out_R;
 
+// Smooth the damping coefficient to prevent clicks during automation
+damp_coeff_smooth += damp_smooth_coeff * (damping * 0.5 - damp_coeff_smooth);
+damp_coeff = damp_coeff_smooth;
+
+// Smooth diffusion stages to prevent clicks when changing stage count
+stages_smooth += stages_coeff * (diffusionStages - stages_smooth);
+
 // ============================================
 // PRE-DELAY & EARLY REFLECTIONS (PHASE 5)
 // ============================================
-
-// Write filtered input to pre-delay buffer FIRST
 predelay_L[predelay_pos] = inL;
 predelay_R[predelay_pos] = inR;
 
@@ -356,18 +527,16 @@ diffR = delayed_R + er_R;
 // Each stage crossfades smoothly based on stages_smooth
 // stage_frac = 1 when fully active, 0 when bypassed, fractional when transitioning
 
-// Stage 1
-stages_smooth >= 0 ? (
-  stage_frac = min(1, max(0, stages_smooth));
-  stage_frac > 0 ? (
-    wet_L = allpass(ap1_L, ap1_pos_L, ap1_delay, diffusion, diffL);
-    wet_R = allpass(ap1_R, ap1_pos_R, ap1_delay_R, diffusion, diffR);
-    diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
-    diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
-  );
-  ap1_pos_L = (ap1_pos_L + 1) & (bufsize - 1);
-  ap1_pos_R = (ap1_pos_R + 1) & (bufsize - 1);
+// Stage 1 (always active — stages_smooth >= 0 is always true)
+stage_frac = min(1, max(0, stages_smooth));
+stage_frac > 0 ? (
+  wet_L = allpass(ap1_L, ap1_pos_L, ap1_delay, diffusion, diffL);
+  wet_R = allpass(ap1_R, ap1_pos_R, ap1_delay_R, diffusion, diffR);
+  diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
+  diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
 );
+ap1_pos_L = (ap1_pos_L + 1) & (ap_bufsize - 1);
+ap1_pos_R = (ap1_pos_R + 1) & (ap_bufsize - 1);
 
 // Stage 2
 stages_smooth >= 1 ? (
@@ -378,8 +547,8 @@ stages_smooth >= 1 ? (
     diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
     diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
   );
-  ap2_pos_L = (ap2_pos_L + 1) & (bufsize - 1);
-  ap2_pos_R = (ap2_pos_R + 1) & (bufsize - 1);
+  ap2_pos_L = (ap2_pos_L + 1) & (ap_bufsize - 1);
+  ap2_pos_R = (ap2_pos_R + 1) & (ap_bufsize - 1);
 );
 
 // Stage 3
@@ -391,8 +560,8 @@ stages_smooth >= 2 ? (
     diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
     diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
   );
-  ap3_pos_L = (ap3_pos_L + 1) & (bufsize - 1);
-  ap3_pos_R = (ap3_pos_R + 1) & (bufsize - 1);
+  ap3_pos_L = (ap3_pos_L + 1) & (ap_bufsize - 1);
+  ap3_pos_R = (ap3_pos_R + 1) & (ap_bufsize - 1);
 );
 
 // Stage 4
@@ -404,8 +573,8 @@ stages_smooth >= 3 ? (
     diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
     diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
   );
-  ap4_pos_L = (ap4_pos_L + 1) & (bufsize - 1);
-  ap4_pos_R = (ap4_pos_R + 1) & (bufsize - 1);
+  ap4_pos_L = (ap4_pos_L + 1) & (ap_bufsize - 1);
+  ap4_pos_R = (ap4_pos_R + 1) & (ap_bufsize - 1);
 );
 
 // Stage 5
@@ -417,8 +586,8 @@ stages_smooth >= 4 ? (
     diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
     diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
   );
-  ap5_pos_L = (ap5_pos_L + 1) & (bufsize - 1);
-  ap5_pos_R = (ap5_pos_R + 1) & (bufsize - 1);
+  ap5_pos_L = (ap5_pos_L + 1) & (ap_bufsize - 1);
+  ap5_pos_R = (ap5_pos_R + 1) & (ap_bufsize - 1);
 );
 
 // Stage 6
@@ -430,8 +599,8 @@ stages_smooth >= 5 ? (
     diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
     diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
   );
-  ap6_pos_L = (ap6_pos_L + 1) & (bufsize - 1);
-  ap6_pos_R = (ap6_pos_R + 1) & (bufsize - 1);
+  ap6_pos_L = (ap6_pos_L + 1) & (ap_bufsize - 1);
+  ap6_pos_R = (ap6_pos_R + 1) & (ap_bufsize - 1);
 );
 
 // Stage 7
@@ -443,8 +612,8 @@ stages_smooth >= 6 ? (
     diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
     diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
   );
-  ap7_pos_L = (ap7_pos_L + 1) & (bufsize - 1);
-  ap7_pos_R = (ap7_pos_R + 1) & (bufsize - 1);
+  ap7_pos_L = (ap7_pos_L + 1) & (ap_bufsize - 1);
+  ap7_pos_R = (ap7_pos_R + 1) & (ap_bufsize - 1);
 );
 
 // Stage 8
@@ -456,171 +625,147 @@ stages_smooth >= 7 ? (
     diffL = diffL * (1 - stage_frac) + wet_L * stage_frac;
     diffR = diffR * (1 - stage_frac) + wet_R * stage_frac;
   );
-  ap8_pos_L = (ap8_pos_L + 1) & (bufsize - 1);
-  ap8_pos_R = (ap8_pos_R + 1) & (bufsize - 1);
+  ap8_pos_L = (ap8_pos_L + 1) & (ap_bufsize - 1);
+  ap8_pos_R = (ap8_pos_R + 1) & (ap_bufsize - 1);
 );
 
-// ============================================
-// MODULATED COMB FILTERS (NEW IN PHASE 3)
-// ============================================
+// ============================================================
+// MODULATED COMB FILTERS
+// ============================================================
 
-// Update LFO phases
-lfo_phase_1L += lfo_increment;
-lfo_phase_2L += lfo_increment;
-lfo_phase_3L += lfo_increment;
-lfo_phase_4L += lfo_increment;
-lfo_phase_1R += lfo_increment;
-lfo_phase_2R += lfo_increment;
-lfo_phase_3R += lfo_increment;
-lfo_phase_4R += lfo_increment;
-
-// Wrap phases
-lfo_phase_1L >= 2*$pi ? lfo_phase_1L -= 2*$pi;
-lfo_phase_2L >= 2*$pi ? lfo_phase_2L -= 2*$pi;
-lfo_phase_3L >= 2*$pi ? lfo_phase_3L -= 2*$pi;
-lfo_phase_4L >= 2*$pi ? lfo_phase_4L -= 2*$pi;
-lfo_phase_1R >= 2*$pi ? lfo_phase_1R -= 2*$pi;
-lfo_phase_2R >= 2*$pi ? lfo_phase_2R -= 2*$pi;
-lfo_phase_3R >= 2*$pi ? lfo_phase_3R -= 2*$pi;
-lfo_phase_4R >= 2*$pi ? lfo_phase_4R -= 2*$pi;
+// Update single master LFO phase
+lfo_phase += lfo_increment;
+lfo_phase >= 2*$pi ? lfo_phase -= 2*$pi;
 
 // COMB FILTER 1 LEFT (with modulation)
-mod1L = sin(lfo_phase_1L) * mod_amount_samples;
-delay1L = comb1_delay + mod1L;
+delay1L = comb1_delay + sin(lfo_phase + lfo_offset_1L) * mod_amount_samples;
 read_pos = comb1_pos_L - delay1L;
-read_pos < 0 ? read_pos += bufsize;
+read_pos < 0 ? read_pos += comb_bufsize;
 // Linear interpolation for fractional delay
 read_int = read_pos | 0;
 frac = read_pos - read_int;
-s1 = comb1_L[read_int & (bufsize - 1)];
-s2 = comb1_L[(read_int + 1) & (bufsize - 1)];
-comb1_out_L = s1 + frac * (s2 - s1);
+interp_a = comb1_L[read_int & (comb_bufsize - 1)];
+interp_b = comb1_L[(read_int + 1) & (comb_bufsize - 1)];
+comb1_out_L = interp_a + frac * (interp_b - interp_a);
 // Damping (one-pole lowpass) - only if enabled
 damp_coeff > 0 ? (
   damp1_L += damp_coeff * (comb1_out_L - damp1_L);
   comb1_out_L = damp1_L;
 );
-comb1_L[comb1_pos_L] = diffL + comb1_out_L * decay;
-comb1_pos_L = (comb1_pos_L + 1) & (bufsize - 1);
+comb1_L[comb1_pos_L] = diffL + comb1_out_L * s_decay_c1L;
+comb1_pos_L = (comb1_pos_L + 1) & (comb_bufsize - 1);
 
 // COMB FILTER 2 LEFT
-mod2L = sin(lfo_phase_2L) * mod_amount_samples;
-delay2L = comb2_delay + mod2L;
+delay2L = comb2_delay + sin(lfo_phase + lfo_offset_2L) * mod_amount_samples;
 read_pos = comb2_pos_L - delay2L;
-read_pos < 0 ? read_pos += bufsize;
+read_pos < 0 ? read_pos += comb_bufsize;
 read_int = read_pos | 0;
 frac = read_pos - read_int;
-s1 = comb2_L[read_int & (bufsize - 1)];
-s2 = comb2_L[(read_int + 1) & (bufsize - 1)];
-comb2_out_L = s1 + frac * (s2 - s1);
+interp_a = comb2_L[read_int & (comb_bufsize - 1)];
+interp_b = comb2_L[(read_int + 1) & (comb_bufsize - 1)];
+comb2_out_L = interp_a + frac * (interp_b - interp_a);
 damp_coeff > 0 ? (
   damp2_L += damp_coeff * (comb2_out_L - damp2_L);
   comb2_out_L = damp2_L;
 );
-comb2_L[comb2_pos_L] = diffL + comb2_out_L * decay;
-comb2_pos_L = (comb2_pos_L + 1) & (bufsize - 1);
+comb2_L[comb2_pos_L] = diffL + comb2_out_L * s_decay_c2L;
+comb2_pos_L = (comb2_pos_L + 1) & (comb_bufsize - 1);
 
 // COMB FILTER 3 LEFT
-mod3L = sin(lfo_phase_3L) * mod_amount_samples;
-delay3L = comb3_delay + mod3L;
+delay3L = comb3_delay + sin(lfo_phase + lfo_offset_3L) * mod_amount_samples;
 read_pos = comb3_pos_L - delay3L;
-read_pos < 0 ? read_pos += bufsize;
+read_pos < 0 ? read_pos += comb_bufsize;
 read_int = read_pos | 0;
 frac = read_pos - read_int;
-s1 = comb3_L[read_int & (bufsize - 1)];
-s2 = comb3_L[(read_int + 1) & (bufsize - 1)];
-comb3_out_L = s1 + frac * (s2 - s1);
+interp_a = comb3_L[read_int & (comb_bufsize - 1)];
+interp_b = comb3_L[(read_int + 1) & (comb_bufsize - 1)];
+comb3_out_L = interp_a + frac * (interp_b - interp_a);
 damp_coeff > 0 ? (
   damp3_L += damp_coeff * (comb3_out_L - damp3_L);
   comb3_out_L = damp3_L;
 );
-comb3_L[comb3_pos_L] = diffL + comb3_out_L * decay;
-comb3_pos_L = (comb3_pos_L + 1) & (bufsize - 1);
+comb3_L[comb3_pos_L] = diffL + comb3_out_L * s_decay_c3L;
+comb3_pos_L = (comb3_pos_L + 1) & (comb_bufsize - 1);
 
 // COMB FILTER 4 LEFT
-mod4L = sin(lfo_phase_4L) * mod_amount_samples;
-delay4L = comb4_delay + mod4L;
+delay4L = comb4_delay + sin(lfo_phase + lfo_offset_4L) * mod_amount_samples;
 read_pos = comb4_pos_L - delay4L;
-read_pos < 0 ? read_pos += bufsize;
+read_pos < 0 ? read_pos += comb_bufsize;
 read_int = read_pos | 0;
 frac = read_pos - read_int;
-s1 = comb4_L[read_int & (bufsize - 1)];
-s2 = comb4_L[(read_int + 1) & (bufsize - 1)];
-comb4_out_L = s1 + frac * (s2 - s1);
+interp_a = comb4_L[read_int & (comb_bufsize - 1)];
+interp_b = comb4_L[(read_int + 1) & (comb_bufsize - 1)];
+comb4_out_L = interp_a + frac * (interp_b - interp_a);
 damp_coeff > 0 ? (
   damp4_L += damp_coeff * (comb4_out_L - damp4_L);
   comb4_out_L = damp4_L;
 );
-comb4_L[comb4_pos_L] = diffL + comb4_out_L * decay;
-comb4_pos_L = (comb4_pos_L + 1) & (bufsize - 1);
+comb4_L[comb4_pos_L] = diffL + comb4_out_L * s_decay_c4L;
+comb4_pos_L = (comb4_pos_L + 1) & (comb_bufsize - 1);
 
 // COMB FILTER 1 RIGHT
-mod1R = sin(lfo_phase_1R) * mod_amount_samples;
-delay1R = comb1_delay_R + mod1R;
+delay1R = comb1_delay_R + sin(lfo_phase + lfo_offset_1R) * mod_amount_samples;
 read_pos = comb1_pos_R - delay1R;
-read_pos < 0 ? read_pos += bufsize;
+read_pos < 0 ? read_pos += comb_bufsize;
 read_int = read_pos | 0;
 frac = read_pos - read_int;
-s1 = comb1_R[read_int & (bufsize - 1)];
-s2 = comb1_R[(read_int + 1) & (bufsize - 1)];
-comb1_out_R = s1 + frac * (s2 - s1);
+interp_a = comb1_R[read_int & (comb_bufsize - 1)];
+interp_b = comb1_R[(read_int + 1) & (comb_bufsize - 1)];
+comb1_out_R = interp_a + frac * (interp_b - interp_a);
 damp_coeff > 0 ? (
   damp1_R += damp_coeff * (comb1_out_R - damp1_R);
   comb1_out_R = damp1_R;
 );
-comb1_R[comb1_pos_R] = diffR + comb1_out_R * decay;
-comb1_pos_R = (comb1_pos_R + 1) & (bufsize - 1);
+comb1_R[comb1_pos_R] = diffR + comb1_out_R * s_decay_c1R;
+comb1_pos_R = (comb1_pos_R + 1) & (comb_bufsize - 1);
 
 // COMB FILTER 2 RIGHT
-mod2R = sin(lfo_phase_2R) * mod_amount_samples;
-delay2R = comb2_delay_R + mod2R;
+delay2R = comb2_delay_R + sin(lfo_phase + lfo_offset_2R) * mod_amount_samples;
 read_pos = comb2_pos_R - delay2R;
-read_pos < 0 ? read_pos += bufsize;
+read_pos < 0 ? read_pos += comb_bufsize;
 read_int = read_pos | 0;
 frac = read_pos - read_int;
-s1 = comb2_R[read_int & (bufsize - 1)];
-s2 = comb2_R[(read_int + 1) & (bufsize - 1)];
-comb2_out_R = s1 + frac * (s2 - s1);
+interp_a = comb2_R[read_int & (comb_bufsize - 1)];
+interp_b = comb2_R[(read_int + 1) & (comb_bufsize - 1)];
+comb2_out_R = interp_a + frac * (interp_b - interp_a);
 damp_coeff > 0 ? (
   damp2_R += damp_coeff * (comb2_out_R - damp2_R);
   comb2_out_R = damp2_R;
 );
-comb2_R[comb2_pos_R] = diffR + comb2_out_R * decay;
-comb2_pos_R = (comb2_pos_R + 1) & (bufsize - 1);
+comb2_R[comb2_pos_R] = diffR + comb2_out_R * s_decay_c2R;
+comb2_pos_R = (comb2_pos_R + 1) & (comb_bufsize - 1);
 
 // COMB FILTER 3 RIGHT
-mod3R = sin(lfo_phase_3R) * mod_amount_samples;
-delay3R = comb3_delay_R + mod3R;
+delay3R = comb3_delay_R + sin(lfo_phase + lfo_offset_3R) * mod_amount_samples;
 read_pos = comb3_pos_R - delay3R;
-read_pos < 0 ? read_pos += bufsize;
+read_pos < 0 ? read_pos += comb_bufsize;
 read_int = read_pos | 0;
 frac = read_pos - read_int;
-s1 = comb3_R[read_int & (bufsize - 1)];
-s2 = comb3_R[(read_int + 1) & (bufsize - 1)];
-comb3_out_R = s1 + frac * (s2 - s1);
+interp_a = comb3_R[read_int & (comb_bufsize - 1)];
+interp_b = comb3_R[(read_int + 1) & (comb_bufsize - 1)];
+comb3_out_R = interp_a + frac * (interp_b - interp_a);
 damp_coeff > 0 ? (
   damp3_R += damp_coeff * (comb3_out_R - damp3_R);
   comb3_out_R = damp3_R;
 );
-comb3_R[comb3_pos_R] = diffR + comb3_out_R * decay;
-comb3_pos_R = (comb3_pos_R + 1) & (bufsize - 1);
+comb3_R[comb3_pos_R] = diffR + comb3_out_R * s_decay_c3R;
+comb3_pos_R = (comb3_pos_R + 1) & (comb_bufsize - 1);
 
 // COMB FILTER 4 RIGHT
-mod4R = sin(lfo_phase_4R) * mod_amount_samples;
-delay4R = comb4_delay_R + mod4R;
+delay4R = comb4_delay_R + sin(lfo_phase + lfo_offset_4R) * mod_amount_samples;
 read_pos = comb4_pos_R - delay4R;
-read_pos < 0 ? read_pos += bufsize;
+read_pos < 0 ? read_pos += comb_bufsize;
 read_int = read_pos | 0;
 frac = read_pos - read_int;
-s1 = comb4_R[read_int & (bufsize - 1)];
-s2 = comb4_R[(read_int + 1) & (bufsize - 1)];
-comb4_out_R = s1 + frac * (s2 - s1);
+interp_a = comb4_R[read_int & (comb_bufsize - 1)];
+interp_b = comb4_R[(read_int + 1) & (comb_bufsize - 1)];
+comb4_out_R = interp_a + frac * (interp_b - interp_a);
 damp_coeff > 0 ? (
   damp4_R += damp_coeff * (comb4_out_R - damp4_R);
   comb4_out_R = damp4_R;
 );
-comb4_R[comb4_pos_R] = diffR + comb4_out_R * decay;
-comb4_pos_R = (comb4_pos_R + 1) & (bufsize - 1);
+comb4_R[comb4_pos_R] = diffR + comb4_out_R * s_decay_c4R;
+comb4_pos_R = (comb4_pos_R + 1) & (comb_bufsize - 1);
 
 // Sum comb outputs (wet signal - includes ER that was fed into diffusion)
 wetL = (comb1_out_L + comb2_out_L + comb3_out_L + comb4_out_L) * 0.25;
@@ -633,3 +778,209 @@ spl1 = spl1 * (1 - mix) + wetR * mix;
 // Apply output level
 spl0 *= outputLevel;
 spl1 *= outputLevel;
+
+// ============================================================
+// GFX
+// ============================================================
+
+@gfx 524 398
+
+control_start("main", "tron");
+
+// ============================================================
+// HELPER FUNCTIONS
+// ============================================================
+
+
+// ============================================================
+// MAIN DRAW
+// ============================================================
+
+// Background
+gfx_r = 0.14; gfx_g = 0.14; gfx_b = 0.16; gfx_a = 1;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+check_dbl_click();
+
+// ============================================================
+// LAYOUT CONSTANTS
+// ============================================================
+
+pad   = 8;   // outer margin
+gap   = 8;   // gap between rows / sections
+ksp   = 68;  // knob spacing
+kr    = 22;  // knob radius
+
+row1_y  = 38;
+row1_h  = 180;
+row1_cy = row1_y + 22 + 68;   // = 128
+
+row2_y  = row1_y + row1_h + gap;
+row2_h  = 164;
+row2_cy = row2_y + 22 + 68;   // = 316
+
+// Row 1: single REVERB section spanning full width
+rev_x = pad; rev_w = gfx_w - pad*2;
+
+// Row 2: three equal sections
+sec_w = (rev_w - gap*2) / 3;
+mod_x = pad;
+eq_x  = mod_x + sec_w + gap;
+out_x = eq_x  + sec_w + gap;
+
+// Reverb knob centers (7 knobs evenly spaced)
+rev_k1 = rev_x + 40;
+rev_k2 = rev_k1 + ksp;
+rev_k3 = rev_k2 + ksp;
+rev_k4 = rev_k3 + ksp;
+rev_k5 = rev_k4 + ksp;
+rev_k6 = rev_k5 + ksp;
+rev_k7 = rev_k6 + ksp;
+
+// Row 2 knob centers (2 per section)
+mod_k1 = mod_x + sec_w * 0.33;
+mod_k2 = mod_x + sec_w * 0.67;
+eq_k1  = eq_x  + sec_w * 0.33;
+eq_k2  = eq_x  + sec_w * 0.67;
+out_k1 = out_x + sec_w * 0.33;
+out_k2 = out_x + sec_w * 0.67;
+
+// ============================================================
+// PLUGIN TITLE
+// ============================================================
+gfx_r = 0.78; gfx_g = 0.78; gfx_b = 0.82; gfx_a = 1;
+gfx_setfont(1, "Trebuchet MS", 14, 'b');
+gfx_x = 12; gfx_y = 8;
+gfx_drawstr("CLOUDBUSTING REVERB");
+
+// ============================================================
+// ROW 1 — REVERB
+// ============================================================
+
+draw_section_box(rev_x, row1_y, rev_w, row1_h, 0.12, 0.62, 0.88, "REVERB");
+
+// Size
+ui_push_rect(rev_k1-kr, row1_cy-kr, kr*2, kr*2);
+  size = control_dial(size, 0.1, 2.0, 0);
+  slider_automate(size);
+ui_pop();
+dbl_click_in_rect(rev_k1-kr, row1_cy-kr, kr*2, kr*2) ? (size=0.7; slider_automate(size););
+strcpy(#lbl, "SIZE");           draw_label_at(rev_k1, row1_cy - kr - 14);
+sprintf(#val, "%.2f", size);    draw_value_at(rev_k1, row1_cy + kr + 4);
+
+// Decay
+ui_push_rect(rev_k2-kr, row1_cy-kr, kr*2, kr*2);
+  rt60 = control_dial(rt60, 0.3, 15.0, 0);
+  slider_automate(rt60);
+ui_pop();
+dbl_click_in_rect(rev_k2-kr, row1_cy-kr, kr*2, kr*2) ? (rt60=2.0; slider_automate(rt60););
+strcpy(#lbl, "DECAY");          draw_label_at(rev_k2, row1_cy - kr - 14);
+sprintf(#val, "%.1f s", rt60);  draw_value_at(rev_k2, row1_cy + kr + 4);
+
+// Diffusion
+ui_push_rect(rev_k3-kr, row1_cy-kr, kr*2, kr*2);
+  diffusion = control_dial(diffusion, 0, 0.85, 0);
+  slider_automate(diffusion);
+ui_pop();
+dbl_click_in_rect(rev_k3-kr, row1_cy-kr, kr*2, kr*2) ? (diffusion=0.7; slider_automate(diffusion););
+strcpy(#lbl, "DIFFUSION");          draw_label_at(rev_k3, row1_cy - kr - 14);
+sprintf(#val, "%.2f", diffusion);   draw_value_at(rev_k3, row1_cy + kr + 4);
+
+// Diffusion Stages
+ui_push_rect(rev_k4-kr, row1_cy-kr, kr*2, kr*2);
+  diffusionStages = control_dial(diffusionStages, 0, 8, 0);
+  slider_automate(diffusionStages);
+ui_pop();
+dbl_click_in_rect(rev_k4-kr, row1_cy-kr, kr*2, kr*2) ? (diffusionStages=4; slider_automate(diffusionStages););
+strcpy(#lbl, "STAGES");                       draw_label_at(rev_k4, row1_cy - kr - 14);
+sprintf(#val, "%.0f", diffusionStages);       draw_value_at(rev_k4, row1_cy + kr + 4);
+
+// Damping
+ui_push_rect(rev_k5-kr, row1_cy-kr, kr*2, kr*2);
+  damping = control_dial(damping, 0, 1, 0);
+  slider_automate(damping);
+ui_pop();
+dbl_click_in_rect(rev_k5-kr, row1_cy-kr, kr*2, kr*2) ? (damping=0; slider_automate(damping););
+strcpy(#lbl, "DAMPING");            draw_label_at(rev_k5, row1_cy - kr - 14);
+sprintf(#val, "%.2f", damping);     draw_value_at(rev_k5, row1_cy + kr + 4);
+
+// Pre-delay
+ui_push_rect(rev_k6-kr, row1_cy-kr, kr*2, kr*2);
+  predelay = control_dial(predelay, 0, 200, 0);
+  slider_automate(predelay);
+ui_pop();
+dbl_click_in_rect(rev_k6-kr, row1_cy-kr, kr*2, kr*2) ? (predelay=0; slider_automate(predelay););
+strcpy(#lbl, "PRE-DELAY");          draw_label_at(rev_k6, row1_cy - kr - 14);
+sprintf(#val, "%.0f ms", predelay); draw_value_at(rev_k6, row1_cy + kr + 4);
+
+// Early Reflections
+ui_push_rect(rev_k7-kr, row1_cy-kr, kr*2, kr*2);
+  earlyMix = control_dial(earlyMix, 0, 1, 0);
+  slider_automate(earlyMix);
+ui_pop();
+dbl_click_in_rect(rev_k7-kr, row1_cy-kr, kr*2, kr*2) ? (earlyMix=0.5; slider_automate(earlyMix););
+strcpy(#lbl, "EARLY REFL");         draw_label_at(rev_k7, row1_cy - kr - 14);
+sprintf(#val, "%.2f", earlyMix);    draw_value_at(rev_k7, row1_cy + kr + 4);
+
+// ============================================================
+// ROW 2 — MODULATION | EQ | OUTPUT
+// ============================================================
+
+// ---- MODULATION (amber) ----
+draw_section_box(mod_x, row2_y, sec_w, row2_h, 0.80, 0.58, 0.08, "MODULATION");
+
+ui_push_rect(mod_k1-kr, row2_cy-kr, kr*2, kr*2);
+  modDepth = control_dial(modDepth, 0, 1, 0);
+  slider_automate(modDepth);
+ui_pop();
+dbl_click_in_rect(mod_k1-kr, row2_cy-kr, kr*2, kr*2) ? (modDepth=0.3; slider_automate(modDepth););
+strcpy(#lbl, "DEPTH");          draw_label_at(mod_k1, row2_cy - kr - 14);
+sprintf(#val, "%.2f", modDepth); draw_value_at(mod_k1, row2_cy + kr + 4);
+
+ui_push_rect(mod_k2-kr, row2_cy-kr, kr*2, kr*2);
+  modRate = control_dial(modRate, 0.01, 2, 0);
+  slider_automate(modRate);
+ui_pop();
+dbl_click_in_rect(mod_k2-kr, row2_cy-kr, kr*2, kr*2) ? (modRate=0.25; slider_automate(modRate););
+strcpy(#lbl, "RATE");            draw_label_at(mod_k2, row2_cy - kr - 14);
+sprintf(#val, "%.2f Hz", modRate); draw_value_at(mod_k2, row2_cy + kr + 4);
+
+// ---- EQ (green) ----
+draw_section_box(eq_x, row2_y, sec_w, row2_h, 0.22, 0.72, 0.32, "EQ");
+
+ui_push_rect(eq_k1-kr, row2_cy-kr, kr*2, kr*2);
+  lowCut = control_dial(lowCut, 20, 500, 0);
+  slider_automate(lowCut);
+ui_pop();
+dbl_click_in_rect(eq_k1-kr, row2_cy-kr, kr*2, kr*2) ? (lowCut=20; slider_automate(lowCut););
+strcpy(#lbl, "LOW CUT");         draw_label_at(eq_k1, row2_cy - kr - 14);
+sprintf(#val, "%.0f Hz", lowCut); draw_value_at(eq_k1, row2_cy + kr + 4);
+
+ui_push_rect(eq_k2-kr, row2_cy-kr, kr*2, kr*2);
+  highCut = control_dial(highCut, 1000, 20000, 0);
+  slider_automate(highCut);
+ui_pop();
+dbl_click_in_rect(eq_k2-kr, row2_cy-kr, kr*2, kr*2) ? (highCut=20000; slider_automate(highCut););
+strcpy(#lbl, "HIGH CUT");         draw_label_at(eq_k2, row2_cy - kr - 14);
+sprintf(#val, "%.0f Hz", highCut); draw_value_at(eq_k2, row2_cy + kr + 4);
+
+// ---- OUTPUT (red) ----
+draw_section_box(out_x, row2_y, sec_w, row2_h, 0.82, 0.22, 0.14, "OUTPUT");
+
+ui_push_rect(out_k1-kr, row2_cy-kr, kr*2, kr*2);
+  mix = control_dial(mix, 0, 1, 0);
+  slider_automate(mix);
+ui_pop();
+dbl_click_in_rect(out_k1-kr, row2_cy-kr, kr*2, kr*2) ? (mix=0.5; slider_automate(mix););
+strcpy(#lbl, "MIX");             draw_label_at(out_k1, row2_cy - kr - 14);
+sprintf(#val, "%.2f", mix);      draw_value_at(out_k1, row2_cy + kr + 4);
+
+ui_push_rect(out_k2-kr, row2_cy-kr, kr*2, kr*2);
+  outputLevel = control_dial(outputLevel, 0, 2, 0);
+  slider_automate(outputLevel);
+ui_pop();
+dbl_click_in_rect(out_k2-kr, row2_cy-kr, kr*2, kr*2) ? (outputLevel=1.0; slider_automate(outputLevel););
+strcpy(#lbl, "LEVEL");           draw_label_at(out_k2, row2_cy - kr - 14);
+sprintf(#val, "%.2f", outputLevel); draw_value_at(out_k2, row2_cy + kr + 4);
+
+mouse_cap_last = mouse_cap;

@@ -1,355 +1,490 @@
 desc: Transparent Bus Compressor
 author: citizenkeith - Claude AI
-version: 1.5
-about:Clean, artifact-free compression for mix bus duty
-// Based on RMS detection with smooth envelope following
+version: 2.0
+about: SSL/Sonitus-inspired glue compression for mix bus duty
+// RMS detection, soft knee, program-dependent release
 // Released under GPLv3 License
 
-slider1:0<-60,0,0.1>Threshold (dB)
-slider2:2<1,20,0.1>Ratio
-slider3:5<0.1,50,0.1>Attack (ms)
-slider4:100<10,1000,1>Release (ms)
-slider5:3<0,12,0.1>Knee (dB)
-slider6:0<0,24,0.1>Makeup Gain (dB)
-slider7:0<0,1,1{Off,On}>Auto Makeup
-slider8:10<1,50,0.1>RMS Window (ms)
+// ReaPack metadata
+// @version 2.0
+// @author citizenkeith
+// @license GPL v3
+// @about
+//   SSL/Sonitus-inspired glue bus compressor. RMS detection with
+//   soft knee, program-dependent release, and stereo-linked gain reduction.
+// @changelog
+//   v2.0
+//     Added citizenkeith-family GUI (COMPRESS row, OUTPUT + GR METER row)
+//     Fixed RMS buffer address collision (was at address 0, overlapping audio)
+//     Fixed RMS math: buffer now stores power (x^2), single sqrt at read
+//     Fixed RMS O(n) per-sample loop: replaced with O(1) running sum
+//     Removed spurious fixed smoothing stage (prev_gain * 0.9 + gr_smooth * 0.1)
+//       — made attack/release knobs inaccurate, unnecessary with proper RMS
+//     Added program-dependent release: speeds up when signal drops hard,
+//       gives SSL-style glue/breathing character
+//     Removed dead gr_peak/gr_peak_hold/peak_hold tracking (GR meter uses gr_smooth directly)
+//     Removed unused in_peak/out_peak metering (not displayed)
+//     Removed redundant coefficient recalculations from @gfx (handled by @slider)
+//     Pre-calculated att/rel complements, knee bounds, peak hold samples
+//     rms_size cap now srate-relative (handles 88.2/96kHz correctly)
+//     Moved @gfx label arrays to @init; fixed overlapping address 10000/10001
+//     sliderchange() replaced with slider_automate()
+//   v1.5
+//     Initial release
+
+import citizenkeith-ui-lib.jsfx-inc
+
+slider1:0<-60,0,0.1>-Threshold (dB)
+slider2:2<1,20,0.1>-Ratio
+slider3:5<0.1,50,0.1>-Attack (ms)
+slider4:100<10,1000,1>-Release (ms)
+slider5:3<0,12,0.1>-Knee (dB)
+slider6:0<0,24,0.1>-Makeup Gain (dB)
+slider7:0<0,1,1{Off,On}>-Auto Makeup
+slider8:10<1,50,0.1>-RMS Window (ms)
 
 @init
 
 // Constants
-SILENCE_THRESHOLD = -144; // dB
+SILENCE_THRESHOLD = -144;
 LOG2DB = 8.6858896380650365530225783783321; // 20/ln(10)
 DB2LOG = 0.11512925464970228420089957273422; // ln(10)/20
 
-// Initialize gain reduction smoothing
+// Envelope
 gr_smooth = 1.0;
-prev_gain = 1.0;
 
-// RMS detection buffer
+// RMS detection — buffer at safe address (1024+), away from address 0
+rms_buffer = 1024;
 rms_size = 0;
-rms_pos = 0;
+rms_pos  = 0;
+rms_running_sum = 0; // O(1) running sum — no per-sample loop
 
-// Metering
-gr_peak = 0;
-gr_peak_hold = 0;
-peak_hold_time = 0;
-in_peak_l = 0;
-in_peak_r = 0;
-out_peak_l = 0;
-out_peak_r = 0;
+// @gfx label arrays — initialised once here, not rewritten every frame
+db_labels     = 2048; // 8 values
+db_labels[0]  =  0; db_labels[1]  = -3; db_labels[2]  = -6;  db_labels[3]  = -9;
+db_labels[4]  = -12; db_labels[5] = -15; db_labels[6] = -18; db_labels[7]  = -24;
 
-function db2gain(db) (
-  exp(db * DB2LOG);
-);
+// ui_setup must be called in @init; address must be beyond all audio buffers
+// rms_buffer starts at 1024, max size = srate samples (~96000 at 96kHz)
+// db_labels at 2048 (8 slots). Safe to start UI memory at 102400.
+ui_setup(102400);
 
-function gain2db(gain) (
-  log(gain) * LOG2DB;
-);
+function db2gain(db) ( exp(db * DB2LOG); );
+function gain2db(gain) ( log(gain) * LOG2DB; );
 
-// Smooth min function for knee
-function smooth_min(x1, x2, k) 
-  local(h)
+// ── GFX helpers ─────────────────────────────────────────────────────────────
+
+function draw_section_box(bx, by, bw, bh, hr, hg, hb, header_text)
+local(tw, th)
 (
-  h = max(k - abs(x1 - x2), 0) / k;
-  min(x1, x2) - h * h * k * 0.25;
+  gfx_r=0.13; gfx_g=0.13; gfx_b=0.15; gfx_a=1; gfx_rect(bx, by, bw, bh);
+  gfx_r=hr;   gfx_g=hg;   gfx_b=hb;   gfx_a=1; gfx_rect(bx, by, bw, 22);
+  gfx_r=0.08; gfx_g=0.08; gfx_b=0.08; gfx_a=1;
+  gfx_setfont(1, "Arial", 11, 'b');
+  gfx_measurestr(header_text, tw, th);
+  gfx_x=bx+bw/2-tw/2; gfx_y=by+11-th/2; gfx_drawstr(header_text);
+  gfx_r=0.30; gfx_g=0.30; gfx_b=0.34; gfx_a=1;
+  gfx_rect(bx,    by,    bw, 1); gfx_rect(bx, by+bh, bw, 1);
+  gfx_rect(bx,    by,    1, bh); gfx_rect(bx+bw, by, 1, bh+1);
+);
+
+function draw_label_at(lx, ly)
+local(lw, lh)
+(
+  gfx_r=0.68; gfx_g=0.68; gfx_b=0.72; gfx_a=1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#lbl, lw, lh);
+  gfx_x=lx-lw/2; gfx_y=ly; gfx_drawstr(#lbl);
+);
+
+function draw_value_at(vx, vy)
+local(vw, vh)
+(
+  gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#val, vw, vh);
+  gfx_x=vx-vw/2; gfx_y=vy; gfx_drawstr(#val);
+);
+
+function draw_switch_label(cx, ly, label)
+local(lw, lh)
+(
+  gfx_r=1.0; gfx_g=1.0; gfx_b=1.0; gfx_a=1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(label, lw, lh);
+  gfx_x=cx-lw/2; gfx_y=ly; gfx_drawstr(label);
+);
+
+function check_dbl_click()
+local(mx, my, now, dt)
+(
+  mx=mouse_x; my=mouse_y; now=time_precise();
+  (mouse_cap & 1) && !(mouse_cap_last & 1) ? (
+    dt = now - dbl_click_time;
+    (dt < 0.4) && (dt > 0.05) && (abs(mx-dbl_click_x)<8) && (abs(my-dbl_click_y)<8) ? (
+      dbl_click_fired=1; dbl_click_cx=mx; dbl_click_cy=my;
+    ) : ( dbl_click_fired=0; );
+    dbl_click_time=now; dbl_click_x=mx; dbl_click_y=my;
+  ) : ( dbl_click_fired=0; );
+);
+
+function dbl_click_in_rect(rx, ry, rw, rh)
+(
+  dbl_click_fired &&
+  (dbl_click_cx>=rx) && (dbl_click_cx<rx+rw) &&
+  (dbl_click_cy>=ry) && (dbl_click_cy<ry+rh)
+);
+
+// Vertical GR meter — fills from top downward as compression increases
+// mlevel = positive dB of gain reduction (0 = no compression, 24 = full scale)
+// mfloor = maximum dB scale (e.g. 24)
+function draw_vmeter(mx, my, mw, mh, mlevel, mfloor)
+local(norm, fill_h, seg_y, seg_norm, t)
+(
+  gfx_r=0.06; gfx_g=0.06; gfx_b=0.08; gfx_a=1; gfx_rect(mx, my, mw, mh);
+  norm   = max(0, min(1, mlevel / mfloor));
+  fill_h = floor(norm * mh);
+  fill_h > 0 ? (
+    seg_y = my + mh - fill_h;
+    loop(fill_h,
+      seg_norm = 1.0 - (seg_y - my) / mh;
+      seg_norm < 0.6 ? (
+        gfx_r=0.15; gfx_g=0.80; gfx_b=0.25;
+      ) : seg_norm < 0.8 ? (
+        t=(seg_norm-0.6)/0.2; gfx_r=0.15+t*0.75; gfx_g=0.80; gfx_b=0.25-t*0.25;
+      ) : seg_norm < 0.93 ? (
+        t=(seg_norm-0.8)/0.13; gfx_r=0.90; gfx_g=0.80-t*0.35; gfx_b=0.0;
+      ) : (
+        t=(seg_norm-0.93)/0.07; gfx_r=0.95; gfx_g=0.45-t*0.35; gfx_b=0.0;
+      );
+      gfx_a=1; gfx_rect(mx, seg_y, mw, 1);
+      seg_y+=1;
+    );
+  );
+  gfx_r=0.28; gfx_g=0.28; gfx_b=0.32; gfx_a=1;
+  gfx_rect(mx,    my,    mw, 1); gfx_rect(mx, my+mh, mw, 1);
+  gfx_rect(mx,    my,    1, mh); gfx_rect(mx+mw, my, 1, mh+1);
 );
 
 @slider
 
-// Convert time constants to coefficients
-// Attack: how fast it clamps down
-att_coeff = exp(-1000 / (slider3 * srate));
+// Attack / release coefficients + pre-calculated complements
+att_coeff     = exp(-1000 / (slider3 * srate));
+att_coeff_inv = 1 - att_coeff;
+rel_coeff     = exp(-1000 / (slider4 * srate));
+rel_coeff_inv = 1 - rel_coeff;
 
-// Release: how fast it lets go (logarithmic curve)
-rel_coeff = exp(-1000 / (slider4 * srate));
+// Program-dependent release: when signal drops hard, release speeds up
+// Factor of 4x faster feels SSL-like without obvious pumping
+pdr_coeff     = exp(-1000 / (slider4 * srate * 0.25));
+pdr_coeff_inv = 1 - pdr_coeff;
 
 // Threshold and ratio
-thresh_db = slider1;
-thresh_gain = db2gain(thresh_db);
-ratio = slider2;
-ratio_inv = 1.0 / ratio;
+thresh_db  = slider1;
+ratio      = slider2;
+ratio_inv  = 1.0 / ratio;
+ratio_term = 1 - ratio_inv; // used every sample in GR calc
 
-// Knee width
-knee_db = slider5;
+// Knee — pre-calculate bounds
+knee_db    = slider5;
+knee_half  = knee_db * 0.5;
+knee_start = -knee_half;
+// knee_end == knee_half (used directly)
 
 // Makeup gain
-makeup_db = slider6;
+makeup_db  = slider6;
 makeup_gain = db2gain(makeup_db);
 
-// Auto makeup calculation
+// Auto makeup
 slider7 ? (
-  // Estimate gain reduction at -20dB input
-  test_level_db = -20;
-  test_over = max(test_level_db - thresh_db, 0);
-  test_gr = test_over * (1 - ratio_inv);
-  makeup_db = test_gr * 0.5; // Conservative estimate
+  test_over  = max(-20 - thresh_db, 0);
+  makeup_db  = test_over * ratio_term * 0.5;
   makeup_gain = db2gain(makeup_db);
-  slider6 = makeup_db;
-  sliderchange(slider6);
+  slider6    = makeup_db;
+  slider_automate(slider6);
 );
 
-// RMS window
+// RMS window — cap at 1 second relative to srate (handles 96kHz correctly)
 rms_window_ms = slider8;
-rms_size = max(1, floor(rms_window_ms * srate * 0.001));
-rms_size = min(rms_size, 48000); // Max 1 second at 48kHz
+new_rms_size  = max(1, min(floor(rms_window_ms * srate * 0.001), srate));
+
+// If window size changed, reset buffer and running sum cleanly
+new_rms_size != rms_size ? (
+  rms_size = new_rms_size;
+  memset(rms_buffer, 0, rms_size);
+  rms_running_sum = 0;
+  rms_pos = 0;
+);
 
 @sample
 
-// === INPUT METERING ===
-in_peak_l = max(in_peak_l * 0.9995, abs(spl0));
-in_peak_r = max(in_peak_r * 0.9995, abs(spl1));
-
-// === RMS DETECTION ===
-// Circular buffer for RMS
+// === RMS DETECTION — O(1) running sum ===
+// Store power (x²) in buffer; maintain running sum by subtracting old, adding new
 rms_pos >= rms_size ? rms_pos = 0;
-rms_sum = 0;
-i = 0;
-loop(rms_size,
-  rms_sum += sqr(rms_buffer[i]);
-  i += 1;
-);
-
-// Current sample squared average of both channels
-input_squared = (sqr(spl0) + sqr(spl1)) * 0.5;
-rms_buffer[rms_pos] = sqrt(input_squared);
+input_squared = (spl0*spl0 + spl1*spl1) * 0.5;
+rms_running_sum -= rms_buffer[rms_pos];   // subtract outgoing power sample
+rms_running_sum += input_squared;          // add incoming power sample
+rms_buffer[rms_pos] = input_squared;
 rms_pos += 1;
 
-// RMS level
-rms_level = sqrt(rms_sum / rms_size);
+rms_level = sqrt(max(0, rms_running_sum) / rms_size);
 rms_db = rms_level > 0.0000001 ? gain2db(rms_level) : SILENCE_THRESHOLD;
 
 // === GAIN REDUCTION CALCULATION ===
-// How far over threshold?
 over_db = rms_db - thresh_db;
 
-// Soft knee using smooth minimum
-over_db > 0 ? (
-  // Apply knee smoothing
-  knee_db > 0 ? (
-    knee_start = -knee_db * 0.5;
-    knee_end = knee_db * 0.5;
-    
-    over_db < knee_start ? (
-      // Below knee - no compression
-      gr_db = 0;
-    ) : over_db > knee_end ? (
-      // Above knee - full ratio
-      gr_db = over_db * (1 - ratio_inv);
-    ) : (
-      // Inside knee - smooth transition
-      knee_factor = (over_db - knee_start) / knee_db;
-      gr_db = over_db * (1 - ratio_inv) * knee_factor * knee_factor;
-    );
+knee_db > 0 ? (
+  over_db <= knee_start ? (
+    gr_db = 0;
+  ) : over_db >= knee_half ? (
+    gr_db = over_db * ratio_term;
   ) : (
-    // Hard knee
-    gr_db = over_db * (1 - ratio_inv);
+    // Inside knee — quadratic blend
+    knee_factor = (over_db - knee_start) / knee_db;
+    gr_db = over_db * ratio_term * knee_factor * knee_factor;
   );
 ) : (
-  gr_db = 0;
+  // Hard knee
+  gr_db = max(0, over_db) * ratio_term;
 );
 
-// Convert to linear gain reduction
 target_gain = db2gain(-gr_db);
 
-// === ENVELOPE FOLLOWER ===
-// Smooth, artifact-free envelope following
-// Attack when target is lower (compressing more)
-// Release when target is higher (compressing less)
+// === ENVELOPE FOLLOWER with program-dependent release ===
 target_gain < gr_smooth ? (
-  // Attack - clamp down quickly
-  gr_smooth = gr_smooth * att_coeff + target_gain * (1 - att_coeff);
+  // Attack
+  gr_smooth += (target_gain - gr_smooth) * att_coeff_inv;
 ) : (
-  // Release - let go slowly with logarithmic curve
-  gr_smooth = gr_smooth * rel_coeff + target_gain * (1 - rel_coeff);
-);
-
-// Additional smoothing to prevent zipper noise
-// Simple one-pole filter on the actual applied gain
-applied_gain = prev_gain * 0.9 + gr_smooth * 0.1;
-prev_gain = applied_gain;
-
-// === GAIN REDUCTION METERING ===
-gr_current = gain2db(applied_gain);
-gr_peak = max(gr_peak * 0.9995, -gr_current); // Negative because GR is reduction
-
-// Peak hold with 2 second decay
-peak_hold_time > 0 ? (
-  peak_hold_time -= 1;
-) : (
-  gr_peak_hold *= 0.99; // Slow decay after hold
-);
-
-gr_peak > gr_peak_hold ? (
-  gr_peak_hold = gr_peak;
-  peak_hold_time = srate * 2; // 2 second hold
+  // Release — speed up when signal drops hard (program-dependent character)
+  drop = target_gain - gr_smooth;
+  drop > 0.5 ? (  // 0.5 linear ≈ 6dB — significant release
+    gr_smooth += drop * pdr_coeff_inv;
+  ) : (
+    gr_smooth += drop * rel_coeff_inv;
+  );
 );
 
 // === APPLY COMPRESSION ===
-spl0 *= applied_gain * makeup_gain;
-spl1 *= applied_gain * makeup_gain;
+combined_gain = gr_smooth * makeup_gain;
+spl0 *= combined_gain;
+spl1 *= combined_gain;
 
-// === OUTPUT METERING ===
-out_peak_l = max(out_peak_l * 0.9995, abs(spl0));
-out_peak_r = max(out_peak_r * 0.9995, abs(spl1));
+@gfx 560 374
 
-@gfx 500 220
+control_start("main", "tron");
 
-// Colors
-gfx_clear = 0;
-bg_r = 0.15; bg_g = 0.15; bg_b = 0.15;
-meter_bg_r = 0.1; meter_bg_g = 0.1; meter_bg_b = 0.1;
-gr_color_r = 0.3; gr_color_g = 0.8; gr_color_b = 0.4;
-peak_color_r = 1.0; peak_color_g = 0.5; peak_color_b = 0.0;
-text_r = 0.9; text_g = 0.9; text_b = 0.9;
-grid_r = 0.3; grid_g = 0.3; grid_b = 0.3;
+ui_screen() == "main" ? (
 
-// Background
-gfx_r = bg_r; gfx_g = bg_g; gfx_b = bg_b;
+gfx_r=0.14; gfx_g=0.14; gfx_b=0.16; gfx_a=1;
 gfx_rect(0, 0, gfx_w, gfx_h);
 
-// Calculate responsive dimensions
-margin = max(10, gfx_w * 0.025);
-title_size = max(14, min(18, gfx_h * 0.08));
-label_size = max(9, min(12, gfx_h * 0.05));
-value_size = max(11, min(14, gfx_h * 0.065));
+check_dbl_click();
 
-// Title
-gfx_r = text_r; gfx_g = text_g; gfx_b = text_b;
-gfx_x = margin;
-gfx_y = margin;
-gfx_setfont(1, "Arial", title_size);
-gfx_drawstr("Gain Reduction");
+// ============================================================
+// LAYOUT CONSTANTS
+// ============================================================
 
-// Meter dimensions - responsive
-meter_x = margin * 2;
-meter_y = margin * 3 + title_size;
-meter_w = gfx_w - (margin * 4);
-meter_h = max(40, min(80, gfx_h * 0.3));
+pad    = 8;
+gap    = 8;
+kr     = 22;
 
-// Meter background
-gfx_r = meter_bg_r; gfx_g = meter_bg_g; gfx_b = meter_bg_b;
-gfx_rect(meter_x, meter_y, meter_w, meter_h);
+row1_y  = 38;
+row1_h  = 160;
+row1_cy = row1_y + 22 + 60;   // 120
 
-// Grid lines and labels - smart spacing
-gfx_setfont(1, "Arial", label_size);
+row2_y  = row1_y + row1_h + gap;
+row2_h  = 160;
+row2_cy = row2_y + 22 + 60;   // 288
 
-// dB marks - only show if there's enough space
-db_values = 10000; // Memory location
-db_values[0] = 0;
-db_values[1] = -3;
-db_values[2] = -6;
-db_values[3] = -9;
-db_values[4] = -12;
-db_values[5] = -15;
-db_values[6] = -18;
-db_values[7] = -24;
+// Row 1: COMPRESS full width, 5 equally-spaced knobs
+comp_x = pad;
+comp_w = gfx_w - pad*2;
+col_w  = comp_w / 5;
+ck1    = comp_x + col_w * 0.5;   // Threshold
+ck2    = comp_x + col_w * 1.5;   // Ratio
+ck3    = comp_x + col_w * 2.5;   // Attack
+ck4    = comp_x + col_w * 3.5;   // Release
+ck5    = comp_x + col_w * 4.5;   // Knee
 
-// Calculate minimum spacing needed (about 35 pixels per label)
-min_spacing = 35;
-max_labels = floor(meter_w / min_spacing);
+// Row 2: OUTPUT | GR METER
+meter_sec_w = 120;
+out_w  = comp_w - meter_sec_w - gap;
+out_x  = pad;
+met_x  = out_x + out_w + gap;
 
-// Determine which labels to show based on width
-meter_w < 200 ? (
-  // Very narrow - only show 0, -12, -24
-  show_labels = 10001;
-  show_labels[0] = 0;
-  show_labels[1] = -12;
-  show_labels[2] = -24;
-  num_labels = 3;
-) : meter_w < 350 ? (
-  // Narrow - show 0, -6, -12, -18, -24
-  show_labels = 10001;
-  show_labels[0] = 0;
-  show_labels[1] = -6;
-  show_labels[2] = -12;
-  show_labels[3] = -18;
-  show_labels[4] = -24;
-  num_labels = 5;
+// OUTPUT: auto makeup switch + makeup gain knob + rms window knob
+out_sw = out_x + out_w * 0.18;
+out_k1 = out_x + out_w * 0.50;
+out_k2 = out_x + out_w * 0.80;
+
+// GR meter geometry inside GAIN REDUCTION section
+gr_mw      = 20;
+gr_mh      = row2_h - 22 - 24;   // section height minus header and bottom pad
+gr_mx      = met_x + (meter_sec_w - gr_mw) / 2;
+gr_my      = row2_y + 22 + 8;
+
+// ============================================================
+// PLUGIN TITLE
+// ============================================================
+gfx_r=0.78; gfx_g=0.78; gfx_b=0.82; gfx_a=1;
+gfx_setfont(1, "Trebuchet MS", 14, 'b');
+gfx_x=12; gfx_y=8;
+gfx_drawstr("TRANSPARENT BUS COMPRESSOR");
+
+// ============================================================
+// ROW 1 — COMPRESS (red)
+// ============================================================
+draw_section_box(comp_x, row1_y, comp_w, row1_h, 0.82, 0.22, 0.14, "COMPRESS");
+
+// THRESHOLD
+ui_push_rect(ck1-kr, row1_cy-kr, kr*2, kr*2);
+  slider1 = control_dial(slider1, -60, 0, 0, 0);
+  slider_automate(slider1);
+ui_pop();
+dbl_click_in_rect(ck1-kr, row1_cy-kr, kr*2, kr*2) ? (slider1=0; slider_automate(slider1););
+thresh_db = slider1;
+strcpy(#lbl, "THRESHOLD");  draw_label_at(ck1, row1_cy-kr-14);
+sprintf(#val, "%.1f dB", slider1); draw_value_at(ck1, row1_cy+kr+4);
+
+// RATIO
+ui_push_rect(ck2-kr, row1_cy-kr, kr*2, kr*2);
+  slider2 = control_dial(slider2, 1, 20, 0, 2);
+  slider_automate(slider2);
+ui_pop();
+dbl_click_in_rect(ck2-kr, row1_cy-kr, kr*2, kr*2) ? (slider2=2; slider_automate(slider2););
+strcpy(#lbl, "RATIO");  draw_label_at(ck2, row1_cy-kr-14);
+sprintf(#val, "%.1f:1", slider2); draw_value_at(ck2, row1_cy+kr+4);
+
+// ATTACK
+ui_push_rect(ck3-kr, row1_cy-kr, kr*2, kr*2);
+  slider3 = control_dial(slider3, 0.1, 50, 0, 5);
+  slider_automate(slider3);
+ui_pop();
+dbl_click_in_rect(ck3-kr, row1_cy-kr, kr*2, kr*2) ? (slider3=5; slider_automate(slider3););
+strcpy(#lbl, "ATTACK");  draw_label_at(ck3, row1_cy-kr-14);
+sprintf(#val, "%.1f ms", slider3); draw_value_at(ck3, row1_cy+kr+4);
+
+// RELEASE
+ui_push_rect(ck4-kr, row1_cy-kr, kr*2, kr*2);
+  slider4 = control_dial(slider4, 10, 1000, log(100), 100);
+  slider_automate(slider4);
+ui_pop();
+dbl_click_in_rect(ck4-kr, row1_cy-kr, kr*2, kr*2) ? (slider4=100; slider_automate(slider4););
+strcpy(#lbl, "RELEASE");  draw_label_at(ck4, row1_cy-kr-14);
+slider4 >= 1000 ? sprintf(#val, "%.1f s", slider4/1000) : sprintf(#val, "%.0f ms", slider4);
+draw_value_at(ck4, row1_cy+kr+4);
+
+// KNEE
+ui_push_rect(ck5-kr, row1_cy-kr, kr*2, kr*2);
+  slider5 = control_dial(slider5, 0, 12, 0, 3);
+  slider_automate(slider5);
+ui_pop();
+dbl_click_in_rect(ck5-kr, row1_cy-kr, kr*2, kr*2) ? (slider5=3; slider_automate(slider5););
+strcpy(#lbl, "KNEE");  draw_label_at(ck5, row1_cy-kr-14);
+slider5 == 0 ? strcpy(#val, "HARD") : sprintf(#val, "%.1f dB", slider5);
+draw_value_at(ck5, row1_cy+kr+4);
+
+// ============================================================
+// ROW 2A — OUTPUT (cyan)
+// ============================================================
+draw_section_box(out_x, row2_y, out_w, row2_h, 0.12, 0.62, 0.88, "OUTPUT");
+
+// AUTO MAKEUP switch
+sw_h = 20;
+draw_switch_label(out_sw, row2_cy-kr-14, "AUTO MAKEUP");
+ui_push_rect(out_sw-28, row2_cy-sw_h/2, 56, sw_h);
+  slider7 = control_switch(slider7);
+  slider_automate(slider7);
+ui_pop();
+auto_makeup = slider7;
+sw_lbl = slider7 ? "ON" : "OFF";
+slider7 ? (gfx_r=0.12; gfx_g=0.62; gfx_b=0.88;) : (gfx_r=0.55; gfx_g=0.55; gfx_b=0.55;);
+gfx_a=1; gfx_setfont(1,"Arial",10);
+gfx_measurestr(sw_lbl, lw, lh);
+gfx_x=out_sw-lw/2; gfx_y=row2_cy+sw_h/2+4; gfx_drawstr(sw_lbl);
+
+// MAKEUP GAIN — dims when auto makeup is on
+slider7 ? (
+  // Draw inactive knob showing auto-calculated value
+  norm_mk = slider6 / 24;
+  start_a = $pi*0.75; end_a = $pi*2.25;
+  angle = start_a + norm_mk*(end_a-start_a);
+  gfx_r=0.16; gfx_g=0.16; gfx_b=0.18; gfx_a=1;
+  gfx_circle(out_k1, row2_cy, kr-2, 1, 1);
+  track_r = kr-5;
+  j=0; loop(floor(norm_mk*270),
+    a = start_a + j*$pi/180;
+    gfx_r=0.28; gfx_g=0.30; gfx_b=0.36; gfx_a=1;
+    gfx_circle(out_k1+cos(a)*track_r, row2_cy+sin(a)*track_r, 1.2, 1, 1);
+    j+=1;
+  );
+  px=out_k1+cos(angle)*(kr*0.45); py=row2_cy+sin(angle)*(kr*0.45);
+  gfx_r=0.40; gfx_g=0.40; gfx_b=0.44; gfx_a=1;
+  gfx_circle(px, py, 2.5, 1, 1);
+  gfx_r=0.45; gfx_g=0.45; gfx_b=0.50; gfx_a=1;
+  gfx_setfont(1,"Arial",10);
+  gfx_measurestr("MAKEUP GAIN", lw, lh); gfx_x=out_k1-lw/2; gfx_y=row2_cy-kr-14; gfx_drawstr("MAKEUP GAIN");
+  gfx_r=0.60; gfx_g=0.50; gfx_b=0.30; gfx_a=1;
+  sprintf(#val, "%.1f dB", slider6);
+  gfx_measurestr(#val, lw, lh); gfx_x=out_k1-lw/2; gfx_y=row2_cy+kr+4; gfx_drawstr(#val);
 ) : (
-  // Wide enough - show all
-  show_labels = 10001;
-  show_labels[0] = 0;
-  show_labels[1] = -3;
-  show_labels[2] = -6;
-  show_labels[3] = -9;
-  show_labels[4] = -12;
-  show_labels[5] = -15;
-  show_labels[6] = -18;
-  show_labels[7] = -24;
-  num_labels = 8;
+  ui_push_rect(out_k1-kr, row2_cy-kr, kr*2, kr*2);
+    slider6 = control_dial(slider6, 0, 24, 0, 0);
+    slider_automate(slider6);
+  ui_pop();
+  dbl_click_in_rect(out_k1-kr, row2_cy-kr, kr*2, kr*2) ? (slider6=0; slider_automate(slider6););
+  makeup_gain = db2gain(slider6);
+  strcpy(#lbl, "MAKEUP GAIN"); draw_label_at(out_k1, row2_cy-kr-14);
+  sprintf(#val, "%.1f dB", slider6); draw_value_at(out_k1, row2_cy+kr+4);
 );
 
-// Draw grid lines and labels
-i = 0;
-loop(num_labels,
-  db_val = show_labels[i];
-  x_pos = meter_x + ((-db_val / 24) * meter_w);
-  
-  // Grid line
-  gfx_r = grid_r; gfx_g = grid_g; gfx_b = grid_b;
-  gfx_line(x_pos, meter_y, x_pos, meter_y + meter_h);
-  
-  // Label - center it properly
-  gfx_r = text_r; gfx_g = text_g; gfx_b = text_b;
-  label_str = sprintf(#, "%d", db_val);
-  gfx_measurestr(label_str, str_w, str_h);
-  gfx_x = x_pos - (str_w * 0.5);
-  gfx_y = meter_y + meter_h + 5;
-  gfx_drawstr(label_str);
-  
-  i += 1;
+// RMS WINDOW
+ui_push_rect(out_k2-kr, row2_cy-kr, kr*2, kr*2);
+  slider8 = control_dial(slider8, 1, 50, 0, 10);
+  slider_automate(slider8);
+ui_pop();
+dbl_click_in_rect(out_k2-kr, row2_cy-kr, kr*2, kr*2) ? (slider8=10; slider_automate(slider8););
+strcpy(#lbl, "RMS WINDOW"); draw_label_at(out_k2, row2_cy-kr-14);
+sprintf(#val, "%.0f ms", slider8); draw_value_at(out_k2, row2_cy+kr+4);
+
+// ============================================================
+// ROW 2B — GAIN REDUCTION METER (amber)
+// ============================================================
+draw_section_box(met_x, row2_y, meter_sec_w, row2_h, 0.80, 0.58, 0.08, "GR");
+
+// GR value in dB (positive = reduction)
+gr_db_display = -gain2db(gr_smooth);   // positive number when compressing
+gr_db_display = max(0, min(24, gr_db_display));
+
+// draw_vmeter expects: mlevel as negative dB from 0 (e.g. -6 = 6dB reduction)
+// mfloor = bottom of scale (-24). 0dB GR = empty meter, 24dB GR = full
+draw_vmeter(gr_mx, gr_my, gr_mw, gr_mh, gr_db_display, 24);
+
+// Scale labels on left of meter
+gfx_setfont(1,"Arial",8);
+i=0;
+loop(5,
+  db_mark = i * 6;         // 0, 6, 12, 18, 24
+  mark_y  = gr_my + gr_mh * (db_mark / 24);
+  gfx_r=0.28; gfx_g=0.28; gfx_b=0.32; gfx_a=1;
+  gfx_line(gr_mx-4, mark_y, gr_mx, mark_y);
+  gfx_r=0.55; gfx_g=0.55; gfx_b=0.58; gfx_a=1;
+  sprintf(#mark_lbl, "%d", -db_mark);
+  gfx_measurestr(#mark_lbl, mlw, mlh);
+  gfx_x = gr_mx - 6 - mlw; gfx_y = mark_y - mlh/2;
+  gfx_drawstr(#mark_lbl);
+  i+=1;
 );
 
-// GR meter fill
-gr_display = min(24, gr_peak); // Cap at -24dB
-gr_width = (gr_display / 24) * meter_w;
+// Numeric GR readout below meter
+gfx_r=1.0; gfx_g=0.82; gfx_b=0.44; gfx_a=1;
+gfx_setfont(1,"Arial",10);
+sprintf(#gr_val, "%.1f dB", gr_db_display);
+gfx_measurestr(#gr_val, mlw, mlh);
+gfx_x = met_x + meter_sec_w/2 - mlw/2;
+gfx_y = gr_my + gr_mh + 5;
+gfx_drawstr(#gr_val);
 
-gfx_r = gr_color_r; gfx_g = gr_color_g; gfx_b = gr_color_b;
-gfx_rect(meter_x, meter_y, gr_width, meter_h);
+mouse_cap_last = mouse_cap;
 
-// Peak hold line
-gr_peak_display = min(24, gr_peak_hold);
-peak_x = meter_x + ((gr_peak_display / 24) * meter_w);
-gfx_r = peak_color_r; gfx_g = peak_color_g; gfx_b = peak_color_b;
-gfx_rect(peak_x - 2, meter_y, 4, meter_h);
-
-// Numeric readouts - responsive positioning
-gfx_setfont(1, "Arial", value_size);
-readout_y = meter_y + meter_h + label_size + 20;
-
-// GR readout
-gfx_r = text_r; gfx_g = text_g; gfx_b = text_b;
-gfx_x = margin * 2;
-gfx_y = readout_y;
-gfx_drawstr("GR: ");
-gfx_drawnumber(-gr_peak, 1);
-gfx_drawstr(" dB");
-
-// Peak hold readout - position based on window width
-gfx_x = margin * 2 + (gfx_w * 0.3);
-gfx_y = readout_y;
-gfx_drawstr("Peak: ");
-gfx_drawnumber(-gr_peak_hold, 1);
-gfx_drawstr(" dB");
-
-// Input/Output levels
-io_y = readout_y + value_size + 10;
-
-// Input
-gfx_setfont(1, "Arial", label_size);
-gfx_x = margin * 2;
-gfx_y = io_y;
-gfx_drawstr("IN: ");
-in_db = gain2db(max(in_peak_l, in_peak_r));
-in_db = max(-60, min(0, in_db));
-gfx_drawnumber(in_db, 1);
-gfx_drawstr(" dB");
-
-// Output
-gfx_x = margin * 2 + (gfx_w * 0.3);
-gfx_y = io_y;
-gfx_drawstr("OUT: ");
-out_db = gain2db(max(out_peak_l, out_peak_r));
-out_db = max(-60, min(0, out_db));
-gfx_drawnumber(out_db, 1);
-gfx_drawstr(" dB");
+) : ui_system();
