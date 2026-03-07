@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="d4cc212a9760099bab92a18052a55066eed5b209" name="citizenkeith">
+<index version="1" commit="76427df14146043471c1d9c80c5ae92f84e952d0" name="citizenkeith">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -29,14 +29,13 @@ v1.5
   Reduced window size: 700x828 -> 580x680
   Smaller knobs and tighter spacing
 v1.4
-  Redesigned GUI: dark background, family-standard title style
-  Section header colors match citizenkeith plugin family
+  New "standard" GUI
   Dim knob labels, amber value readouts
   White VU meters
   C/E/G mode selector with per-mode colors
   Centered Polarity and SAT ON switches
   Compressor knobs repositioned for better spacing]]></changelog>
-        <source>https://github.com/keithhanlon/citizenkeith/raw/a69ced761bb71a8a3a666d189851e707d843efb3/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
       </version>
     </reapack>
   </category>
@@ -73,7 +72,7 @@ v1.4
         <source>https://github.com/keithhanlon/citizenkeith/raw/3d9e3081a375735465bb5fcd34fe34f67e8c8f8b/delay/Garden%20Hose%20Delay%20(AI%20Code).jsfx</source>
       </version>
       <version name="2.0" author="citizenkeith and Claude AI" time="2026-03-07T02:11:08Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/delay/Garden%20Hose%20Delay%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/delay/Garden%20Hose%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
     <reapack name="ReaFripp Tape Loop Delay (AI Code).jsfx" type="effect" desc="ReaFripp Tape Loop Delay">
@@ -90,7 +89,7 @@ v1.4
         <source>https://github.com/keithhanlon/citizenkeith/raw/250c81cf22bfe84766e870b22759daeab20c7a1a/delay/ReaFripp%20Tape%20Loop%20Delay%20(AI%20Code).jsfx</source>
       </version>
       <version name="2.0" author="citizenkeith - Claude AI" time="2026-03-07T02:11:08Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/delay/ReaFripp%20Tape%20Loop%20Delay%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/delay/ReaFripp%20Tape%20Loop%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
     <reapack name="Tycho Delay TMA-1 - Tape Delay (AI Code).jsfx" type="effect" desc="Tycho Delay TMA-1">
@@ -130,18 +129,16 @@ v1.4
       </version>
       <version name="2.5" author="citizenkeith" time="2026-03-07T02:11:08Z">
         <changelog><![CDATA[v2.1
-  Redesigned GUI: section boxes (I/O, Delay, Character) matching citizenkeith plugin family
-  Dark background, family-standard title style
   Double-click to reset knobs, amber value readouts
   Sync selector integrated into Delay section
 v2.0
-  Complete GUI overhaul using citizenkeith-ui-lib
+  New "standard" GUI
   Sync on/off toggle with dedicated SYNC button
   Fixed ui_setup memory overlap causing periodic clicks
 v1.0
   Initial release with Catmull-Rom interpolation delay buffer
   Ping pong stereo, tempo sync, tape saturation]]></changelog>
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -157,14 +154,14 @@ v1.0
 ]]></description>
       </metadata>
       <version name="2.0" author="citizenkeith / Claude AI" time="2026-02-25T04:50:25Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/c4944a6cfe2b2e8cc86a0f21ef145af8cd09ec4d/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
   <category name="dynamics">
     <reapack name="Analog Warmth Compressor.jsfx" type="effect" desc="Analog Warmth Compressor">
       <version name="2.0" author="citizenkeith" time="2026-03-07T02:11:08Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/dynamics/Analog%20Warmth%20Compressor.jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/dynamics/Analog%20Warmth%20Compressor.jsfx</source>
       </version>
     </reapack>
     <reapack name="FM Radio Compressor.jsfx" type="effect" desc="FM Radio Compressor">
@@ -179,7 +176,7 @@ v1.0
       </metadata>
       <version name="1.1" author="citizenkeith" time="2026-03-07T02:11:08Z">
         <changelog><![CDATA[v1.1
-  Added custom GUI: horizontal sliders, boost meter bar
+  New "standard" GUI
   Removed default REAPER slider UI
   Sidechain HPF raised to 150Hz for better bass control
   Level-dependent sensitivity taper replaces hard gate floor
@@ -191,7 +188,7 @@ v1.0
   Program-dependent three-tier release
   Soft limiter (x/1+|x|) output safety stage
   PDC reported to REAPER for phase alignment]]></changelog>
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/dynamics/FM%20Radio%20Compressor.jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/dynamics/FM%20Radio%20Compressor.jsfx</source>
       </version>
     </reapack>
     <reapack name="Transparent Bus Compressor (AI Code).jsfx" type="effect" desc="Transparent Bus Compressor">
@@ -208,7 +205,7 @@ v1.0
         <source>https://github.com/keithhanlon/citizenkeith/raw/df38092f9cb5db151f542b38643ec84ce63b617a/dynamics/Transparent%20Bus%20Compressor%20(AI%20Code).jsfx</source>
       </version>
       <version name="2.0" author="citizenkeith - Claude AI" time="2026-03-07T02:11:08Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/dynamics/Transparent%20Bus%20Compressor%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/dynamics/Transparent%20Bus%20Compressor%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -237,7 +234,7 @@ v1.0
       </metadata>
       <version name="1.0.0" author="citizenkeith" time="2026-03-07T02:11:08Z">
         <changelog><![CDATA[Initial release - Port of igorski's Rechoir VST to JSFX]]></changelog>
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/experiments/ReaChoir%20Delay%20-%20Harmonized%20Delay.jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/experiments/ReaChoir%20Delay%20-%20Harmonized%20Delay.jsfx</source>
       </version>
     </reapack>
   </category>
@@ -267,7 +264,7 @@ v1.1
   Added note_count overflow recovery
   Optimized note-off removal: swap-with-last instead of array shift
   Added custom GUI: horizontal sliders, color-coded section headers]]></changelog>
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/midi/Probabilistic%20MIDI%20Note%20Generator%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/midi/Probabilistic%20MIDI%20Note%20Generator%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -290,10 +287,10 @@ v1.1
   Optimized DSP: smooth_coef in @init, per-sample rate smoothing,
   morph_wave early-outs, independent phase_r increment,
   note_div_values at safe base address, dead cache vars removed
-  Custom citizenkeith-family GUI
+  New "standard" GUI
 v1.0
   Initial release]]></changelog>
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/modulation/Tempo%20Tremolo%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/modulation/Tempo%20Tremolo%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -320,7 +317,7 @@ v1.0
         <source>https://github.com/keithhanlon/citizenkeith/raw/e5c97f8fa97345b6f071a70f20471a7464d8740e/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
       </version>
       <version name="2.5" author="citizenkeith - Claude AI" time="2026-03-07T02:11:08Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
     <reapack name="Cocteau Verb (AI Code).jsfx" type="effect" desc="Cocteau Verb">
@@ -337,7 +334,7 @@ v1.0
         <source>https://github.com/keithhanlon/citizenkeith/raw/e5c97f8fa97345b6f071a70f20471a7464d8740e/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
       </version>
       <version name="2.1" author="citizenkeith and Claude AI" time="2026-03-07T02:11:08Z">
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -373,7 +370,7 @@ v1.1
   Filter stability threshold raised from 2 to 10
   Replaced inline 2*$pi with precomputed pi2 constant
   Removed default GUI. Removed filter state from @serialize]]></changelog>
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/synth/SynthiAKS%20-%20Modular%20Analog%20Synthesizer%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/synth/SynthiAKS%20-%20Modular%20Analog%20Synthesizer%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -433,7 +430,7 @@ v2.0
   Unity gain by default (0% input, 0dB output)
   Conditional dimming of Noise and Head Bump knobs when presets active
   5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape]]></changelog>
-        <source>https://github.com/keithhanlon/citizenkeith/raw/9da29e960f651d3fac670f294af95b767fb45ec2/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
