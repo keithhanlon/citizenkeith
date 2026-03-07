@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="9da29e960f651d3fac670f294af95b767fb45ec2" name="citizenkeith">
+<index version="1" commit="d4cc212a9760099bab92a18052a55066eed5b209" name="citizenkeith">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -248,7 +248,7 @@ v1.0
 {\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
 \widowctrl\hyphauto
 
-{\pard \ql \f0 \sa180 \li0 \fi0 Generative MIDI pattern generator. Outputs note-on/off events based on probabilistic pattern generation across 12 scales. Supports project tempo sync or internal BPM. Fully MIDI-spec compliant note-off messages.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 MIDI pattern generator. Outputs note-on/off events based on probabilistic pattern generation across 12 scales. Supports project tempo sync or internal BPM. Fully MIDI-spec compliant note-off messages.\par}
 }
 ]]></description>
       </metadata>
@@ -305,7 +305,7 @@ v1.0
 \widowctrl\hyphauto
 
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Cloudbusting Reverb\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 A professional algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 An algorithmic reverb plugin featuring parallel comb filters, cascaded allpass diffusion, per-comb LFO modulation, high-frequency damping, input filtering, pre-delay, and early reflections.\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Credits\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 Based on the CloudSeed reverb algorithm by Valdemar Erlingsson (Ghost Note Audio). Original CloudSeed: https://github.com/GhostNoteAudio/CloudSeedCore\par}
 {\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 License\par}
