@@ -1,9 +1,9 @@
 desc: Tempo Tremolo
 author: citizenkeith
-version: 2.0
+version: 2.2
 about:Tempo-synced stereo tremolo with morphing wave shapes.
 // ReaPack metadata
-// @version 2.0
+// @version 2.2
 // @author citizenkeith
 // @license GPL v3
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
@@ -12,6 +12,12 @@ about:Tempo-synced stereo tremolo with morphing wave shapes.
 //   Square, triangle, and sine waveforms with smooth morphing,
 //   tempo sync, and stereo phase offset. 
 // @changelog
+//   v2.2
+//     Tremolo section height reduced from 180 to 128px
+//     Tempo Sync toggle centered on same row as Rate control
+//     Window height reduced from 390 to 346px
+//   v2.1
+//     Standardized section header color: Tremolo=red
 //   v2.0
 //     Optimized DSP: smooth_coef in @init, per-sample rate smoothing,
 //     morph_wave early-outs, independent phase_r increment,
@@ -237,7 +243,7 @@ smooth_gain_r += (target_gain_r - smooth_gain_r) * (1 - smooth_coef);
 spl0 *= smooth_gain_l;
 spl1 *= smooth_gain_r;
 // ============================================================
-@gfx 480 390
+@gfx 480 346
 
 control_start("main", "tron");
 
@@ -256,7 +262,7 @@ gap   = 8;
 kr    = 22;
 
 row1_y  = 38;
-row1_h  = 180;
+row1_h  = 128;
 row1_cy = row1_y + 22 + 68;   // = 128
 
 row2_y  = row1_y + row1_h + gap;
@@ -291,13 +297,13 @@ gfx_drawstr("TEMPO TREMOLO");
 // ============================================================
 // ROW 1 — TREMOLO (green accent)
 // ============================================================
-draw_section_box(trem_x, row1_y, trem_w, row1_h, 0.22, 0.72, 0.32, "TREMOLO");
+draw_section_box(trem_x, row1_y, trem_w, row1_h, 0.82, 0.22, 0.14, "TREMOLO");
 
 // ---- TEMPO SYNC toggle ----
-sw_label_y  = row1_y + 30;
-sw_center_y = row1_y + 58;
+sw_label_y  = row1_cy - 26;
+sw_center_y = row1_cy;
 sw_h        = 20;
-sw_state_y  = sw_center_y + 14;
+sw_state_y  = row1_cy + 14;
 
 draw_switch_label(trem_tog_cx, sw_label_y, "TEMPO SYNC");
 ui_push_rect(trem_tog_cx - 32, sw_center_y - sw_h/2, 64, sw_h);

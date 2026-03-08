@@ -1,5 +1,9 @@
 desc:Fidelio Channel Strip
-// @version 1.6
+author: citizenkeith / Claude AI
+version: 1.7
+about: Channel strip with transformer-style harmonic coloration, Neve-style shelf, Trident-style HPF, plus a VCA compressor, expander and gate.
+
+// @version 1.7
 // @author citizenkeith
 // @license GPL v3
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
@@ -7,6 +11,8 @@ desc:Fidelio Channel Strip
 //   Channel strip with transformer-style harmonic coloration, Neve-style shelf,
 //   Trident-style HPF, plus a VCA compressor, expander and gate. 
 // @changelog
+//   v1.7
+//     Standardized section header colors: Input=red, EQ=amber, Dynamics=blue, Output=green
 //   v1.6
 //     Removed redundant output meter calculation in @sample
 //   v1.5
@@ -912,9 +918,9 @@ draw_section_border(dyn_x, dyn_y, dyn_w, dyn_h);
 draw_section_border(out_x, out_y, out_w, out_h);
 
 // Header bars — family palette
-gfx_r = 0.80; gfx_g = 0.58; gfx_b = 0.08; gfx_a = 1; gfx_rect(in_x,  in_y,  in_w,  in_hdr);  // amber
-gfx_r = 0.12; gfx_g = 0.62; gfx_b = 0.88; gfx_a = 1; gfx_rect(eq_x,  eq_y,  eq_w,  eq_hdr);  // blue
-gfx_r = 0.82; gfx_g = 0.22; gfx_b = 0.14; gfx_a = 1; gfx_rect(dyn_x, dyn_y, dyn_w, dyn_hdr); // red
+gfx_r = 0.82; gfx_g = 0.22; gfx_b = 0.14; gfx_a = 1; gfx_rect(in_x,  in_y,  in_w,  in_hdr);  // red
+gfx_r = 0.80; gfx_g = 0.58; gfx_b = 0.08; gfx_a = 1; gfx_rect(eq_x,  eq_y,  eq_w,  eq_hdr);  // amber
+gfx_r = 0.12; gfx_g = 0.62; gfx_b = 0.88; gfx_a = 1; gfx_rect(dyn_x, dyn_y, dyn_w, dyn_hdr); // blue
 gfx_r = 0.22; gfx_g = 0.72; gfx_b = 0.32; gfx_a = 1; gfx_rect(out_x, out_y, out_w, out_hdr); // green
 
 // Header text

@@ -1,8 +1,8 @@
 desc:Probabilistic MIDI Note Generator
-version: 2.0
+version: 2.1
 author: citizenkeith and Claude AI
 about: MIDI pattern generator with scale-aware probabilistic note selection 
-// @version 2.0
+// @version 2.1
 // @author citizenkeith
 // @license GPL v3
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
@@ -11,6 +11,12 @@ about: MIDI pattern generator with scale-aware probabilistic note selection
 //   probabilistic pattern generation across 12 scales. Supports project tempo
 //   sync or internal BPM. Fully MIDI-spec compliant note-off messages.
 // @changelog
+//   v2.1
+//     Slider fill changed from amber to off-white gray
+//     Subtitle "Generative Music Machine" changed to white
+//     SCALE header changed to red
+//     PATTERN header changed to violet
+//     TIMING header changed to blue
 //   v2.0
 //     Slider labels changed to white for readability
 //   v1.1
@@ -161,7 +167,7 @@ function draw_hslider(sx, sy, sw, sh, val, lo, hi) local(norm, tx) (
   tx = sx + floor(norm * sw);
   gfx_r=0.06; gfx_g=0.06; gfx_b=0.08; gfx_a=1;
   gfx_rect(sx, sy + sh/2 - 4, sw, 8);
-  gfx_r=0.85; gfx_g=0.60; gfx_b=0.10; gfx_a=1;
+  gfx_r=0.62; gfx_g=0.62; gfx_b=0.65; gfx_a=1;
   gfx_rect(sx, sy + sh/2 - 4, floor(norm * sw), 8);
   gfx_r=0.35; gfx_g=0.35; gfx_b=0.40; gfx_a=1;
   gfx_rect(sx, sy + sh/2 - 4, sw, 1);
@@ -307,7 +313,7 @@ gfx_rect(0, 0, gfx_w, gfx_h);
 gfx_r=0.78; gfx_g=0.78; gfx_b=0.82; gfx_a=1;
 gfx_setfont(1, "Trebuchet MS", 14, 'b');
 gfx_x=12; gfx_y=10; gfx_drawstr("PROBABILISTIC MIDI NOTE GENERATOR");
-gfx_r=0.55; gfx_g=0.55; gfx_b=0.60; gfx_a=1;
+gfx_r=1.0; gfx_g=1.0; gfx_b=1.0; gfx_a=1;
 gfx_setfont(1, "Trebuchet MS", 10);
 gfx_x=430; gfx_y=13; gfx_drawstr("Generative Music Machine");
 
@@ -316,7 +322,7 @@ mouse_btn == 0 ? drag_slider = -1;
 row_idx = 0;
 cur_y = 32;
 
-cur_y = draw_sec_hdr(cur_y, 0.18, 0.45, 0.82, "SCALE");
+cur_y = draw_sec_hdr(cur_y, 0.82, 0.22, 0.14, "SCALE");
 slider1 = process_slider(cur_y, slider1, 0, 127);
 sprintf(#v, "%d", slider1);
 cur_y = draw_row(cur_y, "Root Note", #v);
@@ -344,7 +350,7 @@ draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider11, 1, 4)
 
 cur_y += 4;
 
-cur_y = draw_sec_hdr(cur_y, 0.82, 0.18, 0.14, "PATTERN");
+cur_y = draw_sec_hdr(cur_y, 0.52, 0.26, 0.82, "PATTERN");
 slider3 = process_slider(cur_y, slider3, 0, 100);
 sprintf(#v, "%d%%", slider3);
 cur_y = draw_row(cur_y, "Repeat Probability", #v);
@@ -380,7 +386,7 @@ draw_hslider(GUI_SLD_X, cur_y - GUI_ROW_H, GUI_SLD_W, GUI_ROW_H, slider6, 0, 100
 
 cur_y += 4;
 
-cur_y = draw_sec_hdr(cur_y, 0.8, 0.55, 0.08, "TIMING");
+cur_y = draw_sec_hdr(cur_y, 0.18, 0.45, 0.82, "TIMING");
 slider7 = process_slider(cur_y, slider7, 10, 100);
 sprintf(#v, "%d%% of step", slider7);
 cur_y = draw_row(cur_y, "Note Duration", #v);

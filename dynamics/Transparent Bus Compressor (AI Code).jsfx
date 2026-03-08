@@ -1,18 +1,20 @@
 desc: Transparent Bus Compressor
 author: citizenkeith - Claude AI
-version: 2.0
+version: 2.1
 about: SSL/Sonitus-inspired glue compression for mix bus duty 
 // RMS detection, soft knee, program-dependent release
 // Released under GPLv3 License
 
 // ReaPack metadata
-// @version 2.0
+// @version 2.1
 // @author citizenkeith
 // @license GPL v3
 // @about
 //   SSL/Sonitus-inspired glue bus compressor. RMS detection with
 //   soft knee, program-dependent release, and stereo-linked gain reduction.
 // @changelog
+//   v2.1
+//     Standardized section header colors: Output=green, GR=red
 //   v2.0
 //     Added new "standard" GUI
 //     Fixed RMS buffer address collision (was at address 0, overlapping audio)
@@ -387,7 +389,7 @@ draw_value_at(ck5, row1_cy+kr+4);
 // ============================================================
 // ROW 2A — OUTPUT (cyan)
 // ============================================================
-draw_section_box(out_x, row2_y, out_w, row2_h, 0.12, 0.62, 0.88, "OUTPUT");
+draw_section_box(out_x, row2_y, out_w, row2_h, 0.22, 0.72, 0.32, "OUTPUT");
 
 // AUTO MAKEUP switch
 sw_h = 20;
@@ -450,7 +452,7 @@ sprintf(#val, "%.0f ms", slider8); draw_value_at(out_k2, row2_cy+kr+4);
 // ============================================================
 // ROW 2B — GAIN REDUCTION METER (amber)
 // ============================================================
-draw_section_box(met_x, row2_y, meter_sec_w, row2_h, 0.80, 0.58, 0.08, "GR");
+draw_section_box(met_x, row2_y, meter_sec_w, row2_h, 0.82, 0.22, 0.14, "GR");
 
 // GR value in dB (positive = reduction)
 gr_db_display = -gain2db(gr_smooth);   // positive number when compressing

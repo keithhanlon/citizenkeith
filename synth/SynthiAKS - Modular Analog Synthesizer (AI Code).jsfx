@@ -1,10 +1,13 @@
 desc:SynthiAKS Analog Modular Synthesizer
-version: 2.0
+version: 2.1
 author: citizenkeith and Claude AI
 about: Emulation of EMS Synthi AKS Synthesizer 
-// @version 2.0
+// @version 2.1
 // @author citizenkeith
 // @license GPL v3
+// @provides
+//   SynthiAKS - Modular Analog Synthesizer.jsfx
+//   SynthiAKS.md
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
 // @about
 //   Emulation of the EMS Synthi AKS modular synthesizer.
@@ -12,6 +15,10 @@ about: Emulation of EMS Synthi AKS Synthesizer
 //   Sample & Hold with selectable source routing, and MIDI input with pitch bend.
 //   Custom GUI: hand-drawn horizontal sliders in color-coded sections.
 // @changelog
+//   v2.1
+//     Subtitle "Analog Modular Synthesizer" changed to white
+//     Slider fill changed from amber to off-white gray
+//     Window height corrected to 928px — Envelope and MIDI sections were clipped
 //   v2.0
 //     Slider labels changed to white for readability
 //     Added custom GUI with hand-drawn horizontal sliders and color-coded sections
@@ -103,7 +110,7 @@ function draw_hslider(sx, sy, sw, sh, val, lo, hi) local(norm, tx) (
   gfx_r=0.06; gfx_g=0.06; gfx_b=0.08; gfx_a=1;
   gfx_rect(sx, sy + sh/2 - 4, sw, 8);
   // Filled portion: bright amber glow
-  gfx_r=0.85; gfx_g=0.60; gfx_b=0.10; gfx_a=1;
+  gfx_r=0.62; gfx_g=0.62; gfx_b=0.65; gfx_a=1;
   gfx_rect(sx, sy + sh/2 - 4, floor(norm * sw), 8);
   // Track border
   gfx_r=0.35; gfx_g=0.35; gfx_b=0.40; gfx_a=1;
@@ -263,7 +270,7 @@ lp4 += filter_g * (lp3 - lp4);
 lp4 > 0.8 ? lp4 = 0.8 : lp4 < -0.8 ? lp4 = -0.8;
 spl0 = lp4; spl1 = lp4;
 
-@gfx 560 740
+@gfx 560 928
 
 // Layout constants (set each frame so they're always fresh)
 GUI_PAD   = 8;
@@ -285,7 +292,7 @@ gfx_rect(0, 0, gfx_w, gfx_h);
 gfx_r=0.78; gfx_g=0.78; gfx_b=0.82; gfx_a=1;
 gfx_setfont(1, "Trebuchet MS", 14, 'b');
 gfx_x=12; gfx_y=10; gfx_drawstr("SYNTHIAKS");
-gfx_r=0.55; gfx_g=0.55; gfx_b=0.60; gfx_a=1;
+gfx_r=1.0; gfx_g=1.0; gfx_b=1.0; gfx_a=1;
 gfx_setfont(1, "Trebuchet MS", 10);
 gfx_x=116; gfx_y=13; gfx_drawstr("Analog Modular Synthesizer");
 

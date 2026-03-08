@@ -1,5 +1,5 @@
 desc: Cloudbusting Reverb
-version: 2.5
+version: 2.6
 author: citizenkeith - Claude AI
 about:
   # Cloudbusting Reverb
@@ -26,7 +26,7 @@ about:
   and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so.
 
 // ReaPack metadata
-// @version 2.5
+// @version 2.6
 // @author citizenkeith
 // @license MIT
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
@@ -36,6 +36,8 @@ about:
 //   RT60-based decay control, high-frequency damping, input EQ, pre-delay,
 //   early reflections, and custom citizenkeith-family GUI.
 // @changelog
+//   v2.6
+//     Standardized section header colors: Reverb=red, EQ=blue, Output=green
 //   v2.5
 //     New "standard" GUI (dark theme, color-coded sections)
 //     All sliders hidden from default REAPER slider view
@@ -857,7 +859,7 @@ gfx_drawstr("CLOUDBUSTING REVERB");
 // ROW 1 — REVERB
 // ============================================================
 
-draw_section_box(rev_x, row1_y, rev_w, row1_h, 0.12, 0.62, 0.88, "REVERB");
+draw_section_box(rev_x, row1_y, rev_w, row1_h, 0.82, 0.22, 0.14, "REVERB");
 
 // Size
 ui_push_rect(rev_k1-kr, row1_cy-kr, kr*2, kr*2);
@@ -946,7 +948,7 @@ strcpy(#lbl, "RATE");            draw_label_at(mod_k2, row2_cy - kr - 14);
 sprintf(#val, "%.2f Hz", modRate); draw_value_at(mod_k2, row2_cy + kr + 4);
 
 // ---- EQ (green) ----
-draw_section_box(eq_x, row2_y, sec_w, row2_h, 0.22, 0.72, 0.32, "EQ");
+draw_section_box(eq_x, row2_y, sec_w, row2_h, 0.12, 0.62, 0.88, "EQ");
 
 ui_push_rect(eq_k1-kr, row2_cy-kr, kr*2, kr*2);
   lowCut = control_dial(lowCut, 20, 500, 0);
@@ -965,7 +967,7 @@ strcpy(#lbl, "HIGH CUT");         draw_label_at(eq_k2, row2_cy - kr - 14);
 sprintf(#val, "%.0f Hz", highCut); draw_value_at(eq_k2, row2_cy + kr + 4);
 
 // ---- OUTPUT (red) ----
-draw_section_box(out_x, row2_y, sec_w, row2_h, 0.82, 0.22, 0.14, "OUTPUT");
+draw_section_box(out_x, row2_y, sec_w, row2_h, 0.22, 0.72, 0.32, "OUTPUT");
 
 ui_push_rect(out_k1-kr, row2_cy-kr, kr*2, kr*2);
   mix = control_dial(mix, 0, 1, 0);

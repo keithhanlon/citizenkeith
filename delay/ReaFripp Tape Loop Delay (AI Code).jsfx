@@ -1,5 +1,5 @@
 desc: ReaFripp Tape Loop Delay
-version: 2.0
+version: 2.1
 author: citizenkeith - Claude AI
 about:
   Frippertronics-inspired tape loop delay.
@@ -7,7 +7,7 @@ about:
   Supports tempo sync with seven time divisions. 
 
 // ReaPack metadata
-// @version 2.0
+// @version 2.1
 // @author citizenkeith
 // @license GPL v3
 // @about
@@ -15,6 +15,8 @@ about:
 //   feedback, HF damping, tape saturation, wow/flutter modulation,
 //   and tempo sync.
 // @changelog
+//   v2.1
+//     Standardized section header colors: Delay=red, Tempo Sync=blue, Tape Effects=amber, Output=green
 //   v2.0
 //     New "standard" GUI
 //     DELAY section: Loop, Feedback, Damping knobs; Loop greys out when sync active
@@ -474,7 +476,7 @@ draw_value_at(dl_k3, row1_cy + kr + 4);
 // ============================================================
 // ROW 1B — TEMPO SYNC (purple/violet)
 // ============================================================
-draw_section_box(sync_x, row1_y, sync_w, row1_h, 0.55, 0.22, 0.82, "TEMPO SYNC");
+draw_section_box(sync_x, row1_y, sync_w, row1_h, 0.12, 0.62, 0.88, "TEMPO SYNC");
 
 // Label above widget
 gfx_r=0.71; gfx_g=0.71; gfx_b=0.75; gfx_a=1;
@@ -610,7 +612,7 @@ draw_value_at(tape_k2, row2_cy + kr + 4);
 // ============================================================
 // ROW 2B — OUTPUT (cyan)
 // ============================================================
-draw_section_box(out_x, row2_y, out_w, row2_h, 0.12, 0.62, 0.88, "OUTPUT");
+draw_section_box(out_x, row2_y, out_w, row2_h, 0.22, 0.72, 0.32, "OUTPUT");
 
 // MIX
 ui_push_rect(out_k1-kr, row2_cy-kr, kr*2, kr*2);

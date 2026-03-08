@@ -1,5 +1,8 @@
 desc: Tycho Delay TMA-1
-// @version 2.5
+version: 2.7
+author: citizenkeith and Claude AI
+about: Good quality tape-style delay with optimized memory layout and ping pong.
+// @version 2.7
 // @author citizenkeith
 // @license GPL v3
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
@@ -8,6 +11,10 @@ desc: Tycho Delay TMA-1
 //   Based on work by LOSER (JS:Saturation) and Cockos (JS:Delay) with additional code from Sault.
 //   Ping pong functionality inspired by Stillwell. Memory layout optimized by Claude AI. 
 // @changelog
+//   v2.7
+//     Delay Sync widget repositioned: centered vertically between knob row and section bottom
+//   v2.6
+//     Standardized section header color: I/O=green
 //   v2.1
 //     Double-click to reset knobs, amber value readouts
 //     Sync selector integrated into Delay section
@@ -588,7 +595,7 @@ sync_gap     = 4;
 sync_ctr_x   = 329;
 sync_box_x   = sync_ctr_x - (sync_box_w + sync_gap + sync_btn_w) / 2;
 sync_btn_x   = sync_box_x + sync_box_w + sync_gap;
-sync_box_y   = 168;
+sync_box_y   = 192;
 sync_lbl_y   = sync_box_y - 15;
 arrow_h      = 10;
 
@@ -601,7 +608,7 @@ delay_is_synced = sync_on;
 // ============================================================
 // SECTION 1: I/O (blue)
 // ============================================================
-draw_section_box(8, sect_y, 200, sect_h, 0.12, 0.62, 0.88, "I/O");
+draw_section_box(8, sect_y, 200, sect_h, 0.22, 0.72, 0.32, "I/O");
 
 // INPUT
 ui_push_rect(io_cx1-22, knob_cy-22, 44, 44);

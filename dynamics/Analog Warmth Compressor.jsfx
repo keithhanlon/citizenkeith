@@ -1,8 +1,8 @@
 desc:Analog Warmth Compressor
 author:citizenkeith
-version:2.0
+version:2.1
 
-// @version 2.0
+// @version 2.1
 // @author citizenkeith
 // @license GPL v3
 // @provides citizenkeith-ui-lib.jsfx-inc
@@ -11,6 +11,7 @@ version:2.0
 //   a 63-tap halfband FIR filter. Soft/medium/hard slider6, parallel slider8,
 //   stereo-linked detection. 
 // @changelog
+//   2.1 - GR section header color changed to red for family-standard consistency
 //   2.0 - Fixed fir_coeffs memory collision at address 0; replaced shift-register
 //         delay lines with circular buffers (31x fewer memory moves per sample);
 //         exploited halfband FIR symmetry (33->17 multiplies per filter call);
@@ -553,7 +554,7 @@ sprintf(#val, "%.0f%%", slider2); draw_value_at(gui_ck5, row1_cy+kr+4);
 
 // ── ROW 2A: WARMTH (amber) ────────────────────────────────────────────────────
 // GR METER section (amber, row 1 right)
-draw_section_box(gui_gr_sec_x, gui_row1_y, gui_gr_sec_w, gui_row1_h, 0.80, 0.58, 0.08, "GR");
+draw_section_box(gui_gr_sec_x, gui_row1_y, gui_gr_sec_w, gui_row1_h, 0.82, 0.22, 0.14, "GR");
 
 gr_db_display = -gain2db(smooth_gain);
 gr_db_display = max(0, min(24, gr_db_display));

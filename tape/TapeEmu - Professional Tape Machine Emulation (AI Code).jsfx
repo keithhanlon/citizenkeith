@@ -1,13 +1,21 @@
 desc: TapeEmu - Professional Tape Machine Emulation
-version: 2.2
+version: 2.5
 author: citizenkeith - Claude AI
 about: Tape emulation that includes tape machine choices 
 // Linux users can download the Trebuchet MS font at https://font.download/font/trebuchet-ms-2
-// @version 2.1
+// @version 2.5
 // @author citizenkeith
 // @license GPL v3
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
 // @changelog
+//   v2.5
+//     Title changed to "TAPEEMU" with "Tape Machine Emulation" subtitle
+//     Tape Machine section height increased: 10px padding above and below buttons
+//   v2.4
+//     Added spacing between Tape Machine and lower sections
+//   v2.3
+//     Standardized section header colors: I/O=green, Stereo=blue
+//     Fixed Noise and Head Bump not updating DSP when dragged (missing update_audio_vars() in @gfx)
 //   v2.2
 //     Fixed Noise and Head Bump not updating DSP when dragged (missing update_audio_vars() in @gfx)
 //     Fixed Noise slider: now scales noise for all tape machine presets (was Basic Tape only)
@@ -435,7 +443,7 @@ lfm_outR = lfm_monoLP - lfm_stereoLP * lfm_width * 0.5;
 spl0 = lfm_outL + lfm_highL;
 spl1 = lfm_outR + lfm_highR;
 
-@gfx 650 246
+@gfx 650 262
 
 control_start("main", "tron");
 
@@ -449,7 +457,11 @@ gfx_rect(0, 0, gfx_w, gfx_h);
 gfx_r=0.78; gfx_g=0.78; gfx_b=0.82; gfx_a=1;
 gfx_setfont(1, "Trebuchet MS", 14, 'b');
 gfx_x=12; gfx_y=8;
-gfx_drawstr("TAPEEMU: Tape Machine Emulation");
+gfx_drawstr("TAPEEMU");
+gfx_r=1.0; gfx_g=1.0; gfx_b=1.0; gfx_a=1;
+gfx_setfont(1, "Trebuchet MS", 10);
+gfx_x=116; gfx_y=11;
+gfx_drawstr("Tape Machine Emulation");
 
 check_dbl_click();
 
@@ -465,9 +477,9 @@ check_dbl_click();
 // knob_cy: 106 + 22(hdr) + 16(gap) + 22(radius) = 166
 // ============================================================
 
-sect_y   = 106;
+sect_y   = 120;
 sect_h   = 132;
-knob_cy  = 178;
+knob_cy  = 197;
 
 // Knob centers — I/O
 io_cx1 = 50;   // Input
@@ -488,11 +500,11 @@ st_cx2 = 596;  // LF Mono
 // ============================================================
 
 // Section box (red header like Watkins)
-draw_section_box(8, 34, 634, 64, 0.82, 0.22, 0.14, "TAPE MACHINE");
+draw_section_box(8, 34, 634, 78, 0.82, 0.22, 0.14, "TAPE MACHINE");
 
-// 5 buttons inside section, below the 22px header
+// 5 buttons inside section, below the 22px header + 10px padding
 // x=12..638, each button ~125px wide
-btn_y = 58; btn_h = 36;
+btn_y = 66; btn_h = 36;
 i = 0;
 loop(5,
   bx = 12 + i * 125;
@@ -534,7 +546,7 @@ loop(5,
 // ============================================================
 // SECTION 1: I/O
 // ============================================================
-draw_section_box(8, sect_y, 168, sect_h, 0.12, 0.62, 0.88, "I/O");
+draw_section_box(8, sect_y, 168, sect_h, 0.22, 0.72, 0.32, "I/O");
 
 ui_push_rect(io_cx1-22, knob_cy-22, 44, 44);
   ui_automate(slider1, control_dial(slider1, 0, 178, 0, 0));
@@ -618,7 +630,7 @@ gfx_measurestr(#val, tw, th); gfx_x=af_cx4-tw/2; gfx_y=knob_cy+25; gfx_drawstr(#
 // ============================================================
 // SECTION 3: STEREO
 // ============================================================
-draw_section_box(460, sect_y, 182, sect_h, 0.22, 0.72, 0.32, "STEREO");
+draw_section_box(460, sect_y, 182, sect_h, 0.12, 0.62, 0.88, "STEREO");
 
 // STEREO WIDTH
 ui_push_rect(st_cx1-22, knob_cy-22, 44, 44);

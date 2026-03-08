@@ -1,5 +1,5 @@
 desc: Garden Hose Delay
-version: 2.0
+version: 2.2
 author: citizenkeith and Claude AI
 about:
   # Garden Hose Delay - Time Cube Emulator
@@ -8,6 +8,9 @@ about:
   coiled garden hose as a transmission line. 
 
 // @changelog
+//   2.2 - Added "Time Cube Emulator" subtitle.
+//   2.1 - Fixed invalid @reapack directive (converted to // @reapack comment metadata).
+//         Knob rows centered vertically within section bounds.
 //   2.0 - STEREO and OUTPUT sections swapped in bottom row.
 //         Default REAPER GUI hidden (options: no_meter).
 //         Added full ReaPack metadata (provides, screenshot, links).
@@ -18,12 +21,14 @@ about:
 //   1.1 - Fixed buffer size, drift_slew, Character slider range.
 
 
-@reapack
-provides:
-  citizenkeith-ui-lib.jsfx-inc
-screenshot: https://citizenkeith.com/plugins/garden-hose-delay/screenshot.png
-link: Home Page https://citizenkeith.com
-link: ReaPack Repository https://citizenkeith.com/reapack/index.xml
+// @version 2.2
+// @author citizenkeith
+// @license GPL v3
+// @provides
+//   citizenkeith-ui-lib.jsfx-inc
+// @screenshot https://citizenkeith.com/plugins/garden-hose-delay/screenshot.png
+// @link Home Page https://citizenkeith.com
+// @link ReaPack Repository https://citizenkeith.com/reapack/index.xml
 
 import citizenkeith-ui-lib.jsfx-inc
 
@@ -243,11 +248,15 @@ gfx_r = 0.78; gfx_g = 0.78; gfx_b = 0.82; gfx_a = 1;
 gfx_setfont(1, "Trebuchet MS", 14, 'b');
 gfx_x = 12; gfx_y = 8;
 gfx_drawstr("GARDEN HOSE DELAY");
+gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+gfx_setfont(1, "Trebuchet MS", 10);
+gfx_x = 210; gfx_y = 11;
+gfx_drawstr("Time Cube Emulator");
 
 pad    = 8;
-row1_y = 36;  row1_h = 165;  row1_cy = row1_y + 60;
+row1_y = 36;  row1_h = 165;  row1_cy = row1_y + 22 + (row1_h - 22) / 2;
 row2_y = row1_y + row1_h + pad;
-row2_h = 165;  row2_cy = row2_y + 60;
+row2_h = 165;  row2_cy = row2_y + 22 + (row2_h - 22) / 2;
 
 total_w  = gfx_w - pad * 2;
 echo_x = pad; echo_w = total_w;
