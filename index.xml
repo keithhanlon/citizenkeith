@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="76427df14146043471c1d9c80c5ae92f84e952d0" name="citizenkeith">
+<index version="1" commit="9a8b3f27413a00bb8e885dc1a864ba7335254c4f" name="citizenkeith">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -36,6 +36,9 @@ v1.4
   Centered Polarity and SAT ON switches
   Compressor knobs repositioned for better spacing]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
+      </version>
+      <version name="1.7" author="citizenkeith / Claude AI" time="2026-03-08T17:22:39Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/channel-strip/Fidelio%20Channel%20Strip.jsfx</source>
       </version>
     </reapack>
   </category>
@@ -74,6 +77,9 @@ v1.4
       <version name="2.0" author="citizenkeith and Claude AI" time="2026-03-07T02:11:08Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/delay/Garden%20Hose%20Delay%20(AI%20Code).jsfx</source>
       </version>
+      <version name="2.2" author="citizenkeith and Claude AI" time="2026-03-08T17:22:39Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/delay/Garden%20Hose%20Delay%20(AI%20Code).jsfx</source>
+      </version>
     </reapack>
     <reapack name="ReaFripp Tape Loop Delay (AI Code).jsfx" type="effect" desc="ReaFripp Tape Loop Delay">
       <metadata>
@@ -90,6 +96,9 @@ v1.4
       </version>
       <version name="2.0" author="citizenkeith - Claude AI" time="2026-03-07T02:11:08Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/delay/ReaFripp%20Tape%20Loop%20Delay%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.1" author="citizenkeith - Claude AI" time="2026-03-08T17:22:39Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/delay/ReaFripp%20Tape%20Loop%20Delay%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
     <reapack name="Tycho Delay TMA-1 - Tape Delay (AI Code).jsfx" type="effect" desc="Tycho Delay TMA-1">
@@ -140,6 +149,23 @@ v1.0
   Ping pong stereo, tempo sync, tape saturation]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
       </version>
+      <version name="2.7" author="citizenkeith" time="2026-03-08T17:22:39Z">
+        <changelog><![CDATA[v2.7
+  Delay Sync widget repositioned: centered vertically between knob row and section bottom
+v2.6
+  Standardized section header color: I/O=green
+v2.1
+  Double-click to reset knobs, amber value readouts
+  Sync selector integrated into Delay section
+v2.0
+  New "standard" GUI
+  Sync on/off toggle with dedicated SYNC button
+  Fixed ui_setup memory overlap causing periodic clicks
+v1.0
+  Initial release with Catmull-Rom interpolation delay buffer
+  Ping pong stereo, tempo sync, tape saturation]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/delay/Tycho%20Delay%20TMA-1%20-%20Tape%20Delay%20(AI%20Code).jsfx</source>
+      </version>
     </reapack>
   </category>
   <category name="distortion">
@@ -156,12 +182,18 @@ v1.0
       <version name="2.0" author="citizenkeith / Claude AI" time="2026-02-25T04:50:25Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx</source>
       </version>
+      <version name="2.1" author="citizenkeith / Claude AI" time="2026-03-08T17:22:39Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx</source>
+      </version>
     </reapack>
   </category>
   <category name="dynamics">
     <reapack name="Analog Warmth Compressor.jsfx" type="effect" desc="Analog Warmth Compressor">
       <version name="2.0" author="citizenkeith" time="2026-03-07T02:11:08Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/dynamics/Analog%20Warmth%20Compressor.jsfx</source>
+      </version>
+      <version name="2.1" author="citizenkeith" time="2026-03-08T17:22:39Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/dynamics/Analog%20Warmth%20Compressor.jsfx</source>
       </version>
     </reapack>
     <reapack name="FM Radio Compressor.jsfx" type="effect" desc="FM Radio Compressor">
@@ -190,6 +222,29 @@ v1.0
   PDC reported to REAPER for phase alignment]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/dynamics/FM%20Radio%20Compressor.jsfx</source>
       </version>
+      <version name="1.3" author="citizenkeith" time="2026-03-08T17:22:39Z">
+        <changelog><![CDATA[v1.3
+  Slider fill changed from amber to off-white gray
+v1.2
+  CONTROLS header changed to red
+  Lookahead and Sensitivity label font size increased to 12px
+  Subtitle text changed to white
+  Slider fill changed from amber to off-white gray
+v1.1
+  New "standard" GUI
+  Removed default REAPER slider UI
+  Sidechain HPF raised to 150Hz for better bass control
+  Level-dependent sensitivity taper replaces hard gate floor
+  Automatic makeup gain baked into sensitivity scaling
+  Pre-charge fix eliminates startup distortion spike
+v1.0
+  Initial release
+  Upward compression with lookahead circular buffer
+  Program-dependent three-tier release
+  Soft limiter (x/1+|x|) output safety stage
+  PDC reported to REAPER for phase alignment]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/dynamics/FM%20Radio%20Compressor.jsfx</source>
+      </version>
     </reapack>
     <reapack name="Transparent Bus Compressor (AI Code).jsfx" type="effect" desc="Transparent Bus Compressor">
       <metadata>
@@ -206,6 +261,9 @@ v1.0
       </version>
       <version name="2.0" author="citizenkeith - Claude AI" time="2026-03-07T02:11:08Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/dynamics/Transparent%20Bus%20Compressor%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.1" author="citizenkeith - Claude AI" time="2026-03-08T17:22:39Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/dynamics/Transparent%20Bus%20Compressor%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -266,6 +324,26 @@ v1.1
   Added custom GUI: horizontal sliders, color-coded section headers]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/midi/Probabilistic%20MIDI%20Note%20Generator%20(AI%20Code).jsfx</source>
       </version>
+      <version name="2.1" author="citizenkeith" time="2026-03-08T17:22:39Z">
+        <changelog><![CDATA[v2.1
+  Slider fill changed from amber to off-white gray
+  Subtitle "Generative Music Machine" changed to white
+  SCALE header changed to red
+  PATTERN header changed to violet
+  TIMING header changed to blue
+v2.0
+  Slider labels changed to white for readability
+v1.1
+  Fixed pattern regeneration firing every block at step 0 (now uses flag)
+  Fixed step_length not updating when project tempo changes
+  Fixed note-off velocity (now sends 0, per MIDI spec)
+  Restored free-running current_time (runs without transport)
+  Fixed note duration default (now fraction of step, not raw samples)
+  Added note_count overflow recovery
+  Optimized note-off removal: swap-with-last instead of array shift
+  Added custom GUI: horizontal sliders, color-coded section headers]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/midi/Probabilistic%20MIDI%20Note%20Generator%20(AI%20Code).jsfx</source>
+      </version>
     </reapack>
   </category>
   <category name="modulation">
@@ -291,6 +369,22 @@ v1.1
 v1.0
   Initial release]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/modulation/Tempo%20Tremolo%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.2" author="citizenkeith" time="2026-03-08T17:22:39Z">
+        <changelog><![CDATA[v2.2
+  Tremolo section height reduced from 180 to 128px
+  Tempo Sync toggle centered on same row as Rate control
+  Window height reduced from 390 to 346px
+v2.1
+  Standardized section header color: Tremolo=red
+v2.0
+  Optimized DSP: smooth_coef in @init, per-sample rate smoothing,
+  morph_wave early-outs, independent phase_r increment,
+  note_div_values at safe base address, dead cache vars removed
+  New "standard" GUI
+v1.0
+  Initial release]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/modulation/Tempo%20Tremolo%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
@@ -318,6 +412,9 @@ v1.0
       </version>
       <version name="2.5" author="citizenkeith - Claude AI" time="2026-03-07T02:11:08Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.6" author="citizenkeith - Claude AI" time="2026-03-08T17:22:39Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/reverb/Cloudbusting%20Reverb%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
     <reapack name="Cocteau Verb (AI Code).jsfx" type="effect" desc="Cocteau Verb">
@@ -431,6 +528,36 @@ v2.0
   Conditional dimming of Noise and Head Bump knobs when presets active
   5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.5" author="citizenkeith" time="2026-03-08T17:22:39Z">
+        <changelog><![CDATA[v2.5
+  Title changed to "TAPEEMU" with "Tape Machine Emulation" subtitle
+  Tape Machine section height increased: 10px padding above and below buttons
+v2.4
+  Added spacing between Tape Machine and lower sections
+v2.3
+  Standardized section header colors: I/O=green, Stereo=blue
+  Fixed Noise and Head Bump not updating DSP when dragged (missing update_audio_vars() in @gfx)
+v2.2
+  Fixed Noise and Head Bump not updating DSP when dragged (missing update_audio_vars() in @gfx)
+  Fixed Noise slider: now scales noise for all tape machine presets (was Basic Tape only)
+  Fixed Head Bump slider: now trims preset head bump value (was Basic Tape only)
+v2.1
+  Section boxes (I/O, Noise & Head Bump, Character) matching citizenkeith plugin family
+  Knob order: Stereo Width and Wow & Flutter swapped in Character section
+  Background and title styling updated to match Watkins/CocteauVerb
+  Removed GUI meters — using REAPER default meter
+  Added double-click to reset knobs, amber value readouts
+v2.0
+  Complete GUI overhaul with machine selector buttons
+  Added double-click to reset knobs to default values
+  Fixed head bump implementation (low shelf @ 90Hz)
+  Fixed Ampex ATR102 gain staging (was 1.7dB hot)
+  Added machine-specific high-frequency rolloff
+  Unity gain by default (0% input, 0dB output)
+  Conditional dimming of Noise and Head Bump knobs when presets active
+  5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
