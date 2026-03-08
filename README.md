@@ -12,14 +12,10 @@ These effects were written with the help of Claude AI. What started out as a sim
 3. Install plugins - all dependencies installed automatically
 
 ### Manual Installation
-Many plugins require the shared UI library:
-
+All plugins require the shared UI library:
 1. Download `citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx-inc`
 2. Download the plugin(s) you want
 3. Place all files in your REAPER Effects folder (same directory)
-
-## GUI Library
-All plugins require citizenkeith-ui-lib.jsfx-inc located in **citizenkeith-ut-lib directory**
 
 ### Learn How To Install JS plugins:
 https://reaper.blog/2015/06/quick-tip-how-to-install-js-plugins/
@@ -33,7 +29,7 @@ Quick links:
 - [Tycho Delay TMA-1](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tycho-delay-tma-1)
 - [Watkins Fuzz Pedal](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#watkins-fuzz-pedal)
 - [Analog Warmth Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#analog-warmth-compressor)
-- [FM Radio Compressor]((https://github.com/keithhanlon/citizenkeith/blob/main/README.md#fm-radio-compressor)
+- [FM Radio Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#fm-radio-compressor)
 - [Transparent Bus Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#transparent-bus-compressor)
 - [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
 - [Tempo Tremolo](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tempo-tremolo)
