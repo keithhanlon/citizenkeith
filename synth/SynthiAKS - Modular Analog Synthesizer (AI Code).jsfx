@@ -6,8 +6,8 @@ about: Emulation of EMS Synthi AKS Synthesizer
 // @author citizenkeith
 // @license GPL v3
 // @provides
-//   SynthiAKS - Modular Analog Synthesizer.jsfx
-//   SynthiAKS.md
+//   SynthiAKS - Modular Analog Synthesizer (AI Code).jsfx
+//   synthiAKS.md
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
 // @about
 //   Emulation of the EMS Synthi AKS modular synthesizer.
