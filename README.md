@@ -132,6 +132,6 @@ SynthiAKS (rhymes with "maniacs") is an emulation of the classic EMS Synthi AKS 
 
 # Tape Emulation
 ## TapeEmu - Professional Tape Machine Emulation
-![TapeEmu Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/tapeemuv2.png?raw=true)
+![TapeEmu Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TapeEmuV2.png?raw=true)
 TapeEmu is a tape machine emulation plugin designed to add the warmth, character, and sonic artifacts of classic analog tape recording to digital audio. Features include harmonic saturation, tape hiss, low-frequency head bump, stereo width control, and tape aging effects like dropouts and wow & flutter.
 
