@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="9a8b3f27413a00bb8e885dc1a864ba7335254c4f" name="citizenkeith">
+<index version="1" commit="2f5dc09af04dd1cd7b89e7bfc1d589fbda6063da" name="citizenkeith">
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
@@ -468,6 +468,31 @@ v1.1
   Replaced inline 2*$pi with precomputed pi2 constant
   Removed default GUI. Removed filter state from @serialize]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/synth/SynthiAKS%20-%20Modular%20Analog%20Synthesizer%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.1" author="citizenkeith" time="2026-03-08T17:30:20Z">
+        <changelog><![CDATA[v2.1
+  Subtitle "Analog Modular Synthesizer" changed to white
+  Slider fill changed from amber to off-white gray
+  Window height corrected to 928px — Envelope and MIDI sections were clipped
+v2.0
+  Slider labels changed to white for readability
+  Added custom GUI with hand-drawn horizontal sliders and color-coded sections
+  Removed default REAPER slider GUI
+v1.2
+  Added MIDI note on/off: triggers envelope, sets oscillator pitch
+  Added MIDI pitch bend (+/- 2 semitones)
+  Added S&H source selector: Noise / External / Oscillator
+  Added custom GUI: horizontal sliders, color-coded section headers
+v1.1
+  Fixed ext_noinit (moved to options header)
+  Fixed ring modulator - now runs in @sample
+  Fixed VCA pin logic (unity when pin=0, envelope-controlled when pin>0)
+  Fixed Osc->Filter Cutoff pin now applied in cutoff calculation
+  Filter stability threshold raised from 2 to 10
+  Replaced inline 2*$pi with precomputed pi2 constant
+  Removed default GUI. Removed filter state from @serialize]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/2f5dc09af04dd1cd7b89e7bfc1d589fbda6063da/synth/SynthiAKS%20-%20Modular%20Analog%20Synthesizer%20(AI%20Code).jsfx</source>
+        <source file="SynthiAKS.md">https://github.com/keithhanlon/citizenkeith/raw/2f5dc09af04dd1cd7b89e7bfc1d589fbda6063da/synth/SynthiAKS.md</source>
       </version>
     </reapack>
   </category>
