@@ -47,7 +47,7 @@ Fidelio is a channel strip plugin combining transformer-style harmonic saturatio
 # Delays
 
 ## Garden Hose Delay
-![Garden Hose Delay Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/fideliov2.png?raw=true)
+![Garden Hose Delay Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/gardenv2.png?raw=true)
 An emulation of the Cooper Time Cube, a classic electromechanical delay unit that created its characteristic doubling effect by sending audio through a coiled garden hose as a transmission line. 
 
 ## ReaFripp Tape Loop Delay
