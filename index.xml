@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="51c836597e16d3a4197e6b56731fef9293e5b567" name="citizenkeith">
+<index version="1" commit="b94d23770e58c3783288754ec882e4e3ad750449" name="citizenkeith">
   <category name="abandoned">
     <reapack name="Clavius Channel Strip (AI Code).jsfx" type="effect" desc="Channel strip with API 215L-style filters, EQ, Drive, and Compression">
       <version name="1.0" author="citizenkeith and Claude AI - Based on Airwindows open source (MIT) and Universal Audio API 215L" time="2026-03-09T04:11:19Z">
@@ -299,6 +299,28 @@ v1.0
       </version>
       <version name="2.1" author="citizenkeith - Claude AI" time="2026-03-08T17:22:39Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/dynamics/Transparent%20Bus%20Compressor%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+    <reapack name="Zion Vocal Processor.jsfx" type="effect" desc="Zion Vocal Processor">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 Zion Vocal Processor\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 A fast vocal leveling tool with minimal controls, inspired by the workflow of the Waves R-Vox. Optimized for vocals in reggae, dancehall, and related genres. Signal chain: Compressor > Gate > Saturation > Limiter.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Controls\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab COMP: Compression amount. Threshold descends to -40 dB, makeup gain rises to +20 dB automatically. Ratio 4:1, Attack 2ms, Release 100ms.\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab LIMIT: Peak limiter ceiling (dBFS). Prevents clipping at the output.\sa180\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Features\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Fixed noise gate at -45 dBFS\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Analog-style tape saturation (Neve-inspired soft clip)\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Gain reduction meter with dB readout\sa180\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.1.0" author="citizenkeith" time="2026-03-09T20:54:23Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/b94d23770e58c3783288754ec882e4e3ad750449/dynamics/Zion%20Vocal%20Processor.jsfx</source>
       </version>
     </reapack>
   </category>
