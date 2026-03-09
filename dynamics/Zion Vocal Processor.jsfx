@@ -1,0 +1,356 @@
+desc:Zion Vocal Processor
+tags: compressor limiter gate saturation vocal
+version: 1.1.0
+author: citizenkeith
+provides: zion-vocal-processor.jsfx
+about:
+  # Zion Vocal Processor
+  A fast vocal leveling tool with minimal controls, inspired by the workflow
+  of the Waves R-Vox. Optimized for vocals in reggae, dancehall, and related
+  genres. Signal chain: Compressor > Gate > Saturation > Limiter.
+
+  ## Controls
+  - COMP: Compression amount. Threshold descends to -40 dB, makeup gain
+    rises to +20 dB automatically. Ratio 4:1, Attack 2ms, Release 100ms.
+  - LIMIT: Peak limiter ceiling (dBFS). Prevents clipping at the output.
+
+  ## Features
+  - Fixed noise gate at -45 dBFS
+  - Analog-style tape saturation (Neve-inspired soft clip)
+  - Gain reduction meter with dB readout
+
+changelog:
+  1.1.0 - Renamed to Zion Vocal Processor. Added ReaPack headers and changelog.
+  1.0.0 - Initial release. COMP/LIMIT knobs, gate, saturation, GR meter.
+
+// Hiding REAPER default sliders with hyphen after >
+slider1:50<0,100,0.1>- COMP
+slider2:-3<-18,0,0.1>- LIMIT (dBFS)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+
+PI = $pi;
+GW = 380; GH = 264;
+KNOB_R = 40;
+KNOB_MIN_ANG = PI * 0.75;
+KNOB_MAX_ANG = PI * 2.25;
+
+// ---- DSP State ----
+comp_env    = 0;
+gr_current  = 0;
+gr_display  = 0;
+gate_gain   = 1.0;
+lim_env     = 0;
+
+// ---- Mouse State ----
+drag_knob    = 0;  // 0=none, 1=COMP, 2=LIMIT
+mouse_last_y = 0;
+last_btn     = 0;
+dbl_timer    = 0;
+dbl_knob     = 0;
+
+function update_params() (
+  comp_amt = slider1 * 0.01;
+
+  // Compressor: threshold 0→-40dB, makeup 0→+20dB, ratio 4:1
+  comp_thresh_db  = -40.0 * comp_amt;
+  comp_thresh_lin = pow(10.0, comp_thresh_db * 0.05);
+  comp_makeup_lin = pow(10.0, (comp_amt * 20.0) * 0.05);
+  comp_ratio      = 4.0;
+  comp_atk        = exp(-1.0 / (0.002  * srate));  // 2ms
+  comp_rel        = exp(-1.0 / (0.100  * srate));  // 100ms
+
+  // Limiter ceiling
+  lim_ceil_lin = pow(10.0, slider2 * 0.05);
+  lim_atk      = exp(-1.0 / (0.00005 * srate));   // 0.05ms
+  lim_rel      = exp(-1.0 / (0.060   * srate));   // 60ms
+
+  // Gate (fixed, -45 dBFS)
+  gate_thresh_lin = pow(10.0, -45.0 * 0.05);
+  gate_atk        = exp(-1.0 / (0.005 * srate));  // 5ms
+  gate_rel        = exp(-1.0 / (0.200 * srate));  // 200ms
+
+  // Saturation — subtle tape warmth, scales with COMP
+  sat_amt = comp_amt * 0.12;
+);
+
+update_params();
+
+@slider
+update_params();
+
+@sample
+
+in_l = spl0;
+in_r = spl1;
+
+// ---- COMPRESSOR (linked stereo, feed-forward peak) ----
+det = max(abs(in_l), abs(in_r));
+det > comp_env ? (
+  comp_env += (1.0 - comp_atk) * (det - comp_env);
+) : (
+  comp_env += (1.0 - comp_rel) * (det - comp_env);
+);
+
+env_db = comp_env > 0.000001 ? 20.0 * log10(comp_env) : -120.0;
+env_db > comp_thresh_db ? (
+  over_db      = env_db - comp_thresh_db;
+  gr_inst      = over_db * (1.0 - 1.0 / comp_ratio);
+  comp_g       = pow(10.0, -gr_inst * 0.05);
+  gr_current   = gr_inst;
+) : (
+  comp_g       = 1.0;
+  gr_current   = 0.0;
+);
+
+spl0 = in_l * comp_g * comp_makeup_lin;
+spl1 = in_r * comp_g * comp_makeup_lin;
+
+// ---- GATE ----
+gate_det = max(abs(spl0), abs(spl1));
+gate_det > gate_thresh_lin ? (
+  gate_gain += (1.0 - gate_atk) * (1.0 - gate_gain);
+) : (
+  gate_gain += (1.0 - gate_rel) * (0.0 - gate_gain);
+);
+spl0 *= gate_gain;
+spl1 *= gate_gain;
+
+// ---- SATURATION (Neve-style tape warmth, linear blend) ----
+// x/(1+|x|) soft clip blended with dry — transparent at low levels,
+// smoothly rounds peaks at higher levels.
+sat_amt > 0 ? (
+  spl0 = spl0 * (1.0 - sat_amt) + (spl0 / (1.0 + abs(spl0))) * sat_amt;
+  spl1 = spl1 * (1.0 - sat_amt) + (spl1 / (1.0 + abs(spl1))) * sat_amt;
+);
+
+// ---- LIMITER ----
+lim_det = max(abs(spl0), abs(spl1));
+lim_det > lim_env ? (
+  lim_env += (1.0 - lim_atk) * (lim_det - lim_env);
+) : (
+  lim_env += (1.0 - lim_rel) * (lim_det - lim_env);
+);
+lim_env > lim_ceil_lin ? (
+  lim_g = lim_ceil_lin / lim_env;
+  spl0 *= lim_g;
+  spl1 *= lim_g;
+);
+// Hard safety ceiling
+spl0 = max(-lim_ceil_lin, min(lim_ceil_lin, spl0));
+spl1 = max(-lim_ceil_lin, min(lim_ceil_lin, spl1));
+
+// ---- GR meter smoothing (fast attack, slow release) ----
+gr_current > gr_display ? (
+  gr_display = gr_display * 0.6 + gr_current * 0.4;
+) : (
+  gr_display = gr_display * 0.985 + gr_current * 0.015;
+);
+
+@gfx 380 264
+
+// ---- Background ----
+gfx_r = 0.09; gfx_g = 0.09; gfx_b = 0.09; gfx_a = 1;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+// ---- Title bar ----
+gfx_r = 0.13; gfx_g = 0.13; gfx_b = 0.13; gfx_a = 1;
+gfx_rect(0, 0, gfx_w, 32);
+
+gfx_setfont(1, "Trebuchet MS", 13, 'b');
+gfx_r = 1.0; gfx_g = 0.65; gfx_b = 0.0; gfx_a = 1;
+gfx_x = 14; gfx_y = 9;
+gfx_drawstr("ZION  VOCAL PROCESSOR");
+
+gfx_setfont(1, "Trebuchet MS", 10);
+gfx_r = 0.35; gfx_g = 0.35; gfx_b = 0.35; gfx_a = 1;
+gfx_x = gfx_w - 262; gfx_y = 11;
+gfx_drawstr("Compressor/Limiter optimized for vocals");
+
+// Title divider
+gfx_r = 0.22; gfx_g = 0.22; gfx_b = 0.22; gfx_a = 1;
+gfx_line(0, 32, gfx_w, 32);
+
+// ---- Knob drawing function ----
+// Defined locally (no shared lib dependency)
+function draw_knob(cx, cy, r, val, lo, hi, label, fmt_str)
+  local(norm, ang, px, py, tx, ty)
+(
+  norm = (val - lo) / (hi - lo);
+  ang  = KNOB_MIN_ANG + norm * (KNOB_MAX_ANG - KNOB_MIN_ANG);
+
+  // Track ring (dark grey)
+  gfx_r = 0.2; gfx_g = 0.2; gfx_b = 0.2; gfx_a = 1;
+  gfx_arc(cx, cy, r, KNOB_MIN_ANG, KNOB_MAX_ANG, 1);
+
+  // Value arc (amber)
+  gfx_r = 0.95; gfx_g = 0.60; gfx_b = 0.0; gfx_a = 1;
+  gfx_arc(cx, cy, r, KNOB_MIN_ANG, ang, 1);
+
+  // Body fill
+  gfx_r = 0.17; gfx_g = 0.17; gfx_b = 0.17; gfx_a = 1;
+  gfx_circle(cx, cy, r - 7, 1, 1);
+
+  // Body ring
+  gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.28; gfx_a = 1;
+  gfx_circle(cx, cy, r - 7, 0, 1);
+
+  // Pointer
+  px = cx + cos(ang) * (r - 12);
+  py = cy + sin(ang) * (r - 12);
+  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+  gfx_line(cx, cy, px, py, 1);
+
+  // Center dot
+  gfx_r = 0.55; gfx_g = 0.55; gfx_b = 0.55; gfx_a = 1;
+  gfx_circle(cx, cy, 2, 1, 1);
+
+  // Label
+  gfx_setfont(1, "Trebuchet MS", 12, 'b');
+  gfx_r = 0.82; gfx_g = 0.82; gfx_b = 0.82; gfx_a = 1;
+  gfx_measurestr(label, tx, ty);
+  gfx_x = cx - tx * 0.5; gfx_y = cy + r + 10;
+  gfx_drawstr(label);
+
+  // Value readout (amber)
+  gfx_setfont(1, "Trebuchet MS", 11);
+  gfx_r = 1.0; gfx_g = 0.72; gfx_b = 0.1; gfx_a = 1;
+  sprintf(#vs, fmt_str, val);
+  gfx_measurestr(#vs, tx, ty);
+  gfx_x = cx - tx * 0.5; gfx_y = cy + r + 26;
+  gfx_drawstr(#vs);
+);
+
+// Knob positions
+COMP_CX  = gfx_w * 0.24;
+COMP_CY  = 145;
+LIMIT_CX = gfx_w * 0.76;
+LIMIT_CY = 145;
+
+draw_knob(COMP_CX,  COMP_CY,  KNOB_R, slider1,   0, 100, "COMP",  "%.0f%%");
+draw_knob(LIMIT_CX, LIMIT_CY, KNOB_R, slider2, -18,   0, "LIMIT", "%.1f dBFS");
+
+// ---- GR Meter (vertical, center) ----
+MX = gfx_w / 2 - 11;
+MY = 44;
+MW = 22;
+MH = 168;
+
+// Meter background
+gfx_r = 0.05; gfx_g = 0.05; gfx_b = 0.05; gfx_a = 1;
+gfx_rect(MX, MY, MW, MH);
+
+// Color fill (green → amber → red with GR amount)
+gr_norm     = min(gr_display / 20.0, 1.0);
+meter_fill  = MH * gr_norm;
+gfx_r = 0.12 + gr_norm * 0.88;
+gfx_g = 0.78 - gr_norm * 0.58;
+gfx_b = 0.08;
+gfx_a = 1;
+gfx_rect(MX, MY, MW, meter_fill);
+
+// Peak hold flash (bright white-ish when > 10 dB GR)
+gr_display > 10.0 ? (
+  gfx_r = 1.0; gfx_g = 0.3; gfx_b = 0.1; gfx_a = 0.35;
+  gfx_rect(MX, MY, MW, meter_fill);
+);
+
+// Tick marks & dB scale
+gfx_setfont(1, "Trebuchet MS", 9);
+t_i = 0;
+loop(5,
+  t_db  = t_i * -5;
+  t_y   = MY + (t_i / 4.0) * MH;
+  gfx_r = 0.38; gfx_g = 0.38; gfx_b = 0.38; gfx_a = 1;
+  gfx_line(MX - 3, t_y, MX + MW + 3, t_y);
+  t_i == 0 ? (
+    gfx_x = MX + MW + 5; gfx_y = t_y - 4;
+    gfx_r = 0.35; gfx_g = 0.35; gfx_b = 0.35; gfx_a = 1;
+    gfx_drawstr("0");
+  ) : (
+    gfx_x = MX - 20; gfx_y = t_y - 4;
+    gfx_r = 0.35; gfx_g = 0.35; gfx_b = 0.35; gfx_a = 1;
+    sprintf(#tk, "%d", t_db);
+    gfx_drawstr(#tk);
+  );
+  t_i += 1;
+);
+
+// Meter border
+gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.28; gfx_a = 1;
+gfx_rect(MX - 1,    MY - 1,     MW + 2, 1);
+gfx_rect(MX - 1,    MY + MH,    MW + 2, 1);
+gfx_rect(MX - 1,    MY - 1,     1,      MH + 2);
+gfx_rect(MX + MW,   MY - 1,     1,      MH + 2);
+
+// GR label above meter
+gfx_setfont(1, "Trebuchet MS", 10, 'b');
+gfx_r = 0.45; gfx_g = 0.45; gfx_b = 0.45; gfx_a = 1;
+gfx_measurestr("GR", tx, ty);
+gfx_x = MX + (MW - tx) * 0.5; gfx_y = MY - 18;
+gfx_drawstr("GR");
+
+// GR numeric readout below meter
+gfx_setfont(1, "Trebuchet MS", 10);
+gfx_r = 1.0; gfx_g = 0.72; gfx_b = 0.1; gfx_a = 1;
+sprintf(#grs, "%.1fdB", gr_display);
+gfx_measurestr(#grs, tx, ty);
+gfx_x = MX + (MW - tx) * 0.5; gfx_y = MY + MH + 6;
+gfx_drawstr(#grs);
+
+// ---- Signal chain label ----
+gfx_setfont(1, "Trebuchet MS", 9);
+gfx_r = 0.26; gfx_g = 0.26; gfx_b = 0.26; gfx_a = 1;
+gfx_measurestr("COMP  >>  GATE  >>  SAT  >>  LIMIT", tx, ty);
+gfx_x = (gfx_w - tx) * 0.5; gfx_y = gfx_h - 14;
+gfx_drawstr("COMP  >>  GATE  >>  SAT  >>  LIMIT");
+
+// ---- Mouse Interaction ----
+
+// Hit detection + start drag
+mouse_cap > 0 && last_btn == 0 ? (
+  dx1 = mouse_x - COMP_CX;  dy1 = mouse_y - COMP_CY;
+  dx2 = mouse_x - LIMIT_CX; dy2 = mouse_y - LIMIT_CY;
+  dx1*dx1 + dy1*dy1 < (KNOB_R+10)*(KNOB_R+10) ? drag_knob = 1;
+  dx2*dx2 + dy2*dy2 < (KNOB_R+10)*(KNOB_R+10) ? drag_knob = 2;
+  mouse_last_y = mouse_y;
+);
+
+// Drag
+mouse_cap > 0 && drag_knob > 0 ? (
+  delta = mouse_last_y - mouse_y;
+  mouse_cap & 4 ? delta *= 0.1;  // Ctrl = fine adjust
+  drag_knob == 1 ? slider1 = max(0,   min(100, slider1 + delta * 0.5));
+  drag_knob == 2 ? slider2 = max(-18, min(0,   slider2 + delta * 0.09));
+  mouse_last_y = mouse_y;
+);
+
+// Release
+mouse_cap == 0 ? drag_knob = 0;
+
+// Double-click to reset
+mouse_cap > 0 && last_btn == 0 ? (
+  dbl_timer > 0 ? (
+    dx1 = mouse_x - COMP_CX;  dy1 = mouse_y - COMP_CY;
+    dx2 = mouse_x - LIMIT_CX; dy2 = mouse_y - LIMIT_CY;
+    dx1*dx1 + dy1*dy1 < (KNOB_R+10)*(KNOB_R+10) && dbl_knob == 1 ? slider1 = 50;
+    dx2*dx2 + dy2*dy2 < (KNOB_R+10)*(KNOB_R+10) && dbl_knob == 2 ? slider2 = -3;
+    dbl_timer = 0;
+    dbl_knob  = 0;
+  ) : (
+    dx1 = mouse_x - COMP_CX;  dy1 = mouse_y - COMP_CY;
+    dx2 = mouse_x - LIMIT_CX; dy2 = mouse_y - LIMIT_CY;
+    dx1*dx1 + dy1*dy1 < (KNOB_R+10)*(KNOB_R+10) ? ( dbl_knob = 1; dbl_timer = 30; );
+    dx2*dx2 + dy2*dy2 < (KNOB_R+10)*(KNOB_R+10) ? ( dbl_knob = 2; dbl_timer = 30; );
+  );
+);
+dbl_timer > 0 ? dbl_timer -= 1;
+
+last_btn = mouse_cap;
+
+update_params();
