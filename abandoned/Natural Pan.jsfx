@@ -1,0 +1,351 @@
+desc:Natural Pan - Crossover & Delay Panning
+author: Citizen Keith and Claude AI
+version: 1.0
+provides: natural_pan.jsfx
+changelog: Initial release - Natural panning with crossover and delay modes
+
+slider1:pan_pos=0<-100,100,0.1>Pan Position
+slider2:mode=0<0,1,1{Crossover,Delay}>Pan Mode
+slider3:pan_law=1<0,3,1{Linear,-3dB,-4.5dB,-6dB}>Pan Law
+slider4:crossover_freq=800<200,2000,1>Crossover Freq (Hz)
+slider5:delay_time=0.8<0.1,2.0,0.1>Max Delay (ms)
+slider6:width=100<0,200,1>Stereo Width (%)
+slider7:mono_check=0<0,1,1{Off,On}>Mono Check
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+ext_noinit = 1;
+
+// Delay buffer allocation
+delay_max = 0.003 * srate; // 3ms max
+delay_left = 0;
+delay_right = delay_max + 10;
+
+// Crossover filter coefficients storage
+lp_l_a1 = lp_l_a2 = lp_l_b0 = lp_l_b1 = lp_l_b2 = 0;
+hp_l_a1 = hp_l_a2 = hp_l_b0 = hp_l_b1 = hp_l_b2 = 0;
+lp_r_a1 = lp_r_a2 = lp_r_b0 = lp_r_b1 = lp_r_b2 = 0;
+hp_r_a1 = hp_r_a2 = hp_r_b0 = hp_r_b1 = hp_r_b2 = 0;
+
+// Filter state variables
+lp_l_x1 = lp_l_x2 = lp_l_y1 = lp_l_y2 = 0;
+hp_l_x1 = hp_l_x2 = hp_l_y1 = hp_l_y2 = 0;
+lp_r_x1 = lp_r_x2 = lp_r_y1 = lp_r_y2 = 0;
+hp_r_x1 = hp_r_x2 = hp_r_y1 = hp_r_y2 = 0;
+
+// Smooth parameter changes
+smooth_pan = 0;
+smooth_width = 1;
+
+function calculate_crossover(freq)
+local(w0, alpha, cos_w0)
+(
+  w0 = 2 * $pi * freq / srate;
+  cos_w0 = cos(w0);
+  alpha = sin(w0) / (2 * 0.707); // Q = 0.707 for Butterworth
+  
+  // Lowpass coefficients
+  lp_b0 = (1 - cos_w0) / 2;
+  lp_b1 = 1 - cos_w0;
+  lp_b2 = (1 - cos_w0) / 2;
+  lp_a0 = 1 + alpha;
+  lp_a1 = -2 * cos_w0;
+  lp_a2 = 1 - alpha;
+  
+  // Normalize
+  lp_b0 /= lp_a0;
+  lp_b1 /= lp_a0;
+  lp_b2 /= lp_a0;
+  lp_a1 /= lp_a0;
+  lp_a2 /= lp_a0;
+  
+  // Highpass coefficients
+  hp_b0 = (1 + cos_w0) / 2;
+  hp_b1 = -(1 + cos_w0);
+  hp_b2 = (1 + cos_w0) / 2;
+  hp_a0 = 1 + alpha;
+  hp_a1 = -2 * cos_w0;
+  hp_a2 = 1 - alpha;
+  
+  // Normalize
+  hp_b0 /= hp_a0;
+  hp_b1 /= hp_a0;
+  hp_b2 /= hp_a0;
+  hp_a1 /= hp_a0;
+  hp_a2 /= hp_a0;
+);
+
+function process_biquad(x, b0, b1, b2, a1, a2, x1*, x2*, y1*, y2*)
+local(y)
+(
+  y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+  x2 = x1;
+  x1 = x;
+  y2 = y1;
+  y1 = y;
+  y;
+);
+
+@slider
+// Smooth parameter transitions
+smooth_pan = smooth_pan * 0.95 + (pan_pos / 100) * 0.05;
+smooth_width = smooth_width * 0.95 + (width / 100) * 0.05;
+
+// Calculate crossover filters
+calculate_crossover(crossover_freq);
+
+// Calculate pan law multipliers
+pan_law == 0 ? (
+  // Linear
+  pan_law_mult = 1.0;
+) : pan_law == 1 ? (
+  // -3dB
+  pan_law_mult = sqrt(2) / 2;
+) : pan_law == 2 ? (
+  // -4.5dB
+  pan_law_mult = 0.5946;
+) : (
+  // -6dB
+  pan_law_mult = 0.5;
+);
+
+@sample
+// Smooth parameters
+smooth_pan = smooth_pan * 0.999 + (pan_pos / 100) * 0.001;
+smooth_width = smooth_width * 0.999 + (width / 100) * 0.001;
+
+// Get input
+in_l = spl0;
+in_r = spl1;
+
+// Mono check
+mono_check ? (
+  in_l = in_r = (in_l + in_r) * 0.5;
+);
+
+// Calculate pan gains
+pan_norm = (smooth_pan + 1) * 0.5; // Normalize to 0-1
+pan_angle = pan_norm * $pi * 0.5; // 0 to pi/2
+
+// Apply pan law
+pan_law == 0 ? (
+  // Linear
+  gain_l = 1 - pan_norm;
+  gain_r = pan_norm;
+) : (
+  // Constant power with selected law
+  gain_l = cos(pan_angle) * pan_law_mult;
+  gain_r = sin(pan_angle) * pan_law_mult;
+);
+
+// MODE: Crossover
+mode == 0 ? (
+  // Process lowpass and highpass for each channel
+  low_l = process_biquad(in_l, lp_b0, lp_b1, lp_b2, lp_a1, lp_a2, 
+                         lp_l_x1, lp_l_x2, lp_l_y1, lp_l_y2);
+  high_l = process_biquad(in_l, hp_b0, hp_b1, hp_b2, hp_a1, hp_a2,
+                          hp_l_x1, hp_l_x2, hp_l_y1, hp_l_y2);
+  
+  low_r = process_biquad(in_r, lp_b0, lp_b1, lp_b2, lp_a1, lp_a2,
+                         lp_r_x1, lp_r_x2, lp_r_y1, lp_r_y2);
+  high_r = process_biquad(in_r, hp_b0, hp_b1, hp_b2, hp_a1, hp_a2,
+                          hp_r_x1, hp_r_x2, hp_r_y1, hp_r_y2);
+  
+  // Pan the high frequencies, keep lows centered
+  out_l = low_l + (high_l * gain_l + high_r * (1 - gain_l)) * smooth_width;
+  out_r = low_r + (high_r * gain_r + high_l * (1 - gain_r)) * smooth_width;
+  
+// MODE: Delay (Haas Effect)
+) : (
+  // Calculate delay in samples (IID - Interaural Intensity Difference)
+  max_delay_samples = (delay_time / 1000) * srate;
+  delay_samples = abs(smooth_pan) * max_delay_samples;
+  
+  // Write to delay buffers
+  delay_left[0] = in_l;
+  delay_right[0] = in_r;
+  
+  // Read with delay based on pan direction
+  smooth_pan < 0 ? (
+    // Pan left: delay right channel
+    delayed_r = delay_right[delay_samples | 0];
+    out_l = in_l * gain_l * smooth_width;
+    out_r = delayed_r * gain_r * smooth_width;
+  ) : (
+    // Pan right: delay left channel
+    delayed_l = delay_left[delay_samples | 0];
+    out_l = delayed_l * gain_l * smooth_width;
+    out_r = in_r * gain_r * smooth_width;
+  );
+  
+  // Rotate delay buffers
+  delay_left += 1;
+  delay_right += 1;
+  delay_left >= delay_max ? delay_left = 0;
+  delay_right >= delay_max * 2 + 10 ? delay_right = delay_max + 10;
+);
+
+// Output
+spl0 = out_l;
+spl1 = out_r;
+
+@gfx 600 400
+// Color scheme - vintage inspired
+gfx_clear = 234 + 229*256 + 220*65536; // Cream background
+
+function draw_panel(x, y, w, h, title)
+(
+  // Shadow
+  gfx_set(0, 0, 0, 0.1);
+  gfx_rect(x+3, y+3, w, h);
+  
+  // Panel background
+  gfx_set(0.95, 0.94, 0.92);
+  gfx_rect(x, y, w, h);
+  
+  // Border
+  gfx_set(0.3, 0.3, 0.3);
+  gfx_rect(x, y, w, h, 0);
+  
+  // Title bar
+  gfx_set(0.2, 0.25, 0.3);
+  gfx_rect(x, y, w, 24, 1);
+  
+  // Title text
+  gfx_set(0.9, 0.88, 0.85);
+  gfx_x = x + 10;
+  gfx_y = y + 5;
+  gfx_drawstr(title);
+);
+
+function draw_meter(x, y, w, h, value, label)
+(
+  // Meter background
+  gfx_set(0.15, 0.15, 0.15);
+  gfx_rect(x, y, w, h, 1);
+  
+  // Meter fill
+  fill_w = abs(value) * (w / 2);
+  value < 0 ? (
+    gfx_set(0.4, 0.6, 0.8);
+    gfx_rect(x + w/2 - fill_w, y, fill_w, h, 1);
+  ) : (
+    gfx_set(0.8, 0.5, 0.3);
+    gfx_rect(x + w/2, y, fill_w, h, 1);
+  );
+  
+  // Center line
+  gfx_set(0.7, 0.7, 0.7);
+  gfx_line(x + w/2, y, x + w/2, y + h);
+  
+  // Label
+  gfx_set(0.2, 0.2, 0.2);
+  gfx_x = x + 5;
+  gfx_y = y + h + 5;
+  gfx_drawstr(label);
+);
+
+function draw_vu_meter(x, y, w, h, left_val, right_val)
+(
+  // VU meter background
+  gfx_set(0.1, 0.1, 0.1);
+  gfx_rect(x, y, w, h, 1);
+  
+  // Left channel (top half)
+  bar_h = h / 2 - 2;
+  left_w = min(abs(left_val), 1) * w;
+  gfx_set(0.3, 0.7, 0.4);
+  gfx_rect(x + 2, y + 2, left_w, bar_h, 1);
+  
+  // Right channel (bottom half)
+  right_w = min(abs(right_val), 1) * w;
+  gfx_set(0.3, 0.7, 0.4);
+  gfx_rect(x + 2, y + h/2, right_w, bar_h, 1);
+  
+  // Center lines
+  gfx_set(0.5, 0.5, 0.5);
+  gfx_line(x + w/2, y, x + w/2, y + h);
+  gfx_line(x, y + h/2, x + w, y + h/2);
+  
+  // Labels
+  gfx_set(0.8, 0.8, 0.8);
+  gfx_x = x + 5;
+  gfx_y = y + 5;
+  gfx_drawstr("L");
+  gfx_x = x + 5;
+  gfx_y = y + h/2 + 5;
+  gfx_drawstr("R");
+);
+
+// Main title
+gfx_set(0.2, 0.25, 0.3);
+gfx_setfont(1, "Arial", 24, 'b');
+gfx_x = 20;
+gfx_y = 15;
+gfx_drawstr("NATURAL PAN");
+
+gfx_setfont(1, "Arial", 11);
+gfx_x = 20;
+gfx_y = 45;
+gfx_drawstr("Crossover & Delay Panning System");
+
+// Pan position meter
+draw_panel(20, 80, 560, 100, "PAN POSITION");
+draw_meter(40, 120, 520, 40, smooth_pan, 
+           sprintf(#, "%.1f%%", pan_pos));
+
+// Mode indicator
+draw_panel(20, 200, 270, 80, "MODE");
+gfx_setfont(1, "Arial", 14, 'b');
+gfx_set(0.2, 0.2, 0.2);
+gfx_x = 90;
+gfx_y = 240;
+mode == 0 ? (
+  gfx_drawstr("CROSSOVER");
+  gfx_setfont(1, "Arial", 10);
+  gfx_x = 70;
+  gfx_y = 258;
+  gfx_drawstr(sprintf(#, "%d Hz", crossover_freq|0));
+) : (
+  gfx_drawstr("DELAY (HAAS)");
+  gfx_setfont(1, "Arial", 10);
+  gfx_x = 75;
+  gfx_y = 258;
+  gfx_drawstr(sprintf(#, "%.1f ms", delay_time));
+);
+
+// Pan Law indicator
+draw_panel(310, 200, 270, 80, "PAN LAW");
+gfx_setfont(1, "Arial", 14, 'b');
+gfx_set(0.2, 0.2, 0.2);
+gfx_x = 390;
+gfx_y = 240;
+pan_law == 0 ? gfx_drawstr("LINEAR") :
+pan_law == 1 ? gfx_drawstr("-3dB") :
+pan_law == 2 ? gfx_drawstr("-4.5dB") :
+               gfx_drawstr("-6dB");
+
+// Output meters
+draw_panel(20, 300, 270, 80, "OUTPUT");
+draw_vu_meter(40, 335, 230, 30, out_l, out_r);
+
+// Status
+draw_panel(310, 300, 270, 80, "STATUS");
+gfx_setfont(1, "Arial", 12);
+gfx_set(0.2, 0.2, 0.2);
+gfx_x = 330;
+gfx_y = 330;
+gfx_drawstr(sprintf(#, "Width: %.0f%%", width));
+gfx_x = 330;
+gfx_y = 350;
+mono_check ? (
+  gfx_set(0.8, 0.3, 0.2);
+  gfx_drawstr("MONO CHECK: ON");
+) : (
+  gfx_set(0.3, 0.6, 0.3);
+  gfx_drawstr("Stereo");
+);
