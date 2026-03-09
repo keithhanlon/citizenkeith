@@ -42,8 +42,7 @@ Quick links:
 ## Fidelio Channel Strip
 ![Fidelio Channel Strip Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/fideliov2.png?raw=true)
 
-Fidelio is a full-featured channel strip plugin combining transformer-style harmonic saturation, a Neve-inspired high shelf EQ, a Trident-style high-pass filter, two parametric mid bands, and a dynamics section with compressor, expander, and gate modes. Designed for tracking and mixing, it adds analog character while providing precise surgical control.
-Version 1.2 introduces a redesigned Compress/Expand/Gate selector using tab-style switching.
+Fidelio is a channel strip plugin combining transformer-style harmonic saturation, a Neve-inspired high shelf EQ, a Trident-style high-pass filter, two parametric mid bands, and a dynamics section with compressor, expander, and gate modes. 
 
 # Delays
 
@@ -57,8 +56,7 @@ This plugin is inspired by Frippertronics, Robert Fripp's tape delay technique t
 
 ## Tycho Delay TMA-1
 ![Tycho Delay TMA-1 Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/tychov2.png?raw=true)
-Tycho Delay is a tape delay emulation that goes beyond basic delay functionality to provide vintage tape characteristics with modern optimization and flexibility.
-Version 2 includes a complete GUI overhaul, DSP fixes, a dedicated tempo sync on/off toggle, ping pong stereo, and an optimized memory layout that eliminates periodic clicks when the plugin window is open.
+Tycho Delay is a tape delay emulation that provides vintage tape characteristics. Version 2 includes a complete GUI overhaul, DSP fixes, a dedicated tempo sync on/off toggle, ping pong stereo, and an optimized memory.
 
 # Distortion
 
@@ -70,7 +68,7 @@ Emulation of the Watkins WEM Project V Fuzz pedal, a sophisticated 8-transistor 
 
 ## Analog Warmth Compressor
 ![Analog Warmth Compressor Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/AWCv2.png?raw=true)
-VintageWarmer-inspired compressor with optional 2x oversampling via a 63-tap halfband FIR filter. Soft/medium/hard slider6, parallel slider8, stereo-linked detection. 
+VintageWarmer-inspired compressor with optional 2x oversampling via a 63-tap halfband FIR filter. 
 
 ## FM Radio Compressor
 ![FM Radio Compressor Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/FMradio.png?raw=true)
@@ -84,7 +82,7 @@ SSL/Sonitus-inspired glue compression for mix bus duty.
 
 ## Probabilistic MIDI Note Generator
 ![Note Generator Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/probmidiv2.png?raw=true)
-The Probabilistic MIDI Generator creates evolving, generative MIDI patterns using probability-based algorithms. Perfect for ambient music, experimental compositions, modular-style sequencing, and creative improvisation.
+The Probabilistic MIDI Generator creates evolving, generative MIDI patterns using probability-based algorithms. Perfect for ambient music, experimental compositions, modular-style sequencing, and improvisation.
 Insert it before any MIDI instrument in REAPER, and watch as it generates note sequences that never repeat exactly the same way twice.
 
 ### Quick Start Guide
@@ -113,7 +111,7 @@ Tempo-synced stereo tremolo with morphing wave shapes.
 
 ## Cloudbusting Reverb
 ![Cloudbusting Reverb Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/cloudbustingv2.png?raw=true)
-Cloudbusting Reverb is an algorithmic reverb based on the CloudSeed algorithm, using parallel comb filters and cascaded allpass diffusion to create rich, modulated spaces ranging from tight rooms to vast ambiences.
+Cloudbusting Reverb is an algorithmic reverb inspired by the Cloud Seed Reverb, using parallel comb filters and cascaded allpass diffusion to create rich, modulated spaces ranging from tight rooms to vast ambiences.
 
 ## Cocteau Verb
 ![Cocteau Verb Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/cocteauv2.png?raw=true)
@@ -123,7 +121,7 @@ Stereo widener, BBD chorus, ping pong delay and three reverb choices, for a Robi
 
 ## SynthiAKS Analog Modular Synthesizer
 ![SynthiAKS Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/synthiaksv2.png?raw=true)
-SynthiAKS (rhymes with "maniacs") is an emulation of the classic EMS Synthi AKS modular synthesizer, known for its unique pin matrix patching system and distinctive British analog sound used by artists like Pink Floyd and Brian Eno.
+SynthiAKS (rhymes with "maniacs") is an emulation of the EMS Synthi AKS modular synthesizer, known for its unique pin matrix patching system and distinctive analog sound, used by artists like Pink Floyd and Brian Eno.
 
 
 # Tape Emulation
