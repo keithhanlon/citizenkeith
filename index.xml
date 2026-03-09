@@ -1,5 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="2f5dc09af04dd1cd7b89e7bfc1d589fbda6063da" name="citizenkeith">
+<index version="1" commit="51c836597e16d3a4197e6b56731fef9293e5b567" name="citizenkeith">
+  <category name="abandoned">
+    <reapack name="Clavius Channel Strip (AI Code).jsfx" type="effect" desc="Channel strip with API 215L-style filters, EQ, Drive, and Compression">
+      <version name="1.0" author="citizenkeith and Claude AI - Based on Airwindows open source (MIT) and Universal Audio API 215L" time="2026-03-09T04:11:19Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/51c836597e16d3a4197e6b56731fef9293e5b567/abandoned/Clavius%20Channel%20Strip%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+    <reapack name="Stargate Ambient Reverb (AI Code).jsfx" type="effect" desc="Stargate Ambient Reverb">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Diffuse delay lines that morph from simple delays to complex reverb based on diffusion control This JSFX released under GPLv3 license Optimized for lower memory usage\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.1" author="citizenkeith / Claude AI" time="2026-03-09T04:11:19Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/51c836597e16d3a4197e6b56731fef9293e5b567/abandoned/Stargate%20Ambient%20Reverb%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+    <reapack name="Stargate Ambient Reverb V2 (AI Code).jsfx" type="effect" desc="Stargate Ambient Reverb">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Diffuse delay lines that morph from simple delays to complex reverb based on diffusion control This JSFX released under GPLv3 license v1.2: Fixed safety_reduction inversion, feedback5R cross-channel saturation, input starvation at high regen, brightness filter moved into feedback path, pitch curve improved, shimmer LFO now drifts, removed dead mouse variables v1.3: Fixed brightness lowpass range (was capped at ~820Hz \u8212- now 1kHz\u8211-20kHz usable range), removed double brightness filtering on input+feedback, removed 1.5x wet boost+saturation that was distorting the output, simplified attenuate to stable constant\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.3" author="citizenkeith / Claude AI" time="2026-03-09T04:11:19Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/51c836597e16d3a4197e6b56731fef9293e5b567/abandoned/Stargate%20Ambient%20Reverb%20V2%20(AI%20Code).jsfx</source>
+      </version>
+    </reapack>
+  </category>
   <category name="channel-strip">
     <reapack name="Fidelio Channel Strip.jsfx" type="effect" desc="Fidelio Channel Strip">
       <metadata>
