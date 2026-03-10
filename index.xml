@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="ba29602b7da43277d7b01b7a088c0793bc7c5685" name="citizenkeith">
+<index version="1" commit="15911999e2be495bfce5e47ef65f777d6503c3ff" name="citizenkeith">
   <category name="abandoned">
     <reapack name="Clavius Channel Strip (AI Code).jsfx" type="effect" desc="Channel strip with API 215L-style filters, EQ, Drive, and Compression">
       <version name="1.0" author="citizenkeith and Claude AI - Based on Airwindows open source (MIT) and Universal Audio API 215L" time="2026-03-09T04:11:19Z">
@@ -321,6 +321,9 @@ v1.0
       </metadata>
       <version name="1.1.0" author="citizenkeith" time="2026-03-09T20:54:23Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/b94d23770e58c3783288754ec882e4e3ad750449/dynamics/Zion%20Vocal%20Processor.jsfx</source>
+      </version>
+      <version name="1.2" author="citizenkeith" time="2026-03-10T17:54:41Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/15911999e2be495bfce5e47ef65f777d6503c3ff/dynamics/Zion%20Vocal%20Processor.jsfx</source>
       </version>
     </reapack>
   </category>
