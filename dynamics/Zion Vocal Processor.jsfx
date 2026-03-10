@@ -2,7 +2,7 @@ desc:Zion Vocal Processor
 tags: compressor limiter gate saturation vocal
 version: 1.2
 author: citizenkeith
-provides: zion-vocal-processor.jsfx
+provides: Zion Vocal Processor.jsfx
 about:
   # Zion Vocal Processor
   A fast vocal leveling tool with minimal controls, inspired by the workflow
