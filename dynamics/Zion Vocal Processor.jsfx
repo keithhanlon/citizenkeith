@@ -1,8 +1,8 @@
 desc:Zion Vocal Processor
 tags: compressor limiter gate saturation vocal
-version: 1.1.0
+version: 1.2
 author: citizenkeith
-provides: Zion Vocal Processor.jsfx
+provides: zion-vocal-processor.jsfx
 about:
   # Zion Vocal Processor
   A fast vocal leveling tool with minimal controls, inspired by the workflow
@@ -20,12 +20,34 @@ about:
   - Gain reduction meter with dB readout
 
 changelog:
-  1.1.0 - Renamed to Zion Vocal Processor. Added ReaPack headers and changelog.
-  1.0.0 - Initial release. COMP/LIMIT knobs, gate, saturation, GR meter.
+  1.2 - citizenkeith UI library GUI: section boxes, control_dial knobs, GR meter.
+        Chain label vertically centered between sections and window bottom.
+  1.1 - Renamed to Zion Vocal Processor. Added changelog.
+  1.0 - Initial release. COMP/LIMIT knobs, gate, saturation, GR meter.
 
-// Hiding REAPER default sliders with hyphen after >
+// ReaPack metadata
+// @version 1.2
+// @author citizenkeith
+// @license GPL v3
+// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
+// @about
+//   Fast vocal leveling tool with minimal controls.
+//   Signal chain: Compressor > Gate > Saturation > Limiter.
+//   Optimized for reggae, dancehall, and related genres.
+// @changelog
+//   v1.2
+//     citizenkeith UI library GUI: section boxes, control_dial knobs, GR meter.
+//     Chain label vertically centered between sections and window bottom.
+//   v1.1
+//     Renamed to Zion Vocal Processor. Added changelog.
+//   v1.0
+//     Initial release. COMP/LIMIT knobs, gate, saturation, GR meter.
+
+import citizenkeith-ui-lib.jsfx-inc
+
 slider1:50<0,100,0.1>- COMP
 slider2:-3<-18,0,0.1>- LIMIT (dBFS)
+slider3:0<-20,0,0.1>- GR (dB)
 
 in_pin:left input
 in_pin:right input
@@ -34,30 +56,29 @@ out_pin:right output
 
 @init
 
-PI = $pi;
-GW = 380; GH = 264;
-KNOB_R = 40;
-KNOB_MIN_ANG = PI * 0.75;
-KNOB_MAX_ANG = PI * 2.25;
+// UI library init (required by citizenkeith-ui-lib)
+ui_setup(4096);
 
-// ---- DSP State ----
-comp_env    = 0;
-gr_current  = 0;
-gr_display  = 0;
-gate_gain   = 1.0;
-lim_env     = 0;
+// ============================================================
+// DSP STATE
+// ============================================================
 
-// ---- Mouse State ----
-drag_knob    = 0;  // 0=none, 1=COMP, 2=LIMIT
-mouse_last_y = 0;
-last_btn     = 0;
-dbl_timer    = 0;
-dbl_knob     = 0;
+comp_env   = 0;
+gr_current = 0;
+gr_display = 0;
+gate_gain  = 1.0;
+lim_env    = 0;
+
+// ============================================================
+// PARAMETER UPDATE FUNCTION
+// Called from @slider and from @gfx each frame so DSP stays
+// in sync with knob movement without waiting for @slider.
+// ============================================================
 
 function update_params() (
   comp_amt = slider1 * 0.01;
 
-  // Compressor: threshold 0→-40dB, makeup 0→+20dB, ratio 4:1
+  // Compressor: threshold 0->-40dB, makeup 0->+20dB, ratio 4:1
   comp_thresh_db  = -40.0 * comp_amt;
   comp_thresh_lin = pow(10.0, comp_thresh_db * 0.05);
   comp_makeup_lin = pow(10.0, (comp_amt * 20.0) * 0.05);
@@ -75,11 +96,105 @@ function update_params() (
   gate_atk        = exp(-1.0 / (0.005 * srate));  // 5ms
   gate_rel        = exp(-1.0 / (0.200 * srate));  // 200ms
 
-  // Saturation — subtle tape warmth, scales with COMP
+  // Saturation -- subtle tape warmth, scales with COMP
   sat_amt = comp_amt * 0.12;
 );
 
 update_params();
+
+// ============================================================
+// GFX HELPER FUNCTIONS (must be defined in @init)
+// ============================================================
+
+// Draw a section box with colored header bar + border
+function draw_section_box(bx, by, bw, bh, hr, hg, hb, header_text)
+local(tw, th)
+(
+  // Dark section background
+  gfx_r = 0.13; gfx_g = 0.13; gfx_b = 0.15; gfx_a = 1;
+  gfx_rect(bx, by, bw, bh);
+  // Colored header bar
+  gfx_r = hr; gfx_g = hg; gfx_b = hb; gfx_a = 1;
+  gfx_rect(bx, by, bw, 22);
+  // Header label (dark, bold)
+  gfx_r = 0.08; gfx_g = 0.08; gfx_b = 0.08; gfx_a = 1;
+  gfx_setfont(1, "Arial", 11, 'b');
+  gfx_measurestr(header_text, tw, th);
+  gfx_x = bx + bw/2 - tw/2;
+  gfx_y = by + 11 - th/2;
+  gfx_drawstr(header_text);
+  // Border
+  gfx_r = 0.30; gfx_g = 0.30; gfx_b = 0.34; gfx_a = 1;
+  gfx_rect(bx,      by,      bw, 1);
+  gfx_rect(bx,      by + bh, bw, 1);
+  gfx_rect(bx,      by,      1,  bh);
+  gfx_rect(bx + bw, by,      1,  bh + 1);
+);
+
+// Draw knob label -- set #lbl before calling
+function draw_label_at(lx, ly)
+local(lw, lh)
+(
+  gfx_r = 0.68; gfx_g = 0.68; gfx_b = 0.72; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#lbl, lw, lh);
+  gfx_x = lx - lw/2;
+  gfx_y = ly;
+  gfx_drawstr(#lbl);
+);
+
+// Draw knob value in amber -- set #val before calling
+function draw_value_at(vx, vy)
+local(vw, vh)
+(
+  gfx_r = 1.0; gfx_g = 0.82; gfx_b = 0.44; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#val, vw, vh);
+  gfx_x = vx - vw/2;
+  gfx_y = vy;
+  gfx_drawstr(#val);
+);
+
+// Double-click detection -- call once per frame at top of @gfx
+function check_dbl_click()
+local(mx, my, now, dt)
+(
+  mx  = mouse_x;
+  my  = mouse_y;
+  now = time_precise();
+  (mouse_cap & 1) && !(mouse_cap_last & 1) ? (
+    dt = now - dbl_click_time;
+    (dt < 0.4) && (dt > 0.05) && (abs(mx - dbl_click_x) < 8) && (abs(my - dbl_click_y) < 8) ? (
+      dbl_click_fired = 1;
+      dbl_click_cx    = mx;
+      dbl_click_cy    = my;
+    ) : (
+      dbl_click_fired = 0;
+    );
+    dbl_click_time = now;
+    dbl_click_x    = mx;
+    dbl_click_y    = my;
+  ) : (
+    dbl_click_fired = 0;
+  );
+);
+
+// Returns 1 if a double-click landed inside the given rect
+function dbl_click_in_rect(rx, ry, rw, rh)
+(
+  dbl_click_fired &&
+  (dbl_click_cx >= rx) && (dbl_click_cx < rx + rw) &&
+  (dbl_click_cy >= ry) && (dbl_click_cy < ry + rh)
+);
+
+// Init double-click and mouse state
+dbl_click_time  = 0;
+dbl_click_x     = 0;
+dbl_click_y     = 0;
+dbl_click_fired = 0;
+dbl_click_cx    = 0;
+dbl_click_cy    = 0;
+mouse_cap_last  = 0;
 
 @slider
 update_params();
@@ -99,13 +214,13 @@ det > comp_env ? (
 
 env_db = comp_env > 0.000001 ? 20.0 * log10(comp_env) : -120.0;
 env_db > comp_thresh_db ? (
-  over_db      = env_db - comp_thresh_db;
-  gr_inst      = over_db * (1.0 - 1.0 / comp_ratio);
-  comp_g       = pow(10.0, -gr_inst * 0.05);
-  gr_current   = gr_inst;
+  over_db    = env_db - comp_thresh_db;
+  gr_inst    = over_db * (1.0 - 1.0 / comp_ratio);
+  comp_g     = pow(10.0, -gr_inst * 0.05);
+  gr_current = gr_inst;
 ) : (
-  comp_g       = 1.0;
-  gr_current   = 0.0;
+  comp_g     = 1.0;
+  gr_current = 0.0;
 );
 
 spl0 = in_l * comp_g * comp_makeup_lin;
@@ -122,8 +237,7 @@ spl0 *= gate_gain;
 spl1 *= gate_gain;
 
 // ---- SATURATION (Neve-style tape warmth, linear blend) ----
-// x/(1+|x|) soft clip blended with dry — transparent at low levels,
-// smoothly rounds peaks at higher levels.
+// x/(1+|x|) soft clip blended with dry
 sat_amt > 0 ? (
   spl0 = spl0 * (1.0 - sat_amt) + (spl0 / (1.0 + abs(spl0))) * sat_amt;
   spl1 = spl1 * (1.0 - sat_amt) + (spl1 / (1.0 + abs(spl1))) * sat_amt;
@@ -147,210 +261,172 @@ spl1 = max(-lim_ceil_lin, min(lim_ceil_lin, spl1));
 
 // ---- GR meter smoothing (fast attack, slow release) ----
 gr_current > gr_display ? (
-  gr_display = gr_display * 0.6 + gr_current * 0.4;
+  gr_display = gr_display * 0.6  + gr_current * 0.4;
 ) : (
   gr_display = gr_display * 0.985 + gr_current * 0.015;
 );
 
-@gfx 380 264
+// Update read-only GR slider for default REAPER UI fallback
+slider3 = -gr_display;
+
+// ============================================================
+// GFX -- citizenkeith UI library, Watkins-family style
+// ============================================================
+
+@gfx 440 268
+
+control_start("main", "tron");
+
+ui_screen() == "main" ? (
 
 // ---- Background ----
-gfx_r = 0.09; gfx_g = 0.09; gfx_b = 0.09; gfx_a = 1;
+gfx_r = 0.14; gfx_g = 0.14; gfx_b = 0.16; gfx_a = 1;
 gfx_rect(0, 0, gfx_w, gfx_h);
 
-// ---- Title bar ----
-gfx_r = 0.13; gfx_g = 0.13; gfx_b = 0.13; gfx_a = 1;
-gfx_rect(0, 0, gfx_w, 32);
+check_dbl_click();
+update_params();
 
-gfx_setfont(1, "Trebuchet MS", 13, 'b');
-gfx_r = 1.0; gfx_g = 0.65; gfx_b = 0.0; gfx_a = 1;
-gfx_x = 14; gfx_y = 9;
-gfx_drawstr("ZION  VOCAL PROCESSOR");
+// ============================================================
+// LAYOUT CONSTANTS
+// ============================================================
 
+sec_y   = 38;
+sec_h   = 190;
+knob_cy = sec_y + 22 + 76;  // header(22) + padding = y 136
+
+comp_x  = 8;   comp_w  = 168;
+limit_x = 184; limit_w = 168;
+gr_x    = 360; gr_w    = 72;
+
+comp_cx  = comp_x  + comp_w  / 2;  // 92
+limit_cx = limit_x + limit_w / 2;  // 268
+
+// ============================================================
+// TITLE BAR
+// ============================================================
+
+gfx_r = 0.78; gfx_g = 0.78; gfx_b = 0.82; gfx_a = 1;
+gfx_setfont(1, "Trebuchet MS", 14, 'b');
+gfx_x = 12; gfx_y = 9;
+gfx_drawstr("ZION VOCAL PROCESSOR");
+
+gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
 gfx_setfont(1, "Trebuchet MS", 10);
-gfx_r = 0.35; gfx_g = 0.35; gfx_b = 0.35; gfx_a = 1;
-gfx_x = gfx_w - 262; gfx_y = 11;
+gfx_measurestr("Compressor/Limiter optimized for vocals", sub_tw, sub_th);
+gfx_x = gfx_w - sub_tw - 10; gfx_y = 12;
 gfx_drawstr("Compressor/Limiter optimized for vocals");
 
-// Title divider
-gfx_r = 0.22; gfx_g = 0.22; gfx_b = 0.22; gfx_a = 1;
-gfx_line(0, 32, gfx_w, 32);
+// Divider
+gfx_r = 0.26; gfx_g = 0.26; gfx_b = 0.28; gfx_a = 1;
+gfx_line(0, 34, gfx_w, 34);
 
-// ---- Knob drawing function ----
-// Defined locally (no shared lib dependency)
-function draw_knob(cx, cy, r, val, lo, hi, label, fmt_str)
-  local(norm, ang, px, py, tx, ty)
-(
-  norm = (val - lo) / (hi - lo);
-  ang  = KNOB_MIN_ANG + norm * (KNOB_MAX_ANG - KNOB_MIN_ANG);
+// ============================================================
+// COMP SECTION  (green header)
+// ============================================================
 
-  // Track ring (dark grey)
-  gfx_r = 0.2; gfx_g = 0.2; gfx_b = 0.2; gfx_a = 1;
-  gfx_arc(cx, cy, r, KNOB_MIN_ANG, KNOB_MAX_ANG, 1);
+draw_section_box(comp_x, sec_y, comp_w, sec_h, 0.82, 0.22, 0.14, "COMP");
 
-  // Value arc (amber)
-  gfx_r = 0.95; gfx_g = 0.60; gfx_b = 0.0; gfx_a = 1;
-  gfx_arc(cx, cy, r, KNOB_MIN_ANG, ang, 1);
+ui_push_rect(comp_cx - 22, knob_cy - 22, 44, 44);
+  slider1 = control_dial(slider1, 0, 100, 50);
+  slider_automate(slider1);
+ui_pop();
+dbl_click_in_rect(comp_cx - 22, knob_cy - 22, 44, 44) ? (
+  slider1 = 50; slider_automate(slider1);
+);
+strcpy(#lbl, "COMP");
+draw_label_at(comp_cx, knob_cy - 38);
+sprintf(#val, "%.0f%%", slider1);
+draw_value_at(comp_cx, knob_cy + 26);
 
-  // Body fill
-  gfx_r = 0.17; gfx_g = 0.17; gfx_b = 0.17; gfx_a = 1;
-  gfx_circle(cx, cy, r - 7, 1, 1);
+// Threshold hint (small, dim)
+gfx_setfont(1, "Arial", 9);
+gfx_r = 0.45; gfx_g = 0.45; gfx_b = 0.48; gfx_a = 1;
+sprintf(#thr, "THR %.0f dB", comp_thresh_db);
+gfx_measurestr(#thr, thr_tw, thr_th);
+gfx_x = comp_cx - thr_tw/2; gfx_y = knob_cy + 40;
+gfx_drawstr(#thr);
 
-  // Body ring
-  gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.28; gfx_a = 1;
-  gfx_circle(cx, cy, r - 7, 0, 1);
+// ============================================================
+// LIMIT SECTION  (amber header)
+// ============================================================
 
-  // Pointer
-  px = cx + cos(ang) * (r - 12);
-  py = cy + sin(ang) * (r - 12);
-  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
-  gfx_line(cx, cy, px, py, 1);
+draw_section_box(limit_x, sec_y, limit_w, sec_h, 0.22, 0.72, 0.32, "LIMIT");
 
-  // Center dot
-  gfx_r = 0.55; gfx_g = 0.55; gfx_b = 0.55; gfx_a = 1;
-  gfx_circle(cx, cy, 2, 1, 1);
+ui_push_rect(limit_cx - 22, knob_cy - 22, 44, 44);
+  slider2 = control_dial(slider2, -18, 0, -3);
+  slider_automate(slider2);
+ui_pop();
+dbl_click_in_rect(limit_cx - 22, knob_cy - 22, 44, 44) ? (
+  slider2 = -3; slider_automate(slider2);
+);
+strcpy(#lbl, "LIMIT");
+draw_label_at(limit_cx, knob_cy - 38);
+sprintf(#val, "%.1f dBFS", slider2);
+draw_value_at(limit_cx, knob_cy + 26);
 
-  // Label
-  gfx_setfont(1, "Trebuchet MS", 12, 'b');
-  gfx_r = 0.82; gfx_g = 0.82; gfx_b = 0.82; gfx_a = 1;
-  gfx_measurestr(label, tx, ty);
-  gfx_x = cx - tx * 0.5; gfx_y = cy + r + 10;
-  gfx_drawstr(label);
+// ============================================================
+// GR METER SECTION  (dim gray header)
+// ============================================================
 
-  // Value readout (amber)
-  gfx_setfont(1, "Trebuchet MS", 11);
-  gfx_r = 1.0; gfx_g = 0.72; gfx_b = 0.1; gfx_a = 1;
-  sprintf(#vs, fmt_str, val);
-  gfx_measurestr(#vs, tx, ty);
-  gfx_x = cx - tx * 0.5; gfx_y = cy + r + 26;
-  gfx_drawstr(#vs);
+draw_section_box(gr_x, sec_y, gr_w, sec_h, 0.82, 0.22, 0.14, "GR");
+
+// Meter bar geometry
+m_x = gr_x + 22;
+m_y = sec_y + 34;
+m_w = 28;
+m_h = sec_h - 56;
+
+// Background track
+gfx_r = 0.06; gfx_g = 0.06; gfx_b = 0.07; gfx_a = 1;
+gfx_rect(m_x, m_y, m_w, m_h);
+
+// Fill -- green to amber to red with GR amount
+gr_norm = min(gr_display / 20.0, 1.0);
+gr_norm > 0 ? (
+  fill_h = m_h * gr_norm;
+  gfx_r = 0.12 + gr_norm * 0.88;
+  gfx_g = 0.76 - gr_norm * 0.56;
+  gfx_b = 0.08; gfx_a = 1;
+  gfx_rect(m_x, m_y, m_w, fill_h);
 );
 
-// Knob positions
-COMP_CX  = gfx_w * 0.24;
-COMP_CY  = 145;
-LIMIT_CX = gfx_w * 0.76;
-LIMIT_CY = 145;
-
-draw_knob(COMP_CX,  COMP_CY,  KNOB_R, slider1,   0, 100, "COMP",  "%.0f%%");
-draw_knob(LIMIT_CX, LIMIT_CY, KNOB_R, slider2, -18,   0, "LIMIT", "%.1f dBFS");
-
-// ---- GR Meter (vertical, center) ----
-MX = gfx_w / 2 - 11;
-MY = 44;
-MW = 22;
-MH = 168;
-
-// Meter background
-gfx_r = 0.05; gfx_g = 0.05; gfx_b = 0.05; gfx_a = 1;
-gfx_rect(MX, MY, MW, MH);
-
-// Color fill (green → amber → red with GR amount)
-gr_norm     = min(gr_display / 20.0, 1.0);
-meter_fill  = MH * gr_norm;
-gfx_r = 0.12 + gr_norm * 0.88;
-gfx_g = 0.78 - gr_norm * 0.58;
-gfx_b = 0.08;
-gfx_a = 1;
-gfx_rect(MX, MY, MW, meter_fill);
-
-// Peak hold flash (bright white-ish when > 10 dB GR)
-gr_display > 10.0 ? (
-  gfx_r = 1.0; gfx_g = 0.3; gfx_b = 0.1; gfx_a = 0.35;
-  gfx_rect(MX, MY, MW, meter_fill);
-);
-
-// Tick marks & dB scale
-gfx_setfont(1, "Trebuchet MS", 9);
+// Tick marks at 0, -5, -10, -15, -20 dB
 t_i = 0;
 loop(5,
-  t_db  = t_i * -5;
-  t_y   = MY + (t_i / 4.0) * MH;
-  gfx_r = 0.38; gfx_g = 0.38; gfx_b = 0.38; gfx_a = 1;
-  gfx_line(MX - 3, t_y, MX + MW + 3, t_y);
-  t_i == 0 ? (
-    gfx_x = MX + MW + 5; gfx_y = t_y - 4;
-    gfx_r = 0.35; gfx_g = 0.35; gfx_b = 0.35; gfx_a = 1;
-    gfx_drawstr("0");
-  ) : (
-    gfx_x = MX - 20; gfx_y = t_y - 4;
-    gfx_r = 0.35; gfx_g = 0.35; gfx_b = 0.35; gfx_a = 1;
-    sprintf(#tk, "%d", t_db);
-    gfx_drawstr(#tk);
-  );
+  t_y = m_y + (t_i / 4.0) * m_h;
+  gfx_r = 0.32; gfx_g = 0.32; gfx_b = 0.35; gfx_a = 1;
+  gfx_line(m_x - 3, t_y, m_x + m_w + 2, t_y);
   t_i += 1;
 );
 
 // Meter border
-gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.28; gfx_a = 1;
-gfx_rect(MX - 1,    MY - 1,     MW + 2, 1);
-gfx_rect(MX - 1,    MY + MH,    MW + 2, 1);
-gfx_rect(MX - 1,    MY - 1,     1,      MH + 2);
-gfx_rect(MX + MW,   MY - 1,     1,      MH + 2);
+gfx_r = 0.28; gfx_g = 0.28; gfx_b = 0.32; gfx_a = 1;
+gfx_rect(m_x - 1,       m_y - 1,      m_w + 2, 1);
+gfx_rect(m_x - 1,       m_y + m_h,    m_w + 2, 1);
+gfx_rect(m_x - 1,       m_y - 1,      1, m_h + 2);
+gfx_rect(m_x + m_w,     m_y - 1,      1, m_h + 2);
 
-// GR label above meter
-gfx_setfont(1, "Trebuchet MS", 10, 'b');
-gfx_r = 0.45; gfx_g = 0.45; gfx_b = 0.45; gfx_a = 1;
-gfx_measurestr("GR", tx, ty);
-gfx_x = MX + (MW - tx) * 0.5; gfx_y = MY - 18;
-gfx_drawstr("GR");
+// GR numeric readout in amber
+gfx_r = 1.0; gfx_g = 0.82; gfx_b = 0.44; gfx_a = 1;
+gfx_setfont(1, "Arial", 9);
+sprintf(#grv, "%.1fdB", gr_display);
+gfx_measurestr(#grv, grv_tw, grv_th);
+gfx_x = gr_x + gr_w/2 - grv_tw/2;
+gfx_y = m_y + m_h + 6;
+gfx_drawstr(#grv);
 
-// GR numeric readout below meter
-gfx_setfont(1, "Trebuchet MS", 10);
-gfx_r = 1.0; gfx_g = 0.72; gfx_b = 0.1; gfx_a = 1;
-sprintf(#grs, "%.1fdB", gr_display);
-gfx_measurestr(#grs, tx, ty);
-gfx_x = MX + (MW - tx) * 0.5; gfx_y = MY + MH + 6;
-gfx_drawstr(#grs);
+// ============================================================
+// BOTTOM CHAIN LABEL
+// ============================================================
 
-// ---- Signal chain label ----
+gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
 gfx_setfont(1, "Trebuchet MS", 9);
-gfx_r = 0.26; gfx_g = 0.26; gfx_b = 0.26; gfx_a = 1;
-gfx_measurestr("COMP  >>  GATE  >>  SAT  >>  LIMIT", tx, ty);
-gfx_x = (gfx_w - tx) * 0.5; gfx_y = gfx_h - 14;
+gfx_measurestr("COMP  >>  GATE  >>  SAT  >>  LIMIT", chain_tw, chain_th);
+gfx_x = (gfx_w - chain_tw) / 2;
+gfx_y = (sec_y + sec_h) + ((gfx_h - (sec_y + sec_h)) - chain_th) / 2;
 gfx_drawstr("COMP  >>  GATE  >>  SAT  >>  LIMIT");
 
-// ---- Mouse Interaction ----
+// ---- End frame ----
+mouse_cap_last = mouse_cap;
 
-// Hit detection + start drag
-mouse_cap > 0 && last_btn == 0 ? (
-  dx1 = mouse_x - COMP_CX;  dy1 = mouse_y - COMP_CY;
-  dx2 = mouse_x - LIMIT_CX; dy2 = mouse_y - LIMIT_CY;
-  dx1*dx1 + dy1*dy1 < (KNOB_R+10)*(KNOB_R+10) ? drag_knob = 1;
-  dx2*dx2 + dy2*dy2 < (KNOB_R+10)*(KNOB_R+10) ? drag_knob = 2;
-  mouse_last_y = mouse_y;
-);
-
-// Drag
-mouse_cap > 0 && drag_knob > 0 ? (
-  delta = mouse_last_y - mouse_y;
-  mouse_cap & 4 ? delta *= 0.1;  // Ctrl = fine adjust
-  drag_knob == 1 ? slider1 = max(0,   min(100, slider1 + delta * 0.5));
-  drag_knob == 2 ? slider2 = max(-18, min(0,   slider2 + delta * 0.09));
-  mouse_last_y = mouse_y;
-);
-
-// Release
-mouse_cap == 0 ? drag_knob = 0;
-
-// Double-click to reset
-mouse_cap > 0 && last_btn == 0 ? (
-  dbl_timer > 0 ? (
-    dx1 = mouse_x - COMP_CX;  dy1 = mouse_y - COMP_CY;
-    dx2 = mouse_x - LIMIT_CX; dy2 = mouse_y - LIMIT_CY;
-    dx1*dx1 + dy1*dy1 < (KNOB_R+10)*(KNOB_R+10) && dbl_knob == 1 ? slider1 = 50;
-    dx2*dx2 + dy2*dy2 < (KNOB_R+10)*(KNOB_R+10) && dbl_knob == 2 ? slider2 = -3;
-    dbl_timer = 0;
-    dbl_knob  = 0;
-  ) : (
-    dx1 = mouse_x - COMP_CX;  dy1 = mouse_y - COMP_CY;
-    dx2 = mouse_x - LIMIT_CX; dy2 = mouse_y - LIMIT_CY;
-    dx1*dx1 + dy1*dy1 < (KNOB_R+10)*(KNOB_R+10) ? ( dbl_knob = 1; dbl_timer = 30; );
-    dx2*dx2 + dy2*dy2 < (KNOB_R+10)*(KNOB_R+10) ? ( dbl_knob = 2; dbl_timer = 30; );
-  );
-);
-dbl_timer > 0 ? dbl_timer -= 1;
-
-last_btn = mouse_cap;
-
-update_params();
+) : ui_system();
