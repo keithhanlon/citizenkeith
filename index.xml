@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="b94d23770e58c3783288754ec882e4e3ad750449" name="citizenkeith">
+<index version="1" commit="ba29602b7da43277d7b01b7a088c0793bc7c5685" name="citizenkeith">
   <category name="abandoned">
     <reapack name="Clavius Channel Strip (AI Code).jsfx" type="effect" desc="Channel strip with API 215L-style filters, EQ, Drive, and Compression">
       <version name="1.0" author="citizenkeith and Claude AI - Based on Airwindows open source (MIT) and Universal Audio API 215L" time="2026-03-09T04:11:19Z">
@@ -640,6 +640,62 @@ v2.0
   Conditional dimming of Noise and Head Bump knobs when presets active
   5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.7" author="citizenkeith" time="2026-03-10T16:42:15Z">
+        <changelog><![CDATA[v2.7
+  Precomputed LOG10_OVER_20 and LOG10_OVER_40 constants at @init — eliminates
+  repeated log() calls from update_audio_vars(), update_scalars(), and both
+  filter coefficient functions
+  Precomputed sat_amount and sat_norm in update_audio_vars()/update_scalars() —
+  eliminates per-sample sin() call; @sample now uses precomputed values only
+  Declared head_bump_db = 0 at @init — was previously an implicit global set as
+  a side-effect of calculate_head_bump_filter(), making @sample bypass check fragile
+  Removed LFM coefficient block from update_scalars() — coefficients recalculated
+  only in update_audio_vars() via @slider, consistent with the biquad/scalar split
+  Removed lfm_width, lfm_stereoLP, lfm_outL, lfm_outR dead code — lfm_width was
+  always 0.0; LFM output simplified to spl = lfm_monoLP + lfm_high
+  Stereo noise: noise_l and noise_r now generated independently per channel —
+  was mono (same value both channels), always appeared panned centre
+  update_scalars() now skips exp() calls when no relevant slider has changed —
+  cached slider values compared each frame; recompute only on actual change
+  Reduced wow/flutter delay buffer from 1024 to 512 samples — max read offset
+  is ~256 samples; 1024 was 4x larger than necessary
+v2.6
+  Fixed random output spikes on all presets: split update_audio_vars() into
+  update_audio_vars() (filter coefficients, @slider only) and update_scalars()
+  (scalars only, @gfx) — eliminates race condition between GUI thread
+  recalculating biquad coefficients and audio thread mid-filter
+  Fixed left-channel spikes when enabling Wow & Flutter: wow/flutter
+  delay buffers were placed at address 0, overlapping the UI library
+  memory region; buffers now allocated after freemem from ui_setup()
+v2.5
+  Title changed to "TAPEEMU" with "Tape Machine Emulation" subtitle
+  Tape Machine section height increased: 10px padding above and below buttons
+v2.4
+  Added spacing between Tape Machine and lower sections
+v2.3
+  Standardized section header colors: I/O=green, Stereo=blue
+  Fixed Noise and Head Bump not updating DSP when dragged (missing update_audio_vars() in @gfx)
+v2.2
+  Fixed Noise and Head Bump not updating DSP when dragged (missing update_audio_vars() in @gfx)
+  Fixed Noise slider: now scales noise for all tape machine presets (was Basic Tape only)
+  Fixed Head Bump slider: now trims preset head bump value (was Basic Tape only)
+v2.1
+  Section boxes (I/O, Noise & Head Bump, Character) matching citizenkeith plugin family
+  Knob order: Stereo Width and Wow & Flutter swapped in Character section
+  Background and title styling updated to match Watkins/CocteauVerb
+  Removed GUI meters — using REAPER default meter
+  Added double-click to reset knobs, amber value readouts
+v2.0
+  Complete GUI overhaul with machine selector buttons
+  Added double-click to reset knobs to default values
+  Fixed head bump implementation (low shelf @ 90Hz)
+  Fixed Ampex ATR102 gain staging (was 1.7dB hot)
+  Added machine-specific high-frequency rolloff
+  Unity gain by default (0% input, 0dB output)
+  Conditional dimming of Noise and Head Bump knobs when presets active
+  5 tape machine models: Studer A800, Ampex ATR102, Sony APR5000, Otari MTR90, Basic Tape]]></changelog>
+        <source>https://github.com/keithhanlon/citizenkeith/raw/ba29602b7da43277d7b01b7a088c0793bc7c5685/tape/TapeEmu%20-%20Professional%20Tape%20Machine%20Emulation%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
