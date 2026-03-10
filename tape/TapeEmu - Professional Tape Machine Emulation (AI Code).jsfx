@@ -1,13 +1,39 @@
 desc: TapeEmu - Professional Tape Machine Emulation
-version: 2.5
+version: 2.7
 author: citizenkeith - Claude AI
 about: Tape emulation that includes tape machine choices 
 // Linux users can download the Trebuchet MS font at https://font.download/font/trebuchet-ms-2
-// @version 2.5
+// @version 2.7
 // @author citizenkeith
 // @license GPL v3
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
 // @changelog
+//   v2.7
+//     Precomputed LOG10_OVER_20 and LOG10_OVER_40 constants at @init — eliminates
+//     repeated log() calls from update_audio_vars(), update_scalars(), and both
+//     filter coefficient functions
+//     Precomputed sat_amount and sat_norm in update_audio_vars()/update_scalars() —
+//     eliminates per-sample sin() call; @sample now uses precomputed values only
+//     Declared head_bump_db = 0 at @init — was previously an implicit global set as
+//     a side-effect of calculate_head_bump_filter(), making @sample bypass check fragile
+//     Removed LFM coefficient block from update_scalars() — coefficients recalculated
+//     only in update_audio_vars() via @slider, consistent with the biquad/scalar split
+//     Removed lfm_width, lfm_stereoLP, lfm_outL, lfm_outR dead code — lfm_width was
+//     always 0.0; LFM output simplified to spl = lfm_monoLP + lfm_high
+//     Stereo noise: noise_l and noise_r now generated independently per channel —
+//     was mono (same value both channels), always appeared panned centre
+//     update_scalars() now skips exp() calls when no relevant slider has changed —
+//     cached slider values compared each frame; recompute only on actual change
+//     Reduced wow/flutter delay buffer from 1024 to 512 samples — max read offset
+//     is ~256 samples; 1024 was 4x larger than necessary
+//   v2.6
+//     Fixed random output spikes on all presets: split update_audio_vars() into
+//     update_audio_vars() (filter coefficients, @slider only) and update_scalars()
+//     (scalars only, @gfx) — eliminates race condition between GUI thread
+//     recalculating biquad coefficients and audio thread mid-filter
+//     Fixed left-channel spikes when enabling Wow & Flutter: wow/flutter
+//     delay buffers were placed at address 0, overlapping the UI library
+//     memory region; buffers now allocated after freemem from ui_setup()
 //   v2.5
 //     Title changed to "TAPEEMU" with "Tape Machine Emulation" subtitle
 //     Tape Machine section height increased: 10px padding above and below buttons
@@ -56,6 +82,13 @@ out_pin:left output
 out_pin:right output
 
 @init
+// Precomputed log constants
+LOG10_OVER_20 = log(10) / 20;
+LOG10_OVER_40 = log(10) / 40;
+
+// Cached slider values for update_scalars() dirty check
+sc_s1 = sc_s2 = sc_s3 = sc_s5 = sc_s6 = sc_s7 = sc_s8 = -99999;
+
 // Tape age and wow/flutter variables
 age_dropout_counter = 0;
 dropout_counter = 0;
@@ -64,12 +97,15 @@ age_noise_seed = 12345;
 // Wow and flutter variables
 wow_phase = 0;
 flutter_phase = 0;
-wf_buffer_l = 0;
-wf_buffer_r = 1024;
 wf_write_pos = 0;
-wf_buffer_size = 1024;
+wf_buffer_size = 512;
+
+// Zero wow/flutter delay buffers to prevent garbage reads on first enable
+memset(wf_buffer_l, 0, wf_buffer_size);
+memset(wf_buffer_r, 0, wf_buffer_size);
 
 // Head bump filter variables
+head_bump_db = 0;
 hb_b0 = hb_b1 = hb_b2 = 0;
 hb_a1 = hb_a2 = 0;
 hb_x1_l = hb_x2_l = hb_y1_l = hb_y2_l = 0;
@@ -92,6 +128,11 @@ preset_hf_rolloff_amount = 0;
 // UI setup
 ext_noinit = 1;
 freemem = ui_setup(0);
+
+// Wow and flutter delay buffers — placed after UI library memory to avoid corruption
+wf_buffer_l = freemem;
+wf_buffer_r = freemem + 512;
+freemem += 1024;
 
 // ============================================================
 // GFX HELPER FUNCTIONS
@@ -201,7 +242,7 @@ function calculate_head_bump_filter() local(A, w0, cosw0, sinw0, alpha, beta, a0
   head_bump_db = (slider7 == 4 ? slider4 : preset_head_bump);
   
   head_bump_db > 0 ? (
-    A = exp(head_bump_db * log(10) / 40);
+    A = exp(head_bump_db * LOG10_OVER_40);
     w0 = 2 * $pi * 90 / srate;
     cosw0 = cos(w0);
     sinw0 = sin(w0);
@@ -231,7 +272,7 @@ function calculate_head_bump_filter() local(A, w0, cosw0, sinw0, alpha, beta, a0
 
 function calculate_hf_rolloff_filter() local(A, w0, cosw0, sinw0, alpha, beta, a0) (
   preset_hf_rolloff_amount < 0 ? (
-    A = exp(preset_hf_rolloff_amount * log(10) / 40);
+    A = exp(preset_hf_rolloff_amount * LOG10_OVER_40);
     w0 = 2 * $pi * preset_hf_rolloff_freq / srate;
     cosw0 = cos(w0);
     sinw0 = sin(w0);
@@ -261,13 +302,16 @@ function calculate_hf_rolloff_filter() local(A, w0, cosw0, sinw0, alpha, beta, a
 
 function update_audio_vars() (
   load_tape_preset(slider7);
-  output_gain = exp(slider2 * log(10) / 20) * preset_output_compensation;
+  output_gain = exp(slider2 * LOG10_OVER_20) * preset_output_compensation;
   age_factor = 1 + (slider5 / 100) * 3;
   noise_db   = (slider7 == 4) ? (-105 + slider3 * 0.45) : preset_noise_floor;
-  noise_base = (slider7 == 4 && slider3 == 0) ? 0 : exp(noise_db * log(10) / 20);
+  noise_base = (slider7 == 4 && slider3 == 0) ? 0 : exp(noise_db * LOG10_OVER_20);
   noise_gain = noise_base * age_factor;
   width_factor = slider6 / 100;
   wow_flutter_amount = slider8 / 100;
+  effective_saturation = slider1 * preset_sat_character;
+  sat_amount = (effective_saturation / 200) * $pi;
+  sat_norm   = (effective_saturation > 0) ? sin(sat_amount) : 1;
   calculate_head_bump_filter();
   calculate_hf_rolloff_filter();
   // LF Mono crossover (1-pole, 0-100% → 0-300 Hz)
@@ -280,12 +324,32 @@ function update_audio_vars() (
   ) : (
     lfm_a0 = 0; lfm_b1 = 0;
   );
-  lfm_width = 0.0;
+);
+
+// Scalar-only update — safe to call from @gfx every frame (no filter coefficient recalculation)
+// LFM coefficients intentionally excluded — updated via update_audio_vars() on @slider only
+function update_scalars() (
+  (slider1 != sc_s1 || slider2 != sc_s2 || slider3 != sc_s3 ||
+   slider5 != sc_s5 || slider6 != sc_s6 || slider7 != sc_s7 || slider8 != sc_s8) ? (
+    load_tape_preset(slider7);
+    output_gain = exp(slider2 * LOG10_OVER_20) * preset_output_compensation;
+    age_factor = 1 + (slider5 / 100) * 3;
+    noise_db   = (slider7 == 4) ? (-105 + slider3 * 0.45) : preset_noise_floor;
+    noise_base = (slider7 == 4 && slider3 == 0) ? 0 : exp(noise_db * LOG10_OVER_20);
+    noise_gain = noise_base * age_factor;
+    width_factor = slider6 / 100;
+    wow_flutter_amount = slider8 / 100;
+    effective_saturation = slider1 * preset_sat_character;
+    sat_amount = (effective_saturation / 200) * $pi;
+    sat_norm   = (effective_saturation > 0) ? sin(sat_amount) : 1;
+    sc_s1 = slider1; sc_s2 = slider2; sc_s3 = slider3;
+    sc_s5 = slider5; sc_s6 = slider6; sc_s7 = slider7; sc_s8 = slider8;
+  );
 );
 
 // LF Mono filter state
 lfm_tmpl = lfm_tmpr = 0;
-lfm_a0 = lfm_b1 = lfm_width = 0;
+lfm_a0 = lfm_b1 = 0;
 
 update_audio_vars();
 
@@ -293,12 +357,7 @@ update_audio_vars();
 update_audio_vars();
 
 @sample
-effective_saturation = slider1 * preset_sat_character;
-
 effective_saturation > 0 ? (
-  sat_amount = (effective_saturation / 200) * $pi;
-  sat_norm = sin((effective_saturation / 200) * $pi);
-  
   slider7 == 0 ? (
     spl0 = min(max(sin(max(min(spl0, 1), -1) * sat_amount) / sat_norm + spl0 * spl0 * 0.1, -1), 1);
     spl1 = min(max(sin(max(min(spl1, 1), -1) * sat_amount) / sat_norm + spl1 * spl1 * 0.1, -1), 1);
@@ -317,14 +376,18 @@ effective_saturation > 0 ? (
   );
 );
 
-noise = rand(2) - 1;
+noise_l = rand(2) - 1;
+noise_r = rand(2) - 1;
 
 slider7 == 0 ? (
-  noise = noise * 0.8 + sin(noise * $pi) * 0.2;
+  noise_l = noise_l * 0.8 + sin(noise_l * $pi) * 0.2;
+  noise_r = noise_r * 0.8 + sin(noise_r * $pi) * 0.2;
 ) : slider7 == 1 ? (
-  noise = noise + noise * noise * noise * 0.3;
+  noise_l = noise_l + noise_l * noise_l * noise_l * 0.3;
+  noise_r = noise_r + noise_r * noise_r * noise_r * 0.3;
 ) : slider7 == 3 ? (
-  noise = noise * 0.9 + sin(noise * $pi * 0.5) * 0.1;
+  noise_l = noise_l * 0.9 + sin(noise_l * $pi * 0.5) * 0.1;
+  noise_r = noise_r * 0.9 + sin(noise_r * $pi * 0.5) * 0.1;
 );
 
 slider5 > 0 ? (
@@ -347,7 +410,8 @@ slider5 > 0 ? (
   
   age_mod = sin(age_noise_seed * 0.01) * slider5 / 100 * 0.001;
   age_noise_seed += 1;
-  noise += age_mod;
+  noise_l += age_mod;
+  noise_r += age_mod;
 );
 
 wow_flutter_amount > 0 ? (
@@ -379,8 +443,8 @@ wow_flutter_amount > 0 ? (
   wf_write_pos = (wf_write_pos + 1) % wf_buffer_size;
 );
 
-spl0 = spl0 * output_gain + noise * noise_gain;
-spl1 = spl1 * output_gain + noise * noise_gain;
+spl0 = spl0 * output_gain + noise_l * noise_gain;
+spl1 = spl1 * output_gain + noise_r * noise_gain;
 
 head_bump_db > 0 ? (
   hb_out_l = hb_b0 * spl0 + hb_b1 * hb_x1_l + hb_b2 * hb_x2_l - hb_a1 * hb_y1_l - hb_a2 * hb_y2_l;
@@ -436,12 +500,9 @@ lfm_lowL  = (lfm_tmpl = lfm_a0*spl0 - lfm_b1*lfm_tmpl);
 lfm_lowR  = (lfm_tmpr = lfm_a0*spl1 - lfm_b1*lfm_tmpr);
 lfm_highL = spl0 - lfm_lowL;
 lfm_highR = spl1 - lfm_lowR;
-lfm_monoLP   = (lfm_lowL + lfm_lowR) * 0.5;
-lfm_stereoLP = (lfm_lowL - lfm_lowR);
-lfm_outL = lfm_monoLP + lfm_stereoLP * lfm_width * 0.5;
-lfm_outR = lfm_monoLP - lfm_stereoLP * lfm_width * 0.5;
-spl0 = lfm_outL + lfm_highL;
-spl1 = lfm_outR + lfm_highR;
+lfm_monoLP = (lfm_lowL + lfm_lowR) * 0.5;
+spl0 = lfm_monoLP + lfm_highL;
+spl1 = lfm_monoLP + lfm_highR;
 
 @gfx 650 262
 
@@ -653,6 +714,6 @@ slider9 > 0 ? sprintf(#val, "%d Hz", slider9*3) : sprintf(#val, "OFF");
 gfx_measurestr(#val, tw, th); gfx_x=st_cx2-tw/2; gfx_y=knob_cy+25; gfx_drawstr(#val);
 
 // Ensure DSP params update every frame when knobs are dragged
-update_audio_vars();
+update_scalars();
 
 ) : ui_system();
