@@ -31,6 +31,7 @@ Quick links:
 - [Analog Warmth Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#analog-warmth-compressor)
 - [FM Radio Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#fm-radio-compressor)
 - [Transparent Bus Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#transparent-bus-compressor)
+- [Zion Vocal Processor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#zion-vocal-processor)
 - [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
 - [Tempo Tremolo](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tempo-tremolo)
 - [SynthiAKS Analog Modular Synthesizer](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#synthiaks-analog-modular-synthesizer)
@@ -77,6 +78,10 @@ Upward compressor inspired by analog FM radio processing. Boosts quiet passages 
 ## Transparent Bus Compressor
 ![Transparent Bus Compressor Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TBCv2.png?raw=true)
 SSL/Sonitus-inspired glue compression for mix bus duty.
+
+## Zion Vocal Processor
+![Zion Vocal Processor Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/zion.png?raw=true)
+A fast vocal leveling tool with minimal controls, inspired by the workflow of the Waves R-Vox. 
 
 # MIDI
 
