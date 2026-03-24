@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="15911999e2be495bfce5e47ef65f777d6503c3ff" name="citizenkeith">
+<index version="1" commit="7e6e870d7634dee033325fb5112d43497ca8a62b" name="citizenkeith">
   <category name="abandoned">
     <reapack name="Clavius Channel Strip (AI Code).jsfx" type="effect" desc="Channel strip with API 215L-style filters, EQ, Drive, and Compression">
       <version name="1.0" author="citizenkeith and Claude AI - Based on Airwindows open source (MIT) and Universal Audio API 215L" time="2026-03-09T04:11:19Z">
@@ -219,6 +219,9 @@ v1.0
       </version>
       <version name="2.1" author="citizenkeith / Claude AI" time="2026-03-08T17:22:39Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/9a8b3f27413a00bb8e885dc1a864ba7335254c4f/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.2" author="citizenkeith / Claude AI" time="2026-03-24T13:55:17Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/7e6e870d7634dee033325fb5112d43497ca8a62b/distortion/Watkins%20Fuzz%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
