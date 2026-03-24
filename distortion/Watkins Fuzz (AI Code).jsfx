@@ -1,6 +1,6 @@
 desc:Watkins Fuzz
 author: citizenkeith / Claude AI
-version: 2.1
+version: 2.2
 about: 
   Emulation of the Watkins WEM Project V Fuzz pedal, a sophisticated 8-transistor British fuzz from the late 1960s.
   Features asymmetric quasi-complementary clipping, inductor resonance modeling, and dynamic octave effects.
@@ -8,7 +8,7 @@ about:
   This JSFX released under GPLv3 license
 
 // ReaPack metadata
-// @version 2.1
+// @version 2.2
 // @author citizenkeith
 // @license GPL v3
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
@@ -18,6 +18,9 @@ about:
 //   clipping, inductor resonance, dynamic octave effect, power supply sag,
 //   and thermal drift modeling.
 // @changelog
+//   v2.2
+//     Added DC Filter toggle - steep 20Hz high-pass removes DC offset
+//     4th-order Butterworth HPF for transparent DC blocking
 //   v2.1
 //     Standardized section header colors: Bias=blue, Octave=amber
 //   v2.0
@@ -52,6 +55,7 @@ slider13:1800<800,4000,10>-Octave Filter Frequency (Hz)
 slider14:0.6<0,1,0.01>-Octave Blend Dynamics
 slider15:0.5<0,1,0.01>-Sag Amount
 slider16:0.3<0,1,0.01>-Temperature Drift
+slider17:0<0,1,1{Off,On}>-DC Filter (20Hz HPF)
 
 @init
 
@@ -67,6 +71,58 @@ ui_setup(4096);
 function tanh(x)
 (
   (exp(2*x) - 1) / (exp(2*x) + 1);
+);
+
+// 4th-order Butterworth high-pass filter @ 20Hz
+// Steep rolloff for DC blocking, transparent to audio
+function dc_filter_init()
+local(fc, wc, wc2, wc3, wc4, k, k2, k3, k4, q1, q2, a0_1, a1_1, a2_1, b0_1, b1_1, b2_1, a0_2, a1_2, a2_2, b0_2, b1_2, b2_2)
+(
+  fc = 20;  // Cutoff frequency in Hz
+  wc = 2 * $pi * fc / srate;
+  k = tan(wc / 2);
+  k2 = k * k;
+  
+  // First biquad (Q = 0.54119610)
+  q1 = 0.54119610;
+  a0_1 = 1 + k / q1 + k2;
+  dc_a1_1 = 2 * (k2 - 1) / a0_1;
+  dc_a2_1 = (1 - k / q1 + k2) / a0_1;
+  dc_b0_1 = 1 / a0_1;
+  dc_b1_1 = -2 / a0_1;
+  dc_b2_1 = 1 / a0_1;
+  
+  // Second biquad (Q = 1.3065630)
+  q2 = 1.3065630;
+  a0_2 = 1 + k / q2 + k2;
+  dc_a1_2 = 2 * (k2 - 1) / a0_2;
+  dc_a2_2 = (1 - k / q2 + k2) / a0_2;
+  dc_b0_2 = 1 / a0_2;
+  dc_b1_2 = -2 / a0_2;
+  dc_b2_2 = 1 / a0_2;
+);
+
+// Apply 4th-order DC blocking filter (cascaded biquads)
+function dc_filter_process(input)
+local(stage1, stage2)
+(
+  // First biquad stage
+  stage1 = dc_b0_1 * input + dc_b1_1 * dc_x1_1 + dc_b2_1 * dc_x2_1
+           - dc_a1_1 * dc_y1_1 - dc_a2_1 * dc_y2_1;
+  dc_x2_1 = dc_x1_1;
+  dc_x1_1 = input;
+  dc_y2_1 = dc_y1_1;
+  dc_y1_1 = stage1;
+  
+  // Second biquad stage
+  stage2 = dc_b0_2 * stage1 + dc_b1_2 * dc_x1_2 + dc_b2_2 * dc_x2_2
+           - dc_a1_2 * dc_y1_2 - dc_a2_2 * dc_y2_2;
+  dc_x2_2 = dc_x1_2;
+  dc_x1_2 = stage1;
+  dc_y2_2 = dc_y1_2;
+  dc_y1_2 = stage2;
+  
+  stage2;
 );
 
 function power_supply_sag(signal_level, sag_amount)
@@ -224,7 +280,8 @@ local(ring_mod)
 (
   ring_mod = input * prev_input;
   octave_intermod_hp = octave_intermod_hp + 0.015 * (ring_mod - octave_intermod_hp);
-  (ring_mod - octave_intermod_hp) * mod_amount;
+  ring_mod - octave_intermod_hp;
+  ring_mod * mod_amount;
 );
 
 function octave_filter(input, center_freq)
@@ -268,6 +325,11 @@ gain_stage4 = 2.5;
 fc_low = 120 / srate;
 fc_high = 3500 / srate;
 lp1 = hp1 = 0;
+
+// Initialize DC filter states
+dc_x1_1 = dc_x2_1 = dc_y1_1 = dc_y2_1 = 0;
+dc_x1_2 = dc_x2_2 = dc_y1_2 = dc_y2_2 = 0;
+dc_filter_init();
 
 // ============================================================
 // GFX HELPER FUNCTIONS  (must be in @init)
@@ -320,37 +382,6 @@ local(vw, vh)
   gfx_x = vx - vw/2;
   gfx_y = vy;
   gfx_drawstr(#val);
-);
-
-// Draw a greyed-out non-interactive knob
-function draw_knob_inactive(cx, cy, r, val, vmin, vmax)
-local(norm, angle, start_a, end_a, px, py, i, a, track_r)
-(
-  start_a = $pi * 0.75;
-  end_a   = $pi * 2.25;
-  norm    = max(0, min(1, (val - vmin) / (vmax - vmin)));
-  angle   = start_a + norm * (end_a - start_a);
-  gfx_r = 0.16; gfx_g = 0.16; gfx_b = 0.18; gfx_a = 1;
-  gfx_circle(cx, cy, r - 2, 1, 1);
-  track_r = r - 5;
-  i = 0;
-  loop(270,
-    a = start_a + i * $pi / 180;
-    gfx_r = 0.22; gfx_g = 0.22; gfx_b = 0.24; gfx_a = 1;
-    gfx_circle(cx + cos(a)*track_r, cy + sin(a)*track_r, 1.2, 1, 1);
-    i += 1;
-  );
-  i = 0;
-  loop(floor(norm * 270),
-    a = start_a + i * $pi / 180;
-    gfx_r = 0.28; gfx_g = 0.32; gfx_b = 0.38; gfx_a = 1;
-    gfx_circle(cx + cos(a)*track_r, cy + sin(a)*track_r, 1.2, 1, 1);
-    i += 1;
-  );
-  px = cx + cos(angle) * (r * 0.45);
-  py = cy + sin(angle) * (r * 0.45);
-  gfx_r = 0.40; gfx_g = 0.40; gfx_b = 0.44; gfx_a = 1;
-  gfx_circle(px, py, 2.5, 1, 1);
 );
 
 // Draw a centered switch-row label
@@ -423,6 +454,7 @@ function update_parameters()
   octave_dynamics   = slider14;
   sag_amount        = slider15;
   temp_drift_amount = slider16;
+  dc_filter_enable  = slider17;
   edge_boost        = edge_mode ? 1.8 : 1.0;
   drive_treble      = drive_mode ? 1.5 : 0.7;
   npn_sat = 0.7;
@@ -456,6 +488,7 @@ octave_filter_freq = slider13;
 octave_dynamics  = slider14;
 sag_amount       = slider15;
 temp_drift_amount = slider16;
+dc_filter_enable = slider17;
 edge_boost       = edge_mode ? 1.8 : 1.0;
 drive_treble     = drive_mode ? 1.5 : 0.7;
 npn_sat = 0.7;
@@ -514,6 +547,11 @@ stage4 = drive_mode ? stage4 : lp1;
 
 output = asymmetric_clip(stage4 * 0.4, 0.65*supply_voltage, 0.45*supply_voltage, 2.5);
 output = transistor_sat(output, 2.5, npn_sat*supply_voltage, pnp_sat*supply_voltage, bias_shift2 + temp_bias_shift);
+
+// Apply DC blocking filter if enabled
+dc_filter_enable ? (
+  output = dc_filter_process(output);
+);
 
 spl0 = output * volume;
 spl1 = output * volume;
@@ -652,7 +690,7 @@ dbl_click_in_rect(fuzz_vol_cx-22, row1_cy-22, 44, 44) ? (slider2 = 1.0; slider_a
 strcpy(#lbl, "VOLUME"); draw_label_at(fuzz_vol_cx, row1_cy - 36);
 sprintf(#val, "%.2f", slider2); draw_value_at(fuzz_vol_cx, row1_cy + 26);
 
-// ---- BIAS SECTION ---- (amber accent)
+// ---- BIAS SECTION ---- (blue accent)
 draw_section_box(bias_x, row1_y, bias_w, row1_h, 0.12, 0.62, 0.88, "BIAS");
 
 bias_t1_cx = bias_x + 33;
@@ -673,7 +711,7 @@ dbl_click_in_rect(bias_t2_cx-22, row1_cy-22, 44, 44) ? (slider6 = 0.0; slider_au
 strcpy(#lbl, "TRIM 2"); draw_label_at(bias_t2_cx, row1_cy - 36);
 sprintf(#val, "%.2f", slider6); draw_value_at(bias_t2_cx, row1_cy + 26);
 
-// ---- OCTAVE SECTION ---- (cyan accent)
+// ---- OCTAVE SECTION ---- (amber accent)
 draw_section_box(oct_x, row1_y, oct_w, row1_h, 0.80, 0.58, 0.08, "OCTAVE");
 
 oct_amt_cx = oct_x + 51;
@@ -749,7 +787,7 @@ sprintf(#val, "%.2f", slider10); draw_value_at(ind_mix_cx, row2_cy + 26);
 // ---- AGING SECTION ---- (green accent)
 draw_section_box(age_x, row2_y, age_w, row2_h, 0.22, 0.72, 0.32, "AGING");
 
-age_sag_cx = age_x + 54;
+age_sag_cx = age_x + 42;
 ui_push_rect(age_sag_cx - 22, row2_cy - 22, 44, 44);
   slider15 = control_dial(slider15, 0, 1, 0);
   slider_automate(slider15);
@@ -758,7 +796,7 @@ dbl_click_in_rect(age_sag_cx-22, row2_cy-22, 44, 44) ? (slider15 = 0.5; slider_a
 strcpy(#lbl, "SAG"); draw_label_at(age_sag_cx, row2_cy - 36);
 sprintf(#val, "%.2f", slider15); draw_value_at(age_sag_cx, row2_cy + 26);
 
-age_tmp_cx = age_x + 158;
+age_tmp_cx = age_x + 118;
 ui_push_rect(age_tmp_cx - 22, row2_cy - 22, 44, 44);
   slider16 = control_dial(slider16, 0, 1, 0);
   slider_automate(slider16);
@@ -766,6 +804,21 @@ ui_pop();
 dbl_click_in_rect(age_tmp_cx-22, row2_cy-22, 44, 44) ? (slider16 = 0.3; slider_automate(slider16););
 strcpy(#lbl, "TEMP"); draw_label_at(age_tmp_cx, row2_cy - 36);
 sprintf(#val, "%.2f", slider16); draw_value_at(age_tmp_cx, row2_cy + 26);
+
+// DC FILTER SWITCH (slider17: Off/On)
+age_dc_cx = age_x + 178;
+age_dc_switch_y = row2_cy - 10;
+draw_switch_label(age_dc_cx, row2_cy - 36, "DC FILTER");
+ui_push_rect(age_dc_cx - 20, age_dc_switch_y, 40, 20);
+  slider17 = control_switch(slider17);
+  slider_automate(slider17);
+ui_pop();
+sw_lbl_str = slider17 ? "ON" : "OFF";
+slider17 ? (gfx_r=0.3; gfx_g=0.9; gfx_b=0.4;) : (gfx_r=0.7; gfx_g=0.7; gfx_b=0.75;);
+gfx_a = 1; gfx_setfont(1, "Arial", 9);
+gfx_measurestr(sw_lbl_str, sw_lw, sw_lh);
+gfx_x = age_dc_cx - sw_lw/2; gfx_y = age_dc_switch_y + 26;
+gfx_drawstr(sw_lbl_str);
 
 // ---- End frame ----
 mouse_cap_last = mouse_cap;
