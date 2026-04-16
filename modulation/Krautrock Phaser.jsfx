@@ -1,0 +1,560 @@
+desc:Krautrock Phaser
+version:1.1.0
+author:citizenkeith
+about:
+  Inspired by the Schulte Compact Phasing "A" (ca. 1973, West Berlin).
+  Known as the "Krautrock Phaser" — used by Kraftwerk, Tangerine Dream,
+  Klaus Schulze, Pink Floyd, and others.
+  v1.0.0: DSP complete.
+  v1.1.0: GUI — three color-coded sections (MODULATION/OUTPUT/LAMP),
+          citizenkeith tron theme, double-click to reset any knob.
+
+// ReaPack metadata
+// @version 1.1.0
+// @author citizenkeith
+// @license GPL v3
+// @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
+// @about
+//   Inspired by the Schulte Compact Phasing "A" (ca. 1973, West Berlin).
+//   Known as the "Krautrock Phaser" — used by Kraftwerk, Tangerine Dream,
+//   Klaus Schulze, Pink Floyd, and others.
+//   Features: 8-stage all-pass chain, CdS LDR physics model, asymmetric
+//   thermal model, negative feedback loop, true stereo processing.
+// @changelog
+//   v1.1.0
+//     GUI: three color-coded sections (MODULATION/OUTPUT/LAMP)
+//     citizenkeith tron theme, double-click to reset any knob
+//     All sliders hidden from REAPER panel (GUI-only interaction)
+//   v1.0.0
+//     Initial release
+//     8 first-order all-pass sections matching original circuit topology
+//     Sine LFO with asymmetric thermal model (attack/release time constants)
+//     CdS LDR power-law resistance curve: R = R0 * E^(-gamma)
+//     Bias control: residual lamp idle current
+//     Negative feedback loop, LP filtered, DC blocked, tanh soft-clipped
+//     True stereo: hardware mode (shared LFO) and dual LFO (180 deg offset)
+
+// ---------------------------------------------------------------
+// Sliders:
+//   slider1 - Rate:        LFO frequency (Hz)
+//   slider2 - Depth:       LFO modulation depth
+//   slider3 - Mix:         Wet level added to dry (additive)
+//   slider4 - Skew:        LDR gamma exponent — sweep nonlinearity
+//   slider5 - Attack Tau:  Bulb heat-up time constant (s)
+//   slider6 - Release Tau: Bulb cool-down time constant (s)
+//   slider7 - Feedback:    Feedback loop gain
+//   slider8 - Stereo Mode: Hardware (dual tap) vs Dual LFO (180 deg offset)
+//   slider9 - Bias:        Residual lamp idle current (0.25–0.50)
+//                          Higher = sweep spread across full LFO cycle
+//                          Lower  = sweep compressed toward LFO minimum
+// ---------------------------------------------------------------
+
+slider1:0.2<0.01,10,0.01>-Rate (Hz)
+slider2:1.0<0,1,0.01>-Depth
+slider3:0.7<0,1,0.01>-Mix
+slider4:0.65<0.2,1.1,0.01>-Skew (LDR gamma)
+slider5:0.014<0.0001,0.05,0.0001>-Attack Tau (s)
+slider6:0.04<0.0001,0.2,0.0001>-Release Tau (s)
+slider7:0.8<0,0.95,0.01>-Feedback
+slider8:0<0,1,1{Hardware,Dual LFO}>-Stereo Mode
+slider9:0.35<0.25,0.5,0.001>-Bias
+
+import citizenkeith-ui-lib.jsfx-inc
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+
+ui_setup(4096);
+
+// -----------------------------------------------------------
+// Memory layout (local heap)
+//   ap_x[0..7]    — L channel all-pass x[n-1] state
+//   ap_y[0..7]    — L channel all-pass y[n-1] state
+//   ap_x_r[0..7]  — R channel all-pass x[n-1] state (Dual LFO mode)
+//   ap_y_r[0..7]  — R channel all-pass y[n-1] state (Dual LFO mode)
+//   next free address: 32
+// -----------------------------------------------------------
+ap_x   = 0;
+ap_y   = 8;
+ap_x_r = 16;
+ap_y_r = 24;
+
+// L channel LFO + thermal state
+lfo_phase  = 0;
+bulb_state = 0;
+
+// R channel LFO + thermal state
+// lfo_phase_r starts at pi (180 deg offset) for natural stereo spread
+lfo_phase_r  = $pi;
+bulb_state_r = 0;
+
+// L channel feedback path state
+fb_signal   = 0;
+fb_lp_state = 0;
+dc_x1       = 0;
+dc_y1       = 0;
+
+// R channel feedback path state (Dual LFO mode)
+fb_signal_r   = 0;
+fb_lp_state_r = 0;
+dc_x1_r       = 0;
+dc_y1_r       = 0;
+
+// Fixed feedback path LP cutoff — 900 Hz.
+// Models bandwidth limiting of the 741 opamp feedback network.
+FB_LP_FC = 900;
+
+// DC blocker pole — cutoff ~3.5 Hz at 44100.
+// Prevents low-frequency accumulation in the feedback loop.
+DC_R = 0.9995;
+
+// All-pass sweep range — 200 Hz to 1200 Hz.
+// Keeps notches in the perceptually sensitive range throughout the sweep.
+AP_FC_MIN = 200;
+AP_FC_MAX = 1200;
+
+// Feedback tap point — after stage 2.
+FB_TAP_STAGES = 2;
+
+// tanh soft clipper — JSFX has no built-in tanh.
+// Uses the identity: tanh(x) = (exp(2x) - 1) / (exp(2x) + 1)
+// Clamped at |x| > 10 to avoid exp() overflow (tanh is ±1 well before that).
+function tanh(x)
+  local(e2x)
+(
+  x > 10 ? 1 : x < -10 ? -1 : (
+    e2x = exp(2.0 * x);
+    (e2x - 1.0) / (e2x + 1.0)
+  )
+);
+
+// ============================================================
+// GFX HELPER FUNCTIONS
+// ============================================================
+
+// Colored section box with header bar and border
+function draw_section_box(bx, by, bw, bh, hr, hg, hb, header_text)
+local(tw, th)
+(
+  gfx_r = 0.13; gfx_g = 0.13; gfx_b = 0.15; gfx_a = 1;
+  gfx_rect(bx, by, bw, bh);
+  gfx_r = hr; gfx_g = hg; gfx_b = hb; gfx_a = 1;
+  gfx_rect(bx, by, bw, 22);
+  gfx_r = 0.08; gfx_g = 0.08; gfx_b = 0.08; gfx_a = 1;
+  gfx_setfont(1, "Arial", 11, 'b');
+  gfx_measurestr(header_text, tw, th);
+  gfx_x = bx + bw/2 - tw/2;
+  gfx_y = by + 11 - th/2;
+  gfx_drawstr(header_text);
+  gfx_r = 0.30; gfx_g = 0.30; gfx_b = 0.34; gfx_a = 1;
+  gfx_rect(bx,      by,      bw, 1);
+  gfx_rect(bx,      by + bh, bw, 1);
+  gfx_rect(bx,      by,      1,  bh);
+  gfx_rect(bx + bw, by,      1,  bh + 1);
+);
+
+// Knob label — centered above knob, uses global #lbl
+function draw_label_at(lx, ly)
+local(lw, lh)
+(
+  gfx_r = 0.68; gfx_g = 0.68; gfx_b = 0.72; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#lbl, lw, lh);
+  gfx_x = lx - lw/2;
+  gfx_y = ly;
+  gfx_drawstr(#lbl);
+);
+
+// Amber value readout — centered below knob, uses global #val
+function draw_value_at(vx, vy)
+local(vw, vh)
+(
+  gfx_r = 1.0; gfx_g = 0.82; gfx_b = 0.44; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(#val, vw, vh);
+  gfx_x = vx - vw/2;
+  gfx_y = vy;
+  gfx_drawstr(#val);
+);
+
+// Switch row label
+function draw_switch_label(cx, ly, label)
+local(lw, lh)
+(
+  gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
+  gfx_setfont(1, "Arial", 10);
+  gfx_measurestr(label, lw, lh);
+  gfx_x = cx - lw/2;
+  gfx_y = ly;
+  gfx_drawstr(label);
+);
+
+// Double-click detection
+function check_dbl_click()
+local(mx, my, now, dt)
+(
+  mx  = mouse_x;
+  my  = mouse_y;
+  now = time_precise();
+  (mouse_cap & 1) && !(mouse_cap_last & 1) ? (
+    dt = now - dbl_click_time;
+    (dt < 0.4) && (dt > 0.05) && (abs(mx - dbl_click_x) < 8) && (abs(my - dbl_click_y) < 8) ? (
+      dbl_click_fired = 1;
+      dbl_click_cx    = mx;
+      dbl_click_cy    = my;
+    ) : (
+      dbl_click_fired = 0;
+    );
+    dbl_click_time = now;
+    dbl_click_x    = mx;
+    dbl_click_y    = my;
+  ) : (
+    dbl_click_fired = 0;
+  );
+);
+
+// Returns 1 if double-click occurred inside rect
+function dbl_click_in_rect(rx, ry, rw, rh)
+(
+  dbl_click_fired &&
+  (dbl_click_cx >= rx) && (dbl_click_cx < rx + rw) &&
+  (dbl_click_cy >= ry) && (dbl_click_cy < ry + rh)
+);
+
+// Double-click and mouse state
+dbl_click_time  = 0;
+dbl_click_x     = dbl_click_y = 0;
+dbl_click_fired = 0;
+dbl_click_cx    = dbl_click_cy = 0;
+mouse_cap_last  = 0;
+
+function update_params()
+(
+  // LFO angular increment per sample
+  lfo_inc = slider1 * 2 * $pi / srate;
+
+  depth = slider2;
+  mix   = slider3;
+  gamma = slider4;  // CdS LDR exponent; nominal CdS ≈ 0.5–0.8
+
+  // Asymmetric thermal model coefficients.
+  // One-pole LP: coeff = 1 - exp(-1 / (tau * srate))
+  // Small tau → coeff near 1 → fast response (tracks LFO closely)
+  // Large tau → coeff near 0 → slow response (heavy lag)
+  // attack_tau < release_tau: filament heats faster than it cools.
+  attack_coeff  = 1.0 - exp(-1.0 / (slider5 * srate));
+  release_coeff = 1.0 - exp(-1.0 / (slider6 * srate));
+
+  // LDR normalization bounds.
+  // Bias (slider9) controls residual filament glow at LFO minimum.
+  // Higher values spread the sweep across the full LFO cycle.
+  _ldr_eps = slider9;
+  r_bright = pow(1.0 + _ldr_eps, -gamma);
+  r_dark   = pow(_ldr_eps,       -gamma);
+  r_range  = r_dark - r_bright;
+
+  feedback_gain = slider7;
+  dual_lfo      = slider8 >= 0.5;
+  fb_tap_stages = FB_TAP_STAGES;
+
+  // One-pole LP on feedback path
+  fb_lp_coeff = exp(-2.0 * $pi * FB_LP_FC / srate);
+
+  // Precompute log range for all-pass mapping
+  log_fc_min   = log(AP_FC_MIN);
+  log_fc_range = log(AP_FC_MAX / AP_FC_MIN);
+);
+
+update_params();
+
+@slider
+update_params();
+
+@sample
+
+dry   = spl0;
+dry_r = spl1;
+
+// ---------------------------------------------------------------
+// L channel LFO + thermal model + LDR physics
+// ---------------------------------------------------------------
+lfo_out = sin(lfo_phase);
+lfo_phase += lfo_inc;
+lfo_phase >= $pi * 2 ? lfo_phase -= $pi * 2;
+
+lfo_out > bulb_state ?
+  bulb_state += (lfo_out - bulb_state) * attack_coeff
+:
+  bulb_state += (lfo_out - bulb_state) * release_coeff;
+
+E        = (bulb_state * depth + 1.0) * 0.5;
+r_raw    = pow(E + slider9, -gamma);
+lfo_mod  = 1.0 - (r_raw - r_bright) / r_range;
+
+ap_fc    = exp(log_fc_min + lfo_mod * log_fc_range);
+_t       = tan($pi * ap_fc / srate);
+ap_coeff = (_t - 1.0) / (_t + 1.0);
+
+// ---------------------------------------------------------------
+// L channel all-pass chain + feedback
+// ---------------------------------------------------------------
+sig = dry + fb_signal;
+
+i = 0;
+loop(fb_tap_stages,
+  _x1     = ap_x[i];
+  _y1     = ap_y[i];
+  _yn     = ap_coeff * sig + _x1 - ap_coeff * _y1;
+  ap_x[i] = sig;
+  ap_y[i] = _yn;
+  sig     = _yn;
+  i      += 1;
+);
+
+stage2_tap = sig;  // L feedback tap (also L output in hardware mode)
+
+loop(8 - fb_tap_stages,
+  _x1     = ap_x[i];
+  _y1     = ap_y[i];
+  _yn     = ap_coeff * sig + _x1 - ap_coeff * _y1;
+  ap_x[i] = sig;
+  ap_y[i] = _yn;
+  sig     = _yn;
+  i      += 1;
+);
+
+sig_l = sig;  // L full-chain output (R output in hardware mode)
+
+// L feedback update
+fb_lp_state = (1.0 - fb_lp_coeff) * stage2_tap + fb_lp_coeff * fb_lp_state;
+_dc_out     = fb_lp_state - dc_x1 + DC_R * dc_y1;
+dc_x1       = fb_lp_state;
+dc_y1       = _dc_out;
+fb_signal   = -feedback_gain * tanh(_dc_out);
+
+// ---------------------------------------------------------------
+// R channel — both modes process spl1 through the R chain.
+// Hardware mode: shared LFO/ap_coeff with L channel (same phasing,
+//   preserves stereo image of source).
+// Dual LFO mode: independent LFO offset 180 degrees from L.
+// ---------------------------------------------------------------
+dual_lfo ? (
+
+  // R channel LFO + thermal model + LDR physics
+  lfo_out_r = sin(lfo_phase_r);
+  lfo_phase_r += lfo_inc;
+  lfo_phase_r >= $pi * 2 ? lfo_phase_r -= $pi * 2;
+
+  lfo_out_r > bulb_state_r ?
+    bulb_state_r += (lfo_out_r - bulb_state_r) * attack_coeff
+  :
+    bulb_state_r += (lfo_out_r - bulb_state_r) * release_coeff;
+
+  E_r       = (bulb_state_r * depth + 1.0) * 0.5;
+  r_raw_r   = pow(E_r + slider9, -gamma);
+  lfo_mod_r = 1.0 - (r_raw_r - r_bright) / r_range;
+
+  ap_fc_r    = exp(log_fc_min + lfo_mod_r * log_fc_range);
+  _t_r       = tan($pi * ap_fc_r / srate);
+  ap_coeff_r = (_t_r - 1.0) / (_t_r + 1.0);
+
+) : (
+
+  // Hardware mode: R channel shares L channel LFO and ap_coeff
+  ap_coeff_r = ap_coeff;
+
+);
+
+// R channel all-pass chain + feedback (both modes)
+sig_r = dry_r + fb_signal_r;
+
+i = 0;
+loop(fb_tap_stages,
+  _x1       = ap_x_r[i];
+  _y1       = ap_y_r[i];
+  _yn       = ap_coeff_r * sig_r + _x1 - ap_coeff_r * _y1;
+  ap_x_r[i] = sig_r;
+  ap_y_r[i] = _yn;
+  sig_r     = _yn;
+  i        += 1;
+);
+
+stage2_tap_r = sig_r;
+
+loop(8 - fb_tap_stages,
+  _x1       = ap_x_r[i];
+  _y1       = ap_y_r[i];
+  _yn       = ap_coeff_r * sig_r + _x1 - ap_coeff_r * _y1;
+  ap_x_r[i] = sig_r;
+  ap_y_r[i] = _yn;
+  sig_r     = _yn;
+  i        += 1;
+);
+
+// R feedback update
+fb_lp_state_r = (1.0 - fb_lp_coeff) * stage2_tap_r + fb_lp_coeff * fb_lp_state_r;
+_dc_out_r     = fb_lp_state_r - dc_x1_r + DC_R * dc_y1_r;
+dc_x1_r       = fb_lp_state_r;
+dc_y1_r       = _dc_out_r;
+fb_signal_r   = -feedback_gain * tanh(_dc_out_r);
+
+out_l = sig_l;
+out_r = sig_r;
+
+// ---------------------------------------------------------------
+// Output: dry + wet (additive). Each channel preserves its own dry.
+// ---------------------------------------------------------------
+spl0 = dry   + out_l * mix;
+spl1 = dry_r + out_r * mix;
+
+// ============================================================
+// GFX — Tron theme, citizenkeith-ui-lib
+// ============================================================
+
+@gfx 740 250
+
+control_start("main", "tron");
+
+ui_screen() == "main" ? (
+
+// Background
+gfx_r = 0.14; gfx_g = 0.14; gfx_b = 0.16; gfx_a = 1;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+check_dbl_click();
+update_params();
+
+// ---- Layout constants ----
+row_y  = 36;
+row_h  = 190;
+row_cy = 150;   // knob center y
+
+// Section x/w — 8px margins and gaps throughout
+// Total: 8 + 160 + 8 + 160 + 8 + 388 + 8 = 740
+mod_x  = 8;   mod_w  = 160;   // MODULATION
+out_x  = 176; out_w  = 160;   // OUTPUT
+lamp_x = 344; lamp_w = 388;   // LAMP
+
+// MODULATION knob centers (80px spacing, 40px side margins)
+rate_cx  = mod_x + 40;    //  48
+depth_cx = mod_x + 120;   // 128
+
+// OUTPUT knob/switch centers (80px spacing, 40px side margins)
+stereo_cx = out_x + 40;   // 216
+mix_cx    = out_x + 120;  // 296
+
+// LAMP knob centers (80px spacing, 34px side margins)
+skew_cx     = lamp_x + 34;           // 378
+attack_cx   = skew_cx     + 80;      // 458
+release_cx  = attack_cx   + 80;      // 538
+feedback_cx = release_cx  + 80;      // 618
+bias_cx     = feedback_cx + 80;      // 698
+
+sw_h = 20;
+
+// ---- Plugin title ----
+gfx_r = 0.78; gfx_g = 0.78; gfx_b = 0.82; gfx_a = 1;
+gfx_setfont(1, "Trebuchet MS", 14, 'b');
+gfx_x = 12; gfx_y = 8;
+gfx_drawstr("KRAUTROCK PHASER");
+
+// ============================================================
+// MODULATION SECTION — red
+// ============================================================
+draw_section_box(mod_x, row_y, mod_w, row_h, 0.82, 0.15, 0.15, "MODULATION");
+
+ui_push_rect(rate_cx - 22, row_cy - 22, 44, 44);
+  slider1 = control_dial(slider1, 0.01, 10, 0);
+  slider_automate(slider1);
+ui_pop();
+dbl_click_in_rect(rate_cx-22, row_cy-22, 44, 44) ? (slider1 = 0.2; slider_automate(slider1););
+strcpy(#lbl, "RATE"); draw_label_at(rate_cx, row_cy - 36);
+sprintf(#val, "%.2f Hz", slider1); draw_value_at(rate_cx, row_cy + 26);
+
+ui_push_rect(depth_cx - 22, row_cy - 22, 44, 44);
+  slider2 = control_dial(slider2, 0, 1, 0);
+  slider_automate(slider2);
+ui_pop();
+dbl_click_in_rect(depth_cx-22, row_cy-22, 44, 44) ? (slider2 = 1.0; slider_automate(slider2););
+strcpy(#lbl, "DEPTH"); draw_label_at(depth_cx, row_cy - 36);
+sprintf(#val, "%.2f", slider2); draw_value_at(depth_cx, row_cy + 26);
+
+// ============================================================
+// OUTPUT SECTION — green
+// ============================================================
+draw_section_box(out_x, row_y, out_w, row_h, 0.22, 0.72, 0.32, "OUTPUT");
+
+// Stereo Mode toggle switch
+draw_switch_label(stereo_cx, row_cy - 36, "STEREO");
+ui_push_rect(stereo_cx - 26, row_cy - sw_h/2, 52, sw_h);
+  slider8 = control_switch(slider8);
+  slider_automate(slider8);
+ui_pop();
+sw_lbl_str = slider8 ? "DUAL LFO" : "HARDWARE";
+slider8 ? (gfx_r=1.0; gfx_g=0.82; gfx_b=0.44;) : (gfx_r=0.7; gfx_g=0.7; gfx_b=0.75;);
+gfx_a = 1; gfx_setfont(1, "Arial", 9);
+gfx_measurestr(sw_lbl_str, sw_lw, sw_lh);
+gfx_x = stereo_cx - sw_lw/2; gfx_y = row_cy + 14;
+gfx_drawstr(sw_lbl_str);
+
+// Mix knob
+ui_push_rect(mix_cx - 22, row_cy - 22, 44, 44);
+  slider3 = control_dial(slider3, 0, 1, 0);
+  slider_automate(slider3);
+ui_pop();
+dbl_click_in_rect(mix_cx-22, row_cy-22, 44, 44) ? (slider3 = 0.7; slider_automate(slider3););
+strcpy(#lbl, "MIX"); draw_label_at(mix_cx, row_cy - 36);
+sprintf(#val, "%.2f", slider3); draw_value_at(mix_cx, row_cy + 26);
+
+// ============================================================
+// LAMP SECTION — amber
+// ============================================================
+draw_section_box(lamp_x, row_y, lamp_w, row_h, 0.80, 0.58, 0.08, "LAMP");
+
+ui_push_rect(skew_cx - 22, row_cy - 22, 44, 44);
+  slider4 = control_dial(slider4, 0.2, 1.1, 0);
+  slider_automate(slider4);
+ui_pop();
+dbl_click_in_rect(skew_cx-22, row_cy-22, 44, 44) ? (slider4 = 0.65; slider_automate(slider4););
+strcpy(#lbl, "SKEW"); draw_label_at(skew_cx, row_cy - 36);
+sprintf(#val, "%.2f", slider4); draw_value_at(skew_cx, row_cy + 26);
+
+ui_push_rect(attack_cx - 22, row_cy - 22, 44, 44);
+  slider5 = control_dial(slider5, 0.0001, 0.05, 0);
+  slider_automate(slider5);
+ui_pop();
+dbl_click_in_rect(attack_cx-22, row_cy-22, 44, 44) ? (slider5 = 0.014; slider_automate(slider5););
+strcpy(#lbl, "ATTACK"); draw_label_at(attack_cx, row_cy - 36);
+sprintf(#val, "%.3f s", slider5); draw_value_at(attack_cx, row_cy + 26);
+
+ui_push_rect(release_cx - 22, row_cy - 22, 44, 44);
+  slider6 = control_dial(slider6, 0.0001, 0.2, 0);
+  slider_automate(slider6);
+ui_pop();
+dbl_click_in_rect(release_cx-22, row_cy-22, 44, 44) ? (slider6 = 0.04; slider_automate(slider6););
+strcpy(#lbl, "RELEASE"); draw_label_at(release_cx, row_cy - 36);
+sprintf(#val, "%.3f s", slider6); draw_value_at(release_cx, row_cy + 26);
+
+ui_push_rect(feedback_cx - 22, row_cy - 22, 44, 44);
+  slider7 = control_dial(slider7, 0, 0.95, 0);
+  slider_automate(slider7);
+ui_pop();
+dbl_click_in_rect(feedback_cx-22, row_cy-22, 44, 44) ? (slider7 = 0.8; slider_automate(slider7););
+strcpy(#lbl, "FEEDBACK"); draw_label_at(feedback_cx, row_cy - 36);
+sprintf(#val, "%.2f", slider7); draw_value_at(feedback_cx, row_cy + 26);
+
+ui_push_rect(bias_cx - 22, row_cy - 22, 44, 44);
+  slider9 = control_dial(slider9, 0.25, 0.5, 0);
+  slider_automate(slider9);
+ui_pop();
+dbl_click_in_rect(bias_cx-22, row_cy-22, 44, 44) ? (slider9 = 0.35; slider_automate(slider9););
+strcpy(#lbl, "BIAS"); draw_label_at(bias_cx, row_cy - 36);
+sprintf(#val, "%.3f", slider9); draw_value_at(bias_cx, row_cy + 26);
+
+mouse_cap_last = mouse_cap;
+
+) : ui_system();
