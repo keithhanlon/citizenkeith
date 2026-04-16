@@ -112,6 +112,10 @@ From there, experiment with:
 ![Tempo Tremolo Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/tempotremv2.png?raw=true)
 Tempo-synced stereo tremolo with morphing wave shapes.
 
+##Krautrock Phaser
+![Krautrock Phaser Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/krautock.png?raw=true)
+Inspired by the Schulte Compact Phasing "A" (ca. 1973, West Berlin). Known as the "Krautrock Phaser", it was used by Kraftwerk, Tangerine Dream, Conny Plank, Klaus Schulze, Pink Floyd, and others.
+
 # Reverb
 
 ## Cloudbusting Reverb
