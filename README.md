@@ -23,21 +23,30 @@ https://reaper.blog/2015/06/quick-tip-how-to-install-js-plugins/
 # Plugin Features
 
 Quick links:
+### Channel Strip
 - [Fidelio Channel Strip](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#fidelio-channel-strip)
+###  Delay
 - [Garden Hose Delay](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#garden-hose-delay)
 - [ReaFripp Tape Loop Delay](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#reafripp-tape-loop-delay)
 - [Tycho Delay TMA-1](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tycho-delay-tma-1)
+### Distortion
 - [Watkins Fuzz Pedal](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#watkins-fuzz-pedal)
+### Dynamics
 - [Analog Warmth Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#analog-warmth-compressor)
 - [FM Radio Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#fm-radio-compressor)
 - [Transparent Bus Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#transparent-bus-compressor)
 - [Zion Vocal Processor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#zion-vocal-processor)
+### MIDI
 - [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
+### Modulation
 - [Tempo Tremolo](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tempo-tremolo)
 - [Krautrock Phaser](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#krautrock-phaser)
+### Synth
 - [SynthiAKS Analog Modular Synthesizer](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#synthiaks-analog-modular-synthesizer)
+###  Reverb
 - [Cloudbusting Reverb](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#cloudbusting-reverb)
 - [Cocteau Verb](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#cocteau-verb)
+### Tape
 - [TapeEmu - Professional Tape Machine Emulation](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tapeemu---professional-tape-machine-emulation)
 
 # Channel Strips
