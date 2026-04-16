@@ -20,9 +20,8 @@ All plugins require the shared UI library:
 ### Learn How To Install JS plugins:
 https://reaper.blog/2015/06/quick-tip-how-to-install-js-plugins/
 
-# Plugin Features
+# Plugins
 
-Quick links:
 ### Channel Strip
 - [Fidelio Channel Strip](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#fidelio-channel-strip)
 ###  Delay
