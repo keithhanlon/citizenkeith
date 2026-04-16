@@ -34,6 +34,7 @@ Quick links:
 - [Zion Vocal Processor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#zion-vocal-processor)
 - [Probabilistic MIDI Note Generator](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#probabilistic-midi-note-generator)
 - [Tempo Tremolo](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#tempo-tremolo)
+- [Krautrock Phaser](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#krautrock-phaser)
 - [SynthiAKS Analog Modular Synthesizer](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#synthiaks-analog-modular-synthesizer)
 - [Cloudbusting Reverb](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#cloudbusting-reverb)
 - [Cocteau Verb](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#cocteau-verb)
@@ -113,7 +114,7 @@ From there, experiment with:
 Tempo-synced stereo tremolo with morphing wave shapes.
 
 ##Krautrock Phaser
-![Krautrock Phaser Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/krautock.png?raw=true)
+![Krautrock Phaser Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/krautrock.png?raw=true)
 Inspired by the Schulte Compact Phasing "A" (ca. 1973, West Berlin). Known as the "Krautrock Phaser", it was used by Kraftwerk, Tangerine Dream, Conny Plank, Klaus Schulze, Pink Floyd, and others.
 
 # Reverb
