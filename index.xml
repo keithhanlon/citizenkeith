@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="7e6e870d7634dee033325fb5112d43497ca8a62b" name="citizenkeith">
+<index version="1" commit="b25227f3cb4b3268a8a8b89f99046a9a48de3cd6" name="citizenkeith">
   <category name="abandoned">
     <reapack name="Clavius Channel Strip (AI Code).jsfx" type="effect" desc="Channel strip with API 215L-style filters, EQ, Drive, and Compression">
       <version name="1.0" author="citizenkeith and Claude AI - Based on Airwindows open source (MIT) and Universal Audio API 215L" time="2026-03-09T04:11:19Z">
@@ -410,6 +410,20 @@ v1.1
     </reapack>
   </category>
   <category name="modulation">
+    <reapack name="Krautrock Phaser.jsfx" type="effect" desc="Krautrock Phaser">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Inspired by the Schulte Compact Phasing "A" (ca. 1973, West Berlin). Known as the "Krautrock Phaser" \u8212- used by Kraftwerk, Tangerine Dream, Conny Plank, Klaus Schulze, Pink Floyd, and others. v1.0.0: DSP complete. v1.1.0: GUI \u8212- three color-coded sections (MODULATION/OUTPUT/LAMP), citizenkeith tron theme, double-click to reset any knob.\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.1.0" author="citizenkeith" time="2026-04-16T15:33:59Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/f5c889272cdf3015a8a13ba7f6d1427a96560d58/modulation/Krautrock%20Phaser.jsfx</source>
+      </version>
+    </reapack>
     <reapack name="Tempo Tremolo (AI Code).jsfx" type="effect" desc="Tempo Tremolo">
       <metadata>
         <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
@@ -495,6 +509,9 @@ v1.0
       </version>
       <version name="2.1" author="citizenkeith and Claude AI" time="2026-03-07T02:11:08Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/76427df14146043471c1d9c80c5ae92f84e952d0/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
+      </version>
+      <version name="2.4" author="citizenkeith and Claude AI" time="2026-04-30T16:25:02Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/b25227f3cb4b3268a8a8b89f99046a9a48de3cd6/reverb/Cocteau%20Verb%20(AI%20Code).jsfx</source>
       </version>
     </reapack>
   </category>
