@@ -1,9 +1,9 @@
 desc:Cocteau Verb
-version: 2.1
+version: 2.4
 author: citizenkeith and Claude AI
 about: Stereo widener, BBD chorus, ping pong delay and three reverb choices, for a Robin Guthrie-inspired tone. 
 
-// @version 2.1
+// @version 2.4
 // @author citizenkeith
 // @license GPL v3
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
@@ -11,6 +11,20 @@ about: Stereo widener, BBD chorus, ping pong delay and three reverb choices, for
 //   Stereo widener, BBD-style chorus, ping-pong delay, and three reverb algorithms
 //   (Verbity2, Bloom/MidiVerb II, Dattorro) for a Robin Guthrie / Cocteau Twins inspired tone.
 // @changelog
+//   v2.4
+//     Item 14: Removed dead wraparound conditionals in Verbity2
+//     Item 15: Removed redundant memset() calls (JSFX zero-fills heap)
+//     Item 16: Removed | 0 JavaScript idiom (floor() already integer)
+//     Item 17: eq_boost_low/high confirmed removed (handled in v2.2 item 8)
+//     Item 18: Added comments for hardcoded chorus parameters (Dream Pop voice)
+//   v2.3
+//     Item 2: Dattorro modulation moved to inner APF (apA1/apB1) — canonical Dattorro figure-8
+//     Item 3: Linear interpolation on modulated APF reads — eliminates zipper artifacts
+//     Item 4: Multi-tap figure-8 output with cross-coupling and sign inversion
+//   v2.2
+//     Item 8: Smoothed effect_level and eq_balance (click-free automation)
+//     Item 11: Denormal protection on chorus/delay/EQ filters
+//     Item 12: @slider now calls update_parameters() - single source of truth
 //   v2.1
 //     New "standard" GUI: wider window
 //     Added amber value readouts below all knobs
@@ -185,9 +199,11 @@ write_pos_bbd1_R = 0;
 write_pos_bbd2_L = 0;
 write_pos_bbd2_R = 0;
 
-chorus_center_delay = 7.5;
-chorus_depth = 2.0;
-chorus_rate = 0.35;
+// Hardcoded chorus parameters — intentional "Dream Pop voice"
+// Changing these alters the fundamental character of the effect
+chorus_center_delay = 7.5;  // ms — BBD center delay
+chorus_depth = 2.0;          // ms — LFO sweep depth
+chorus_rate = 0.35;          // Hz — LFO rate
 lfo_phase = 0;
 
 pre_emph_freq = 2000;
@@ -206,10 +222,12 @@ eq_high_coeff = exp(-2 * $pi * eq_high_freq / srate);
 eq_low_z1_L  = eq_low_z1_R  = 0;
 eq_high_z1_L = eq_high_z1_R = 0;
 
-smooth_coeff       = exp(-2 * $pi * 10 / srate);
-smooth_delay_mix   = 0;
-smooth_feedback    = 0;
-smooth_reverb_mix  = 0;
+smooth_coeff        = exp(-2 * $pi * 10 / srate);
+smooth_delay_mix    = 0;
+smooth_feedback     = 0;
+smooth_reverb_mix   = 0;
+smooth_effect_level = 0;
+smooth_eq_balance   = 0.5;
 
 // === PING-PONG DELAY ===
 max_delay_time_samples = ceil(1.0 * srate);
@@ -468,59 +486,7 @@ R.previousA = R.previousB = R.previousC = R.previousD = R.previousE = 0;
 L.interpolate = R.interpolate = 0;
 cycle = 0;
 
-memset(L.aA, 0, 5005); memset(L.aF, 0, 4953); memset(L.aK, 0, 4921);
-memset(L.aP, 0, 4801); memset(L.aU, 0, 4753); memset(L.aB, 0, 4351);
-memset(L.aG, 0, 4159); memset(L.aL, 0, 3931); memset(L.aQ, 0, 3531);
-memset(L.aV, 0, 3331); memset(L.aC, 0, 3325); memset(L.aH, 0, 2793);
-memset(L.aM, 0, 2769); memset(L.aR, 0, 2391); memset(L.aW, 0, 2349);
-memset(L.aD, 0, 2143); memset(L.aI, 0, 1813); memset(L.aN, 0, 1735);
-memset(L.aS, 0, 1173); memset(L.aX, 0, 789);  memset(L.aE, 0, 679);
-memset(L.aJ, 0, 645);  memset(L.aO, 0, 441);  memset(L.aT, 0, 351);
-memset(L.aY, 0, 283);  memset(L.lastRef, 0, 7);
-
-memset(R.aA, 0, 5005); memset(R.aF, 0, 4953); memset(R.aK, 0, 4921);
-memset(R.aP, 0, 4801); memset(R.aU, 0, 4753); memset(R.aB, 0, 4351);
-memset(R.aG, 0, 4159); memset(R.aL, 0, 3931); memset(R.aQ, 0, 3531);
-memset(R.aV, 0, 3331); memset(R.aC, 0, 3325); memset(R.aH, 0, 2793);
-memset(R.aM, 0, 2769); memset(R.aR, 0, 2391); memset(R.aW, 0, 2349);
-memset(R.aD, 0, 2143); memset(R.aI, 0, 1813); memset(R.aN, 0, 1735);
-memset(R.aS, 0, 1173); memset(R.aX, 0, 789);  memset(R.aE, 0, 679);
-memset(R.aJ, 0, 645);  memset(R.aO, 0, 441);  memset(R.aT, 0, 351);
-memset(R.aY, 0, 283);  memset(R.lastRef, 0, 7);
-
-memset(mv2_aAL, 0, 15150); memset(mv2_aAR, 0, 15150);
-memset(mv2_aBL, 0, 14618); memset(mv2_aBR, 0, 14618);
-memset(mv2_aCL, 0, 14358); memset(mv2_aCR, 0, 14358);
-memset(mv2_aDL, 0, 13818); memset(mv2_aDR, 0, 13818);
-memset(mv2_aEL, 0, 13562); memset(mv2_aER, 0, 13562);
-memset(mv2_aFL, 0, 13046); memset(mv2_aFR, 0, 13046);
-memset(mv2_aGL, 0, 11966); memset(mv2_aGR, 0, 11966);
-memset(mv2_aHL, 0, 11130); memset(mv2_aHR, 0, 11130);
-memset(mv2_aIL, 0, 10598); memset(mv2_aIR, 0, 10598);
-memset(mv2_aJL, 0, 9810);  memset(mv2_aJR, 0, 9810);
-memset(mv2_aKL, 0, 9522);  memset(mv2_aKR, 0, 9522);
-memset(mv2_aLL, 0, 8982);  memset(mv2_aLR, 0, 8982);
-memset(mv2_aML, 0, 8786);  memset(mv2_aMR, 0, 8786);
-memset(mv2_aNL, 0, 8462);  memset(mv2_aNR, 0, 8462);
-memset(mv2_aOL, 0, 8310);  memset(mv2_aOR, 0, 8310);
-memset(mv2_aPL, 0, 7982);  memset(mv2_aPR, 0, 7982);
-memset(mv2_aQL, 0, 7322);  memset(mv2_aQR, 0, 7322);
-memset(mv2_aRL, 0, 6818);  memset(mv2_aRR, 0, 6818);
-memset(mv2_aSL, 0, 6506);  memset(mv2_aSR, 0, 6506);
-memset(mv2_aTL, 0, 6002);  memset(mv2_aTR, 0, 6002);
-memset(mv2_aUL, 0, 5838);  memset(mv2_aUR, 0, 5838);
-memset(mv2_aVL, 0, 5502);  memset(mv2_aVR, 0, 5502);
-memset(mv2_aWL, 0, 5010);  memset(mv2_aWR, 0, 5010);
-memset(mv2_aXL, 0, 4850);  memset(mv2_aXR, 0, 4850);
-memset(mv2_aYL, 0, 4296);  memset(mv2_aYR, 0, 4296);
-memset(mv2_aZL, 0, 4180);  memset(mv2_aZR, 0, 4180);
-memset(mv2_lastRefL, 0, 7); memset(mv2_lastRefR, 0, 7);
-
-memset(dat_ap1, 0, 210);    memset(dat_ap2, 0, 159);
-memset(dat_ap3, 0, 562);    memset(dat_ap4, 0, 410);
-memset(dat_delayA1, 0, 4500); memset(dat_apA1, 0, 1800);
-memset(dat_delayA2, 0, 3500); memset(dat_delayB1, 0, 4200);
-memset(dat_apB1, 0, 1650);  memset(dat_delayB2, 0, 3200);
+// JSFX zero-fills freshly allocated heap memory — memsets omitted (redundant)
 
 UINT32_MAX = 4294967295;
 L.fpd = 1.0; while (L.fpd < 16386) (L.fpd = rand()*UINT32_MAX);
@@ -556,7 +522,7 @@ function update_parameters()
   delay_time_samples = min(ceil(delay_time_ms * 0.001 * srate), max_delay_time_samples - 1);
 
   overallscale = srate / 44100;
-  cycleEnd = max(1, min(4, floor(overallscale) | 0));
+  cycleEnd = max(1, min(4, floor(overallscale)));  // floor() already integer-valued
 
   A = min(0.94, 0.94 * pow(reverb_size, 1.1));
   size = pow(A, 1.3) * 0.97 + 0.03;
@@ -588,6 +554,40 @@ function update_parameters()
   dat_decay           = 0.4 + reverb_decay * 0.35;
   dat_damping         = 0.15 + reverb_dampen * 0.4;
   dat_mod_depth       = 3.0;
+
+  // Verbity2 delay lengths (depend on size, computed here for single source of truth)
+  L.delayA = floor(5003 * size); L.delayF = floor(4951 * size);
+  L.delayK = floor(4919 * size); L.delayP = floor(4799 * size);
+  L.delayU = floor(4751 * size);
+  L.delayB = floor(4349 * size); L.delayG = floor(4157 * size);
+  L.delayL = floor(3929 * size); L.delayQ = floor(3529 * size);
+  L.delayV = floor(3329 * size);
+  L.delayC = floor(3323 * size); L.delayH = floor(2791 * size);
+  L.delayM = floor(2767 * size); L.delayR = floor(2389 * size);
+  L.delayW = floor(2347 * size);
+  L.delayD = floor(2141 * size); L.delayI = floor(1811 * size);
+  L.delayN = floor(1733 * size); L.delayS = floor(1171 * size);
+  L.delayX = floor(787  * size);
+  L.delayE = floor(677 * size); L.delayJ = floor(643 * size);
+  L.delayO = floor(439 * size); L.delayT = floor(349 * size);
+  L.delayY = floor(281 * size);
+
+  st = 0.08; st1 = 1 + st; st2 = 1 - st;
+  R.delayA = L.delayA * st1; R.delayF = L.delayF * st2;
+  R.delayK = L.delayK * st1; R.delayP = L.delayP * st2;
+  R.delayU = L.delayU * st1;
+  R.delayB = L.delayB * st2; R.delayG = L.delayG * st1;
+  R.delayL = L.delayL * st2; R.delayQ = L.delayQ * st1;
+  R.delayV = L.delayV * st2;
+  R.delayC = L.delayC * st1; R.delayH = L.delayH * st2;
+  R.delayM = L.delayM * st1; R.delayR = L.delayR * st2;
+  R.delayW = L.delayW * st1;
+  R.delayD = L.delayD * st2; R.delayI = L.delayI * st1;
+  R.delayN = L.delayN * st2; R.delayS = L.delayS * st1;
+  R.delayX = L.delayX * st2;
+  R.delayE = L.delayE * st1; R.delayJ = L.delayJ * st2;
+  R.delayO = L.delayO * st1; R.delayT = L.delayT * st2;
+  R.delayY = L.delayY * st1;
 );
 
 // ============================================================
@@ -695,17 +695,17 @@ function cycleEnd1()
   aD[countD] = inputSample + (feedbackD * (regen*(1.0-abs(feedbackD*regen))));
   aE[countE] = inputSample + (feedbackE * (regen*(1.0-abs(feedbackE*regen))));
 
-  countA+=1; (countA < 0 || countA > delayA) ? countA = 0;
-  countB+=1; (countB < 0 || countB > delayB) ? countB = 0;
-  countC+=1; (countC < 0 || countC > delayC) ? countC = 0;
-  countD+=1; (countD < 0 || countD > delayD) ? countD = 0;
-  countE+=1; (countE < 0 || countE > delayE) ? countE = 0;
+  countA+=1; countA > delayA ? countA = 0;
+  countB+=1; countB > delayB ? countB = 0;
+  countC+=1; countC > delayC ? countC = 0;
+  countD+=1; countD > delayD ? countD = 0;
+  countE+=1; countE > delayE ? countE = 0;
 
-  outA = aA[countA-((countA > delayA)?delayA+1:0)];
-  outB = aB[countB-((countB > delayB)?delayB+1:0)];
-  outC = aC[countC-((countC > delayC)?delayC+1:0)];
-  outD = aD[countD-((countD > delayD)?delayD+1:0)];
-  outE = aE[countE-((countE > delayE)?delayE+1:0)];
+  outA = aA[countA];
+  outB = aB[countB];
+  outC = aC[countC];
+  outD = aD[countD];
+  outE = aE[countE];
 
   aF[countF] = ((outA*3.0) - ((outB + outC + outD + outE)*2.0));
   aG[countG] = ((outB*3.0) - ((outA + outC + outD + outE)*2.0));
@@ -713,17 +713,17 @@ function cycleEnd1()
   aI[countI] = ((outD*3.0) - ((outA + outB + outC + outE)*2.0));
   aJ[countJ] = ((outE*3.0) - ((outA + outB + outC + outD)*2.0));
 
-  countF+=1; (countF < 0 || countF > delayF) ? countF = 0;
-  countG+=1; (countG < 0 || countG > delayG) ? countG = 0;
-  countH+=1; (countH < 0 || countH > delayH) ? countH = 0;
-  countI+=1; (countI < 0 || countI > delayI) ? countI = 0;
-  countJ+=1; (countJ < 0 || countJ > delayJ) ? countJ = 0;
+  countF+=1; countF > delayF ? countF = 0;
+  countG+=1; countG > delayG ? countG = 0;
+  countH+=1; countH > delayH ? countH = 0;
+  countI+=1; countI > delayI ? countI = 0;
+  countJ+=1; countJ > delayJ ? countJ = 0;
 
-  outF = aF[countF-((countF > delayF)?delayF+1:0)];
-  outG = aG[countG-((countG > delayG)?delayG+1:0)];
-  outH = aH[countH-((countH > delayH)?delayH+1:0)];
-  outI = aI[countI-((countI > delayI)?delayI+1:0)];
-  outJ = aJ[countJ-((countJ > delayJ)?delayJ+1:0)];
+  outF = aF[countF];
+  outG = aG[countG];
+  outH = aH[countH];
+  outI = aI[countI];
+  outJ = aJ[countJ];
 
   aK[countK] = ((outF*3.0) - ((outG + outH + outI + outJ)*2.0));
   aL[countL] = ((outG*3.0) - ((outF + outH + outI + outJ)*2.0));
@@ -731,17 +731,17 @@ function cycleEnd1()
   aN[countN] = ((outI*3.0) - ((outF + outG + outH + outJ)*2.0));
   aO[countO] = ((outJ*3.0) - ((outF + outG + outH + outI)*2.0));
 
-  countK+=1; (countK < 0 || countK > delayK) ? countK = 0;
-  countL+=1; (countL < 0 || countL > delayL) ? countL = 0;
-  countM+=1; (countM < 0 || countM > delayM) ? countM = 0;
-  countN+=1; (countN < 0 || countN > delayN) ? countN = 0;
-  countO+=1; (countO < 0 || countO > delayO) ? countO = 0;
+  countK+=1; countK > delayK ? countK = 0;
+  countL+=1; countL > delayL ? countL = 0;
+  countM+=1; countM > delayM ? countM = 0;
+  countN+=1; countN > delayN ? countN = 0;
+  countO+=1; countO > delayO ? countO = 0;
 
-  outK = aK[countK-((countK > delayK)?delayK+1:0)];
-  outL = aL[countL-((countL > delayL)?delayL+1:0)];
-  outM = aM[countM-((countM > delayM)?delayM+1:0)];
-  outN = aN[countN-((countN > delayN)?delayN+1:0)];
-  outO = aO[countO-((countO > delayO)?delayO+1:0)];
+  outK = aK[countK];
+  outL = aL[countL];
+  outM = aM[countM];
+  outN = aN[countN];
+  outO = aO[countO];
 
   aP[countP] = ((outK*3.0) - ((outL + outM + outN + outO)*2.0));
   aQ[countQ] = ((outL*3.0) - ((outK + outM + outN + outO)*2.0));
@@ -749,17 +749,17 @@ function cycleEnd1()
   aS[countS] = ((outN*3.0) - ((outK + outL + outM + outO)*2.0));
   aT[countT] = ((outO*3.0) - ((outK + outL + outM + outN)*2.0));
 
-  countP+=1; (countP < 0 || countP > delayP) ? countP = 0;
-  countQ+=1; (countQ < 0 || countQ > delayQ) ? countQ = 0;
-  countR+=1; (countR < 0 || countR > delayR) ? countR = 0;
-  countS+=1; (countS < 0 || countS > delayS) ? countS = 0;
-  countT+=1; (countT < 0 || countT > delayT) ? countT = 0;
+  countP+=1; countP > delayP ? countP = 0;
+  countQ+=1; countQ > delayQ ? countQ = 0;
+  countR+=1; countR > delayR ? countR = 0;
+  countS+=1; countS > delayS ? countS = 0;
+  countT+=1; countT > delayT ? countT = 0;
 
-  outP = aP[countP-((countP > delayP)?delayP+1:0)];
-  outQ = aQ[countQ-((countQ > delayQ)?delayQ+1:0)];
-  outR = aR[countR-((countR > delayR)?delayR+1:0)];
-  outS = aS[countS-((countS > delayS)?delayS+1:0)];
-  outT = aT[countT-((countT > delayT)?delayT+1:0)];
+  outP = aP[countP];
+  outQ = aQ[countQ];
+  outR = aR[countR];
+  outS = aS[countS];
+  outT = aT[countT];
 
   aU[countU] = ((outP*3.0) - ((outQ + outR + outS + outT)*2.0));
   aV[countV] = ((outQ*3.0) - ((outP + outR + outS + outT)*2.0));
@@ -767,17 +767,17 @@ function cycleEnd1()
   aX[countX] = ((outS*3.0) - ((outP + outQ + outR + outT)*2.0));
   aY[countY] = ((outT*3.0) - ((outP + outQ + outR + outS)*2.0));
 
-  countU+=1; (countU < 0 || countU > delayU) ? countU = 0;
-  countV+=1; (countV < 0 || countV > delayV) ? countV = 0;
-  countW+=1; (countW < 0 || countW > delayW) ? countW = 0;
-  countX+=1; (countX < 0 || countX > delayX) ? countX = 0;
-  countY+=1; (countY < 0 || countY > delayY) ? countY = 0;
+  countU+=1; countU > delayU ? countU = 0;
+  countV+=1; countV > delayV ? countV = 0;
+  countW+=1; countW > delayW ? countW = 0;
+  countX+=1; countX > delayX ? countX = 0;
+  countY+=1; countY > delayY ? countY = 0;
 
-  outU = aU[countU-((countU > delayU)?delayU+1:0)];
-  outV = aV[countV-((countV > delayV)?delayV+1:0)];
-  outW = aW[countW-((countW > delayW)?delayW+1:0)];
-  outX = aX[countX-((countX > delayX)?delayX+1:0)];
-  outY = aY[countY-((countY > delayY)?delayY+1:0)];
+  outU = aU[countU];
+  outV = aV[countV];
+  outW = aW[countW];
+  outX = aX[countX];
+  outY = aY[countY];
 );
 
 function cycleEnd2()
@@ -809,122 +809,23 @@ function cycleEnd2()
 );
 
 @slider
-effect_level        = slider1 * 0.01;
-eq_balance          = slider2 * 0.01;
-delay_mix_target    = slider10 * 0.01;
-delay_time_ms       = slider11;
-delay_feedback_target = slider12 * 0.01;
-reverb_type         = slider20;
-reverb_size         = slider21 * 0.01;
-reverb_decay        = slider22 * 0.01;
-reverb_dampen       = slider23 * 0.01;
-reverb_predelay_ms  = slider24;
-reverb_hpf          = slider25;
-reverb_lpf          = slider26 * 1000;
-reverb_width        = slider27 * 0.01;
-reverb_mix          = slider28 * 0.01;
-
-// Widener filters have no sliders - nothing to update here.
-// widener_gain, coefficients, and state are all set once at @init.
-
-// Update delay time (clamped for safety)
-delay_time_samples = min(ceil(delay_time_ms * 0.001 * srate), max_delay_time_samples - 1);
-
-// Verbity2 parameters
-overallscale = srate / 44100;
-cycleEnd = max(1, min(4, floor(overallscale) | 0));
+// Single source of truth - all parameter math lives in update_parameters()
+update_parameters();
 cycle = 0;
-
-A = min(0.94, 0.94 * pow(reverb_size, 1.1));
-size = pow(A, 1.3) * 0.97 + 0.03;
-
-decay1 = min(1, reverb_decay * 2);
-decay1 = pow(decay1, 0.6) * 0.5 + max(0, reverb_decay * 2 - 1) ^ 1.4 * 0.5;
-B = min(1 - 0.2 * A * A, pow(decay1, 1.5));
-regen = (1.0 - pow(1.0 - B, 3.0)) * 0.00032;
-
-interpolateMax = 0.01 + reverb_dampen * 0.5;
-widtha = 1 - abs(reverb_width) ^ 0.5;
-
-reverb_prelen = min(max_reverb_predelay_samples, floor(reverb_predelay_ms * 0.001 * srate));
-
-L.delayA = floor(5003 * size); L.delayF = floor(4951 * size);
-L.delayK = floor(4919 * size); L.delayP = floor(4799 * size);
-L.delayU = floor(4751 * size);
-
-L.delayB = floor(4349 * size); L.delayG = floor(4157 * size);
-L.delayL = floor(3929 * size); L.delayQ = floor(3529 * size);
-L.delayV = floor(3329 * size);
-
-L.delayC = floor(3323 * size); L.delayH = floor(2791 * size);
-L.delayM = floor(2767 * size); L.delayR = floor(2389 * size);
-L.delayW = floor(2347 * size);
-
-L.delayD = floor(2141 * size); L.delayI = floor(1811 * size);
-L.delayN = floor(1733 * size); L.delayS = floor(1171 * size);
-L.delayX = floor(787  * size);
-
-L.delayE = floor(677 * size); L.delayJ = floor(643 * size);
-L.delayO = floor(439 * size); L.delayT = floor(349 * size);
-L.delayY = floor(281 * size);
-
-st = 0.08;
-st1 = 1 + st;
-st2 = 1 - st;
-
-R.delayA = L.delayA * st1; R.delayF = L.delayF * st2;
-R.delayK = L.delayK * st1; R.delayP = L.delayP * st2;
-R.delayU = L.delayU * st1;
-
-R.delayB = L.delayB * st2; R.delayG = L.delayG * st1;
-R.delayL = L.delayL * st2; R.delayQ = L.delayQ * st1;
-R.delayV = L.delayV * st2;
-
-R.delayC = L.delayC * st1; R.delayH = L.delayH * st2;
-R.delayM = L.delayM * st1; R.delayR = L.delayR * st2;
-R.delayW = L.delayW * st1;
-
-R.delayD = L.delayD * st2; R.delayI = L.delayI * st1;
-R.delayN = L.delayN * st2; R.delayS = L.delayS * st1;
-R.delayX = L.delayX * st2;
-
-R.delayE = L.delayE * st1; R.delayJ = L.delayJ * st2;
-R.delayO = L.delayO * st1; R.delayT = L.delayT * st2;
-R.delayY = L.delayY * st1;
-
-highpass = (0.002 + (reverb_hpf / 300) * 0.045) / sqrt(overallscale);
-lowpass  = (1.0 - ((1 - reverb_lpf / 20000) ^ 0.89145 * 0.85)) / sqrt(overallscale);
-
-// === BLOOM REVERB PARAMETERS ===
-mv2_stage = floor(reverb_size * 27.0);
-mv2_damp  = floor((1.0 - reverb_dampen) * mv2_stage);
-
-mv2_feedbacklevel = reverb_decay;
-mv2_feedbacklevel <= 0.0625                                  ? mv2_feedbacklevel = 0.0;
-mv2_feedbacklevel > 0.0625 && mv2_feedbacklevel <= 0.125    ? mv2_feedbacklevel = 0.0625;
-mv2_feedbacklevel > 0.125  && mv2_feedbacklevel <= 0.25     ? mv2_feedbacklevel = 0.125;
-mv2_feedbacklevel > 0.25   && mv2_feedbacklevel <= 0.5      ? mv2_feedbacklevel = 0.25;
-mv2_feedbacklevel > 0.5    && mv2_feedbacklevel <= 0.99     ? mv2_feedbacklevel = 0.5;
-mv2_feedbacklevel > 0.99                                     ? mv2_feedbacklevel = 1.0;
-
-mv2_gain = 1.0;
-
-// === DATTORRO REVERB PARAMETERS ===
-dat_size             = 0.5 + reverb_size * 0.5;
-dat_input_diffusion  = 0.5;
-dat_decay_diffusion  = 0.5;
-dat_decay            = 0.4 + reverb_decay * 0.35;
-dat_damping          = 0.15 + reverb_dampen * 0.4;
-dat_mod_depth        = 3.0;
 
 @block
 cycle > cycleEnd - 1 ? cycle = cycleEnd - 1;
 
 @sample
 // === PARAMETER SMOOTHING ===
-smooth_delay_mix  = delay_mix_target       * (1 - smooth_coeff) + smooth_delay_mix  * smooth_coeff;
-smooth_feedback   = delay_feedback_target  * (1 - smooth_coeff) + smooth_feedback   * smooth_coeff;
-smooth_reverb_mix = reverb_mix             * (1 - smooth_coeff) + smooth_reverb_mix * smooth_coeff;
+smooth_delay_mix    = delay_mix_target   * (1 - smooth_coeff) + smooth_delay_mix    * smooth_coeff;
+smooth_feedback     = delay_feedback_target * (1 - smooth_coeff) + smooth_feedback  * smooth_coeff;
+smooth_reverb_mix   = reverb_mix         * (1 - smooth_coeff) + smooth_reverb_mix   * smooth_coeff;
+smooth_effect_level = effect_level       * (1 - smooth_coeff) + smooth_effect_level * smooth_coeff;
+smooth_eq_balance   = eq_balance         * (1 - smooth_coeff) + smooth_eq_balance   * smooth_coeff;
+
+eq_boost_low_s  = (smooth_eq_balance - 0.5) * -2;
+eq_boost_high_s = (smooth_eq_balance - 0.5) *  2;
 
 // === STAGE 1: STEREO WIDENER ===
 widener_in_L = spl0;
@@ -950,10 +851,12 @@ lfo2 = sin(lfo_phase + $pi);
 
 pre_hp_L = widened_L - pre_z1_L;
 pre_z1_L = widened_L * (1 - pre_coeff) + pre_z1_L * pre_coeff;
+abs(pre_z1_L) < DENORMAL_THRESHOLD ? pre_z1_L = 0;
 pre_emphasized_L = widened_L + pre_hp_L * 0.5;
 
 pre_hp_R = widened_R - pre_z1_R;
 pre_z1_R = widened_R * (1 - pre_coeff) + pre_z1_R * pre_coeff;
+abs(pre_z1_R) < DENORMAL_THRESHOLD ? pre_z1_R = 0;
 pre_emphasized_R = widened_R + pre_hp_R * 0.5;
 
 bbd_buffer_1_L[write_pos_bbd1_L] = pre_emphasized_L;
@@ -995,30 +898,34 @@ chorused_R = (delayed1_R + delayed2_R) * 0.5;
 
 de_lp_L = chorused_L * (1 - de_coeff) + de_z1_L * de_coeff;
 de_z1_L = de_lp_L;
+abs(de_z1_L) < DENORMAL_THRESHOLD ? de_z1_L = 0;
 chorused_L = chorused_L - (chorused_L - de_lp_L) * 0.5;
 
 de_lp_R = chorused_R * (1 - de_coeff) + de_z1_R * de_coeff;
 de_z1_R = de_lp_R;
+abs(de_z1_R) < DENORMAL_THRESHOLD ? de_z1_R = 0;
 chorused_R = chorused_R - (chorused_R - de_lp_R) * 0.5;
 
 eq_low_shelf_L = widened_L * (1 - eq_low_coeff) + eq_low_z1_L * eq_low_coeff;
 eq_low_z1_L = eq_low_shelf_L;
+abs(eq_low_z1_L) < DENORMAL_THRESHOLD ? eq_low_z1_L = 0;
 eq_high_shelf_L = chorused_L - eq_high_z1_L;
 eq_high_z1_L = chorused_L * (1 - eq_high_coeff) + eq_high_z1_L * eq_high_coeff;
+abs(eq_high_z1_L) < DENORMAL_THRESHOLD ? eq_high_z1_L = 0;
 
 eq_low_shelf_R = widened_R * (1 - eq_low_coeff) + eq_low_z1_R * eq_low_coeff;
 eq_low_z1_R = eq_low_shelf_R;
+abs(eq_low_z1_R) < DENORMAL_THRESHOLD ? eq_low_z1_R = 0;
 eq_high_shelf_R = chorused_R - eq_high_z1_R;
 eq_high_z1_R = chorused_R * (1 - eq_high_coeff) + eq_high_z1_R * eq_high_coeff;
+abs(eq_high_z1_R) < DENORMAL_THRESHOLD ? eq_high_z1_R = 0;
 
-eq_boost_low  = (eq_balance - 0.5) * -2;
-eq_boost_high = (eq_balance - 0.5) *  2;
+// Use pre-computed smoothed eq boosts (updated in smoothing section above)
+eq_chorused_L = chorused_L + eq_low_shelf_L * eq_boost_low_s + eq_high_shelf_L * eq_boost_high_s;
+eq_chorused_R = chorused_R + eq_low_shelf_R * eq_boost_low_s + eq_high_shelf_R * eq_boost_high_s;
 
-eq_chorused_L = chorused_L + eq_low_shelf_L * eq_boost_low + eq_high_shelf_L * eq_boost_high;
-eq_chorused_R = chorused_R + eq_low_shelf_R * eq_boost_low + eq_high_shelf_R * eq_boost_high;
-
-chorus_out_L = widened_L * (1 - effect_level) + eq_chorused_L * effect_level;
-chorus_out_R = widened_R * (1 - effect_level) + eq_chorused_R * effect_level;
+chorus_out_L = widened_L * (1 - smooth_effect_level) + eq_chorused_L * smooth_effect_level;
+chorus_out_R = widened_R * (1 - smooth_effect_level) + eq_chorused_R * smooth_effect_level;
 
 // === STAGE 3: PING-PONG DELAY ===
 delay_mod_phase += delay_mod_rate * 2 * $pi / srate;
@@ -1042,10 +949,12 @@ delayed_R = delay_buffer_R[read_delay_R_int] * (1 - read_delay_R_frac) + delay_b
 
 delay_hp_temp_L = delayed_L - delay_hp_L;
 delay_hp_L = delayed_L * (1 - hp_coeff) + delay_hp_L * hp_coeff;
+abs(delay_hp_L) < DENORMAL_THRESHOLD ? delay_hp_L = 0;
 delayed_L = delay_hp_temp_L;
 
 delay_hp_temp_R = delayed_R - delay_hp_R;
 delay_hp_R = delayed_R * (1 - hp_coeff) + delay_hp_R * hp_coeff;
+abs(delay_hp_R) < DENORMAL_THRESHOLD ? delay_hp_R = 0;
 delayed_R = delay_hp_temp_R;
 
 delay_lp_L = delayed_L * (1 - lp_coeff) + delay_lp_L * lp_coeff;
@@ -1695,21 +1604,34 @@ reverb_type == 0 ? (
   dat_input_mono = dat_buf - dat_input_mono * dat_input_diffusion;
   dat_ap4_idx = (dat_ap4_idx + 1) % 410;
 
+  // === TANK A ===
+  // Item 2: modulation moved from delayA1 to apA1 (inner APF — canonical Dattorro)
   dat_lfo1 += dat_lfo_rate; dat_lfo1 >= 1.0 ? dat_lfo1 -= 1.0;
-  dat_mod = sin(dat_lfo1 * 2 * $pi) * dat_mod_depth;
-  dat_read_pos = floor(dat_delayA1_idx - dat_delayA1_len * dat_size + dat_mod);
+  dat_mod_A = sin(dat_lfo1 * 2 * $pi) * dat_mod_depth;
+
+  // delayA1: unmodulated input delay
+  dat_read_pos = dat_delayA1_idx - floor(dat_delayA1_len * dat_size);
   while (dat_read_pos < 0) ( dat_read_pos += 4500; );
   dat_tankA = dat_delayA1[dat_read_pos % 4500];
 
   dat_dampA = dat_tankA * (1.0 - dat_damping) + dat_dampA * dat_damping;
   abs(dat_dampA) < DENORMAL_THRESHOLD ? dat_dampA = 0.0;
 
-  dat_temp = dat_apA1_idx - floor(dat_apA1_len * dat_size);
-  while (dat_temp < 0) ( dat_temp += 1800; );
-  dat_buf = dat_apA1[dat_temp % 1800];
+  // apA1: modulated read with linear interpolation (Items 2 + 3)
+  dat_ap_read = dat_apA1_idx - floor(dat_apA1_len * dat_size) + dat_mod_A;
+  while (dat_ap_read < 0) ( dat_ap_read += 1800; );
+  dat_ap_int = floor(dat_ap_read) % 1800;
+  dat_ap_frac = dat_ap_read - floor(dat_ap_read);
+  dat_ap_next = (dat_ap_int + 1) % 1800;
+  dat_buf = dat_apA1[dat_ap_int] * (1 - dat_ap_frac) + dat_apA1[dat_ap_next] * dat_ap_frac;
   dat_apA1[dat_apA1_idx] = dat_dampA + dat_buf * dat_decay_diffusion;
   dat_tankA = dat_buf - dat_dampA * dat_decay_diffusion;
   dat_apA1_idx = (dat_apA1_idx + 1) % 1800;
+
+  // Item 4: additional output tap from apA1 at ~60% position
+  dat_ap_tap_pos = dat_apA1_idx - floor(dat_apA1_len * dat_size * 0.6);
+  while (dat_ap_tap_pos < 0) ( dat_ap_tap_pos += 1800; );
+  dat_apA1_tap = dat_apA1[dat_ap_tap_pos % 1800];
 
   dat_read_pos = dat_delayA2_idx - floor(dat_delayA2_len * dat_size);
   while (dat_read_pos < 0) ( dat_read_pos += 3500; );
@@ -1717,21 +1639,33 @@ reverb_type == 0 ? (
   dat_delayA2[dat_delayA2_idx] = dat_tankA;
   dat_delayA2_idx = (dat_delayA2_idx + 1) % 3500;
 
+  // === TANK B ===
   dat_lfo2 += dat_lfo_rate * 1.07; dat_lfo2 >= 1.0 ? dat_lfo2 -= 1.0;
-  dat_mod = sin(dat_lfo2 * 2 * $pi) * dat_mod_depth;
-  dat_read_pos = floor(dat_delayB1_idx - dat_delayB1_len * dat_size + dat_mod);
+  dat_mod_B = sin(dat_lfo2 * 2 * $pi) * dat_mod_depth;
+
+  // delayB1: unmodulated input delay
+  dat_read_pos = dat_delayB1_idx - floor(dat_delayB1_len * dat_size);
   while (dat_read_pos < 0) ( dat_read_pos += 4200; );
   dat_tankB = dat_delayB1[dat_read_pos % 4200];
 
   dat_dampB = dat_tankB * (1.0 - dat_damping) + dat_dampB * dat_damping;
   abs(dat_dampB) < DENORMAL_THRESHOLD ? dat_dampB = 0.0;
 
-  dat_temp = dat_apB1_idx - floor(dat_apB1_len * dat_size);
-  while (dat_temp < 0) ( dat_temp += 1650; );
-  dat_buf = dat_apB1[dat_temp % 1650];
+  // apB1: modulated read with linear interpolation (Items 2 + 3)
+  dat_ap_read = dat_apB1_idx - floor(dat_apB1_len * dat_size) + dat_mod_B;
+  while (dat_ap_read < 0) ( dat_ap_read += 1650; );
+  dat_ap_int = floor(dat_ap_read) % 1650;
+  dat_ap_frac = dat_ap_read - floor(dat_ap_read);
+  dat_ap_next = (dat_ap_int + 1) % 1650;
+  dat_buf = dat_apB1[dat_ap_int] * (1 - dat_ap_frac) + dat_apB1[dat_ap_next] * dat_ap_frac;
   dat_apB1[dat_apB1_idx] = dat_dampB + dat_buf * dat_decay_diffusion;
   dat_tankB = dat_buf - dat_dampB * dat_decay_diffusion;
   dat_apB1_idx = (dat_apB1_idx + 1) % 1650;
+
+  // Item 4: additional output tap from apB1 at ~60% position
+  dat_ap_tap_pos = dat_apB1_idx - floor(dat_apB1_len * dat_size * 0.6);
+  while (dat_ap_tap_pos < 0) ( dat_ap_tap_pos += 1650; );
+  dat_apB1_tap = dat_apB1[dat_ap_tap_pos % 1650];
 
   dat_read_pos = dat_delayB2_idx - floor(dat_delayB2_len * dat_size);
   while (dat_read_pos < 0) ( dat_read_pos += 3200; );
@@ -1745,8 +1679,11 @@ reverb_type == 0 ? (
   dat_delayB1[dat_delayB1_idx] = dat_input_mono + dat_tankA_out * dat_decay;
   dat_delayB1_idx = (dat_delayB1_idx + 1) % 4200;
 
-  wetL = dat_tankA_out * 0.5 + dat_tankA * 0.3 + dat_tankB * 0.2;
-  wetR = dat_tankB_out * 0.5 + dat_tankB * 0.3 + dat_tankA * 0.2;
+  // Item 4: multi-tap figure-8 output with cross-coupling and sign inversion
+  // L: primary from tankA_out, secondary from apA1 tap, cross from B tanks (inverted)
+  // R: primary from tankB_out, secondary from apB1 tap, cross from A tanks (inverted)
+  wetL = dat_tankA_out * 0.4 + dat_apA1_tap * 0.35 - dat_tankB_out * 0.15 - dat_apB1_tap * 0.1;
+  wetR = dat_tankB_out * 0.4 + dat_apB1_tap * 0.35 - dat_tankA_out * 0.15 - dat_apA1_tap * 0.1;
 
   wetL > 1.0  ? wetL = 1.0  + (wetL - 1.0) * 0.5;
   wetL < -1.0 ? wetL = -1.0 + (wetL + 1.0) * 0.5;
