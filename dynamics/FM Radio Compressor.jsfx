@@ -1,6 +1,6 @@
 desc:FM Radio Compressor
 tags: dynamics upward-compression mastering loudness
-version: 1.3
+version: 1.4
 author: citizenkeith
 about:
   Upward compressor inspired by analog FM radio processing and Rogue Amoeba Magic Boost.
@@ -8,15 +8,28 @@ about:
   Program-dependent release avoids pumping artifacts.
   Lookahead prevents transient overshoot on gain reduction.
   Sidechain high-pass filter (150Hz) keeps bass from driving gain decisions.
-  Automatic makeup gain scales with sensitivity. 
-// @version 1.3
+  Automatic makeup gain scales with sensitivity.
+  Output stage applies broadcast-style soft saturation (x/1+|x|) — this is
+  the FM radio character: peaks are gently rounded rather than left fully linear.
+// @version 1.4
 // @author citizenkeith
 // @license GPL v3
 // @provides FM Radio Compressor.jsfx
 // @about
 //   Upward compressor inspired by analog FM radio processing.
 //   Boosts quiet passages while leaving loud peaks untouched.
+//   Output soft saturator gives classic broadcast character.
 // @changelog
+//   v1.4
+//     Gain smoothing now in dB — perceptually equal-time gain changes
+//     at all gain levels (was linear, causing asymmetric perceived speed)
+//     Removed update_params() from @sample — was running at 48kHz
+//     needlessly recalculating pow/exp/divisions on unchanged slider values
+//     Jump test now a free subtraction in dB (was two log10 calls per sample)
+//     Buffer advance now uses bitmask & 8191 instead of modulo
+//     PDC reporting moved to @init and @slider (was running every sample)
+//     Fixed comment: sidechain HPF is 150Hz (was mislabelled 90Hz)
+//     Updated about text: soft saturator honestly described as FM character
 //   v1.3
 //     Slider fill changed from amber to off-white gray
 //   v1.2
@@ -52,6 +65,7 @@ buf_pos    = 0;
 
 env_follow = 0;
 comp_gain  = 1.0;
+gain_db    = 0.0;
 hpf_l      = 0;
 hpf_r      = 0;
 hpf_l_prev = 0;
@@ -157,9 +171,10 @@ local(sens_t)
 
   // Automatic makeup gain: scales with sensitivity
   // Sensitivity 1 → +1dB, Sensitivity 5 → +3.2dB, Sensitivity 10 → +6dB
-  makeup_gain = db2lin(1.0 + sens_t * 5.0);  knee_lo   = thresh_db - 6.0;
+  makeup_gain = db2lin(1.0 + sens_t * 5.0);
+  knee_lo   = thresh_db - 6.0;
 
-  // Sidechain high-pass filter at 90Hz — prevents bass frequencies from
+  // Sidechain high-pass filter at 150Hz — prevents bass frequencies from
   // driving gain decisions. Audio path is unaffected; only the envelope
   // follower sees the filtered signal.
   hpf_coef  = exp(-2.0 * $pi * 150.0 / srate);
@@ -179,18 +194,28 @@ local(sens_t)
 
 update_params();
 
-// Pre-charge gain state to just below threshold at startup.
-// Starting near-silence produced an astronomical initial comp_gain
-// causing a brief distortion spike on the first samples.
+// Pre-charge: start near compression point to avoid startup spike.
 // Starting 12dB below threshold gives a gentle, immediate boost
-// without the spike.
+// without the distortion spike that occurs from a cold start.
 env_follow = db2lin(thresh_db - 12.0);
-comp_gain  = db2lin((thresh_db - lin2db(env_follow)) * (1.0 - 1.0 / ratio));
+gain_db    = (thresh_db - lin2db(env_follow)) * (1.0 - 1.0 / ratio);
+comp_gain  = db2lin(gain_db);
+
+// PDC reported here — REAPER reads it after @init and after @slider changes.
+// No need to set every sample.
+pdc_delay  = la_samps;
+pdc_bot_ch = 0;
+pdc_top_ch = 2;
 
 // -----------------------------------------------------------------------
 @slider
 
 update_params();
+
+// Update PDC when lookahead slider changes
+pdc_delay  = la_samps;
+pdc_bot_ch = 0;
+pdc_top_ch = 2;
 
 // -----------------------------------------------------------------------
 @sample
@@ -205,7 +230,7 @@ rd < 0 ? rd += MAX_DELAY;
 dry_l = buf_l[rd];
 dry_r = buf_r[rd];
 
-// --- Sidechain high-pass filter ---
+// --- Sidechain high-pass filter at 150Hz ---
 // Bass frequencies are removed from the detection signal only.
 // The audio path (dry_l/dry_r) is completely untouched.
 hpf_l = hpf_coef * (hpf_l + spl0 - hpf_l_prev);
@@ -229,7 +254,7 @@ sc > env_follow ? (
 // Signal below knee       → full upward compression
 // level_scale tapers sensitivity to zero as signal approaches silence,
 // preventing the compressor from hypercompressing noise and fade-outs.
-env_db     = lin2db(env_follow);
+env_db      = lin2db(env_follow);
 level_scale = clamp((env_db - (-50.0)) / 20.0, 0.0, 1.0);
 
 env_db >= thresh_db ? (
@@ -242,18 +267,18 @@ env_db >= thresh_db ? (
   target_db = (thresh_db - env_db) * (1.0 - 1.0 / ratio) * level_scale;
 );
 
-target_lin = db2lin(target_db);
-
-// --- Program-dependent release ---
-// When gain needs to come DOWN (loud content incoming), pick release speed
-// based on how large the level jump is.
-// When gain needs to go UP (quiet passage), always use slow attack.
-target_lin > comp_gain ? (
+// --- Program-dependent release, smoothed in dB ---
+// Smoothing gain_db (not comp_gain linear) gives perceptually equal-time
+// gain changes regardless of absolute level — a +6dB move from 0dB and
+// a +6dB move from 12dB now take the same perceived time to complete.
+// Jump test is a free subtraction since we're already in dB — saves two
+// log10 calls per sample vs. the previous lin2db(comp_gain)-lin2db(target).
+target_db > gain_db ? (
   // Boosting — use attack coefficient
-  comp_gain = atk_coef * comp_gain + (1.0 - atk_coef) * target_lin;
+  gain_db = atk_coef * gain_db + (1.0 - atk_coef) * target_db;
 ) : (
-  // Reducing boost — measure jump size and pick release tier
-  jump_db = lin2db(comp_gain) - lin2db(target_lin);
+  // Reducing boost — pick release tier based on jump size
+  jump_db = gain_db - target_db;
   jump_db > 15.0 ? (
     rel_coef = rel_fast;
   ) : jump_db > 6.0 ? (
@@ -261,15 +286,20 @@ target_lin > comp_gain ? (
   ) : (
     rel_coef = rel_slow;
   );
-  comp_gain = rel_coef * comp_gain + (1.0 - rel_coef) * target_lin;
+  gain_db = rel_coef * gain_db + (1.0 - rel_coef) * target_db;
 );
+comp_gain = db2lin(gain_db);
 
 // --- Apply boost and makeup gain ---
 out_l = dry_l * comp_gain * makeup_gain;
 out_r = dry_r * comp_gain * makeup_gain;
 
-// --- Soft limiter: x/(1+|x|) prevents digital clipping as a safety net ---
-// Gentle soft-knee curve, barely audible on well-mastered material.
+// --- Soft saturator: x/(1+|x|) — broadcast FM character ---
+// This is intentional, not a safety net. It gives the classic FM radio
+// loudness curve: peaks above ~0.5 are gently rounded, adding warmth
+// and perceived density. On well-mastered material at moderate sensitivity
+// settings the effect is subtle; at high sensitivity it becomes audible
+// as a characteristic soft clip.
 out_l = out_l / (1.0 + abs(out_l));
 out_r = out_r / (1.0 + abs(out_r));
 
@@ -279,17 +309,8 @@ spl1 = out_r;
 // --- Update gain boost readout slider ---
 slider3 = lin2db(comp_gain);
 
-// --- Advance buffer ---
-buf_pos = (buf_pos + 1) % MAX_DELAY;
-
-// --- Report lookahead to REAPER for Plugin Delay Compensation ---
-// Keeps this plugin in phase-sync on the mix bus or in a mastering chain.
-pdc_delay  = la_samps;
-pdc_bot_ch = 0;
-pdc_top_ch = 2;
-
-// Re-bake params every sample block (citizenkeith pattern)
-update_params();
+// --- Advance buffer: bitmask replaces modulo (MAX_DELAY = 8192 = 2^13) ---
+buf_pos = (buf_pos + 1) & 8191;
 
 // -----------------------------------------------------------------------
 @gfx 560 160
@@ -391,4 +412,3 @@ gfx_drawstr(#gr_str);
 
 // Re-bake DSP params every gfx frame so slider drags take effect immediately
 update_params();
-
