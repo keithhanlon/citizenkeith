@@ -1,6 +1,6 @@
 desc:Watkins Fuzz
 author: citizenkeith / Claude AI
-version: 2.2
+version: 2.4
 about: 
   Emulation of the Watkins WEM Project V Fuzz pedal, a sophisticated 8-transistor British fuzz from the late 1960s.
   Features asymmetric quasi-complementary clipping, inductor resonance modeling, and dynamic octave effects.
@@ -8,7 +8,7 @@ about:
   This JSFX released under GPLv3 license
 
 // ReaPack metadata
-// @version 2.2
+// @version 2.4
 // @author citizenkeith
 // @license GPL v3
 // @depends ../citizenkeith-ui-lib/citizenkeith-ui-lib.jsfx
@@ -18,6 +18,19 @@ about:
 //   clipping, inductor resonance, dynamic octave effect, power supply sag,
 //   and thermal drift modeling.
 // @changelog
+//   v2.4
+//     Fixed root cause of DC offset and sub-50Hz self-oscillation:
+//     - temp_bias_shift now starts at zero (was offset by -0.5, generating
+//       DC immediately even with no input signal)
+//     - DC filter is now always-on and unconditional (40Hz 4th-order
+//       Butterworth HPF); bias modeling continuously generates sub-audio
+//       content so the filter must always run, not just on demand
+//     - DC Filter slider repurposed: now selects 20Hz (musical bass)
+//       vs 40Hz (maximum DC rejection) cutoff
+//     - Startup ramp retained for insert-click suppression
+//   v2.3
+//     Added 5ms output ramp-in on playback start to suppress DC click
+//     @play block resets ramp counter on every REAPER play event
 //   v2.2
 //     Added DC Filter toggle - steep 20Hz high-pass removes DC offset
 //     4th-order Butterworth HPF for transparent DC blocking
@@ -55,7 +68,7 @@ slider13:1800<800,4000,10>-Octave Filter Frequency (Hz)
 slider14:0.6<0,1,0.01>-Octave Blend Dynamics
 slider15:0.5<0,1,0.01>-Sag Amount
 slider16:0.3<0,1,0.01>-Temperature Drift
-slider17:0<0,1,1{Off,On}>-DC Filter (20Hz HPF)
+slider17:0<0,1,1{20Hz,40Hz}>-DC Filter Cutoff
 
 @init
 
@@ -73,28 +86,26 @@ function tanh(x)
   (exp(2*x) - 1) / (exp(2*x) + 1);
 );
 
-// 4th-order Butterworth high-pass filter @ 20Hz
-// Steep rolloff for DC blocking, transparent to audio
-function dc_filter_init()
-local(fc, wc, wc2, wc3, wc4, k, k2, k3, k4, q1, q2, a0_1, a1_1, a2_1, b0_1, b1_1, b2_1, a0_2, a1_2, a2_2, b0_2, b1_2, b2_2)
+// 4th-order Butterworth high-pass filter
+// Always-on — bias modeling generates continuous sub-audio content
+// fc_hz: cutoff frequency (20Hz = musical bass safe, 40Hz = max DC rejection)
+function dc_filter_init(fc_hz)
+local(wc, k, k2, q1, q2, a0_1, a0_2)
 (
-  fc = 20;  // Cutoff frequency in Hz
-  wc = 2 * $pi * fc / srate;
-  k = tan(wc / 2);
+  wc = 2 * $pi * fc_hz / srate;
+  k  = tan(wc / 2);
   k2 = k * k;
-  
-  // First biquad (Q = 0.54119610)
-  q1 = 0.54119610;
-  a0_1 = 1 + k / q1 + k2;
+
+  q1    = 0.54119610;
+  a0_1  = 1 + k / q1 + k2;
   dc_a1_1 = 2 * (k2 - 1) / a0_1;
   dc_a2_1 = (1 - k / q1 + k2) / a0_1;
   dc_b0_1 = 1 / a0_1;
   dc_b1_1 = -2 / a0_1;
   dc_b2_1 = 1 / a0_1;
-  
-  // Second biquad (Q = 1.3065630)
-  q2 = 1.3065630;
-  a0_2 = 1 + k / q2 + k2;
+
+  q2    = 1.3065630;
+  a0_2  = 1 + k / q2 + k2;
   dc_a1_2 = 2 * (k2 - 1) / a0_2;
   dc_a2_2 = (1 - k / q2 + k2) / a0_2;
   dc_b0_2 = 1 / a0_2;
@@ -102,26 +113,19 @@ local(fc, wc, wc2, wc3, wc4, k, k2, k3, k4, q1, q2, a0_1, a1_1, a2_1, b0_1, b1_1
   dc_b2_2 = 1 / a0_2;
 );
 
-// Apply 4th-order DC blocking filter (cascaded biquads)
 function dc_filter_process(input)
 local(stage1, stage2)
 (
-  // First biquad stage
-  stage1 = dc_b0_1 * input + dc_b1_1 * dc_x1_1 + dc_b2_1 * dc_x2_1
-           - dc_a1_1 * dc_y1_1 - dc_a2_1 * dc_y2_1;
-  dc_x2_1 = dc_x1_1;
-  dc_x1_1 = input;
-  dc_y2_1 = dc_y1_1;
-  dc_y1_1 = stage1;
-  
-  // Second biquad stage
-  stage2 = dc_b0_2 * stage1 + dc_b1_2 * dc_x1_2 + dc_b2_2 * dc_x2_2
-           - dc_a1_2 * dc_y1_2 - dc_a2_2 * dc_y2_2;
-  dc_x2_2 = dc_x1_2;
-  dc_x1_2 = stage1;
-  dc_y2_2 = dc_y1_2;
-  dc_y1_2 = stage2;
-  
+  stage1 = dc_b0_1 * input   + dc_b1_1 * dc_x1_1 + dc_b2_1 * dc_x2_1
+         - dc_a1_1 * dc_y1_1 - dc_a2_1 * dc_y2_1;
+  dc_x2_1 = dc_x1_1; dc_x1_1 = input;
+  dc_y2_1 = dc_y1_1; dc_y1_1 = stage1;
+
+  stage2 = dc_b0_2 * stage1  + dc_b1_2 * dc_x1_2 + dc_b2_2 * dc_x2_2
+         - dc_a1_2 * dc_y1_2 - dc_a2_2 * dc_y2_2;
+  dc_x2_2 = dc_x1_2; dc_x1_2 = stage1;
+  dc_y2_2 = dc_y1_2; dc_y1_2 = stage2;
+
   stage2;
 );
 
@@ -130,11 +134,11 @@ local(load, voltage_drop, supply_voltage)
 (
   load = signal_level * signal_level;
   load > sag_voltage ? (
-    sag_voltage = sag_voltage + 0.05 * (load - sag_voltage);
+    sag_voltage = sag_voltage + 0.05  * (load - sag_voltage);
   ) : (
     sag_voltage = sag_voltage + 0.001 * (load - sag_voltage);
   );
-  voltage_drop = sag_voltage * sag_amount * 0.3;
+  voltage_drop   = sag_voltage * sag_amount * 0.3;
   supply_voltage = 1.0 - voltage_drop;
   max(0.7, min(1.0, supply_voltage));
 );
@@ -142,11 +146,14 @@ local(load, voltage_drop, supply_voltage)
 function temperature_drift(signal_level, drift_amount)
 local(heat, temp_coefficient, drift)
 (
-  heat = signal_level * signal_level;
-  temperature = temperature + 0.0002 * (heat - temperature);
+  heat             = signal_level * signal_level;
+  temperature      = temperature + 0.0002 * (heat - temperature);
   temp_coefficient = temperature * drift_amount;
-  drift = 1.0 + (temp_coefficient - temp_coefficient * temp_coefficient * 2.0) * 0.05;
-  temp_bias_shift = (temperature - 0.5) * drift_amount * 0.1;
+  drift            = 1.0 + (temp_coefficient - temp_coefficient * temp_coefficient * 2.0) * 0.05;
+  // FIX: was (temperature - 0.5) which gave -0.015 offset with zero input,
+  // causing transistor_sat to generate sub-audio content even with no signal.
+  // Now starts at zero and only drifts positive as the circuit warms up.
+  temp_bias_shift  = temperature * drift_amount * 0.1;
   drift;
 );
 
@@ -156,7 +163,7 @@ local(compressed, threshold)
   threshold = 0.7 * supply_voltage;
   abs(input) > threshold ? (
     compressed = input > 0 ?
-      threshold + (input - threshold) * 0.6 :
+       threshold + (input - threshold) * 0.6 :
       -threshold + (input + threshold) * 0.6;
   ) : (
     compressed = input;
@@ -192,52 +199,50 @@ function transistor_sat(x, gain, pos_sat, neg_sat, bias_shift)
 local(shifted, sat_pos, sat_neg)
 (
   shifted = x + bias_shift;
-  sat_pos = pos_sat * (2.0 / (1.0 + exp(-shifted * gain / pos_sat)) - 1.0);
-  sat_neg = -neg_sat * (2.0 / (1.0 + exp(shifted * gain / neg_sat)) - 1.0);
+  sat_pos = pos_sat  * (2.0 / (1.0 + exp(-shifted * gain / pos_sat)) - 1.0);
+  sat_neg = -neg_sat * (2.0 / (1.0 + exp( shifted * gain / neg_sat)) - 1.0);
   shifted > 0 ? sat_pos : sat_neg;
 );
 
 function svf_tick(input, freq, q)
 local(f, feedback, lowpass, highpass, bandpass)
 (
-  f = 2.0 * sin($pi * freq / srate);
+  f        = 2.0 * sin($pi * freq / srate);
   feedback = 1.0 / q;
-  lowpass = svf_lp + f * svf_bp;
+  lowpass  = svf_lp + f * svf_bp;
   highpass = input - lowpass - feedback * svf_bp;
   bandpass = svf_bp + f * highpass;
-  svf_lp = lowpass;
-  svf_bp = bandpass;
-  svf_hp = highpass;
+  svf_lp   = lowpass;
+  svf_bp   = bandpass;
+  svf_hp   = highpass;
   bandpass;
 );
 
 function rlc_resonator(input, freq, q, damping)
 local(omega, alpha, a0, a1, a2, b0, b1, b2, output)
 (
-  omega = 2.0 * $pi * freq / srate;
-  alpha = sin(omega) / (2.0 * q);
-  a0 = 1.0 + alpha;
-  a1 = -2.0 * cos(omega);
-  a2 = 1.0 - alpha;
-  b0 = alpha;
-  b1 = 0;
-  b2 = -alpha;
-  output = (b0 / a0) * input + (b1 / a0) * rlc_x1 + (b2 / a0) * rlc_x2
-           - (a1 / a0) * rlc_y1 - (a2 / a0) * rlc_y2;
-  rlc_x2 = rlc_x1;
-  rlc_x1 = input;
-  rlc_y2 = rlc_y1;
-  rlc_y1 = output;
+  omega  = 2.0 * $pi * freq / srate;
+  alpha  = sin(omega) / (2.0 * q);
+  a0     = 1.0 + alpha;
+  a1     = -2.0 * cos(omega);
+  a2     = 1.0 - alpha;
+  b0     = alpha;
+  b1     = 0;
+  b2     = -alpha;
+  output = (b0/a0)*input + (b1/a0)*rlc_x1 + (b2/a0)*rlc_x2
+           - (a1/a0)*rlc_y1 - (a2/a0)*rlc_y2;
+  rlc_x2 = rlc_x1; rlc_x1 = input;
+  rlc_y2 = rlc_y1; rlc_y1 = output;
   output * (1.0 - damping * 0.1);
 );
 
 function inductor_saturate(input, sat_amount)
 local(flux, sat_flux)
 (
-  flux = inductor_flux + input * 0.1;
-  sat_flux = tanh(flux * (1.0 + sat_amount * 10.0));
-  inductor_flux = sat_flux * 0.995;
-  inductor_output = (sat_flux - inductor_last_flux);
+  flux               = inductor_flux + input * 0.1;
+  sat_flux           = tanh(flux * (1.0 + sat_amount * 10.0));
+  inductor_flux      = sat_flux * 0.995;
+  inductor_output    = sat_flux - inductor_last_flux;
   inductor_last_flux = sat_flux;
   inductor_output;
 );
@@ -256,15 +261,14 @@ local(rectified)
 (
   rectified = abs(input);
   octave_hp = octave_hp + 0.01 * (rectified - octave_hp);
-  rectified = rectified - octave_hp;
-  rectified;
+  rectified - octave_hp;
 );
 
 function octave_doubler(input, intensity)
 local(squared, shaped)
 (
   squared = input * input;
-  shaped = input >= 0 ? squared : -squared;
+  shaped  = input >= 0 ? squared : -squared;
   shaped * intensity;
 );
 
@@ -278,17 +282,16 @@ local(even_harmonics)
 function octave_intermod(input, prev_input, mod_amount)
 local(ring_mod)
 (
-  ring_mod = input * prev_input;
+  ring_mod           = input * prev_input;
   octave_intermod_hp = octave_intermod_hp + 0.015 * (ring_mod - octave_intermod_hp);
-  ring_mod - octave_intermod_hp;
   ring_mod * mod_amount;
 );
 
 function octave_filter(input, center_freq)
 local(bp_coeff)
 (
-  bp_coeff = 2.0 * sin($pi * center_freq / srate);
-  octave_bp_low = octave_bp_low + bp_coeff * octave_bp_band;
+  bp_coeff       = 2.0 * sin($pi * center_freq / srate);
+  octave_bp_low  = octave_bp_low  + bp_coeff * octave_bp_band;
   octave_bp_high = input - octave_bp_low - 0.5 * octave_bp_band;
   octave_bp_band = octave_bp_band + bp_coeff * octave_bp_high;
   octave_bp_band;
@@ -297,62 +300,56 @@ local(bp_coeff)
 function octave_dynamic_mix(input, octave_sig, dynamics_amount, static_mix)
 local(abs_input, envelope, dynamic_mix)
 (
-  abs_input = abs(input);
-  envelope = abs_input > octave_env ?
-             octave_env + 0.1 * (abs_input - octave_env) :
-             octave_env + 0.001 * (abs_input - octave_env);
-  octave_env = envelope;
+  abs_input   = abs(input);
+  envelope    = abs_input > octave_env ?
+                octave_env + 0.1   * (abs_input - octave_env) :
+                octave_env + 0.001 * (abs_input - octave_env);
+  octave_env  = envelope;
   dynamic_mix = min(1.0, static_mix + envelope * dynamics_amount);
   input * (1.0 - dynamic_mix) + octave_sig * dynamic_mix;
 );
 
-// Initialize filter states
+// ---- Initialize filter states ----
 svf_lp = svf_bp = svf_hp = 0;
 rlc_x1 = rlc_x2 = rlc_y1 = rlc_y2 = 0;
 inductor_flux = inductor_last_flux = inductor_output = 0;
-octave_hp = 0;
-octave_intermod_hp = 0;
+octave_hp = octave_intermod_hp = 0;
 octave_bp_low = octave_bp_high = octave_bp_band = 0;
-octave_env = 0;
-prev_sample = 0;
-sag_voltage = 0;
-temperature = 0;
-temp_bias_shift = 0;
-gain_stage1 = 3.0;
-gain_stage2 = 4.5;
-gain_stage3 = 6.0;
-gain_stage4 = 2.5;
-fc_low = 120 / srate;
+octave_env = prev_sample = 0;
+sag_voltage = temperature = temp_bias_shift = 0;
+signal_level = 0;
+gain_stage1 = 3.0; gain_stage2 = 4.5;
+gain_stage3 = 6.0; gain_stage4 = 2.5;
+fc_low  = 120  / srate;
 fc_high = 3500 / srate;
 lp1 = hp1 = 0;
 
-// Initialize DC filter states
+// ---- Initialize DC filter states ----
 dc_x1_1 = dc_x2_1 = dc_y1_1 = dc_y2_1 = 0;
 dc_x1_2 = dc_x2_2 = dc_y1_2 = dc_y2_2 = 0;
-dc_filter_init();
+// Default to 40Hz cutoff; re-initialized when slider17 changes
+dc_filter_init(40);
+
+// ---- Startup ramp ----
+startup_ramp     = 0;
+startup_ramp_len = 0.005 * srate;  // 5ms
 
 // ============================================================
-// GFX HELPER FUNCTIONS  (must be in @init)
+// GFX HELPER FUNCTIONS
 // ============================================================
 
-// Draw a section box with colored header bar + border
 function draw_section_box(bx, by, bw, bh, hr, hg, hb, header_text)
 local(tw, th)
 (
-  // Dark section background
   gfx_r = 0.13; gfx_g = 0.13; gfx_b = 0.15; gfx_a = 1;
   gfx_rect(bx, by, bw, bh);
-  // Colored header bar
   gfx_r = hr; gfx_g = hg; gfx_b = hb; gfx_a = 1;
   gfx_rect(bx, by, bw, 22);
-  // Header text (dark, bold)
   gfx_r = 0.08; gfx_g = 0.08; gfx_b = 0.08; gfx_a = 1;
   gfx_setfont(1, "Arial", 11, 'b');
   gfx_measurestr(header_text, tw, th);
-  gfx_x = bx + bw/2 - tw/2;
-  gfx_y = by + 11 - th/2;
+  gfx_x = bx + bw/2 - tw/2; gfx_y = by + 11 - th/2;
   gfx_drawstr(header_text);
-  // Border
   gfx_r = 0.30; gfx_g = 0.30; gfx_b = 0.34; gfx_a = 1;
   gfx_rect(bx,      by,      bw, 1);
   gfx_rect(bx,      by + bh, bw, 1);
@@ -360,67 +357,57 @@ local(tw, th)
   gfx_rect(bx + bw, by,      1,  bh + 1);
 );
 
-// Draw knob label (uses global #lbl)
 function draw_label_at(lx, ly)
 local(lw, lh)
 (
   gfx_r = 0.68; gfx_g = 0.68; gfx_b = 0.72; gfx_a = 1;
   gfx_setfont(1, "Arial", 10);
   gfx_measurestr(#lbl, lw, lh);
-  gfx_x = lx - lw/2;
-  gfx_y = ly;
+  gfx_x = lx - lw/2; gfx_y = ly;
   gfx_drawstr(#lbl);
 );
 
-// Draw knob value (uses global #val, amber color)
 function draw_value_at(vx, vy)
 local(vw, vh)
 (
   gfx_r = 1.0; gfx_g = 0.82; gfx_b = 0.44; gfx_a = 1;
   gfx_setfont(1, "Arial", 10);
   gfx_measurestr(#val, vw, vh);
-  gfx_x = vx - vw/2;
-  gfx_y = vy;
+  gfx_x = vx - vw/2; gfx_y = vy;
   gfx_drawstr(#val);
 );
 
-// Draw a centered switch-row label
 function draw_switch_label(cx, ly, label)
 local(lw, lh)
 (
   gfx_r = 1.0; gfx_g = 1.0; gfx_b = 1.0; gfx_a = 1;
   gfx_setfont(1, "Arial", 10);
   gfx_measurestr(label, lw, lh);
-  gfx_x = cx - lw/2;
-  gfx_y = ly;
+  gfx_x = cx - lw/2; gfx_y = ly;
   gfx_drawstr(label);
 );
 
-// Double-click detection (run once per frame)
 function check_dbl_click()
 local(mx, my, now, dt)
 (
-  mx  = mouse_x;
-  my  = mouse_y;
+  mx = mouse_x; my = mouse_y;
   now = time_precise();
   (mouse_cap & 1) && !(mouse_cap_last & 1) ? (
     dt = now - dbl_click_time;
-    (dt < 0.4) && (dt > 0.05) && (abs(mx - dbl_click_x) < 8) && (abs(my - dbl_click_y) < 8) ? (
+    (dt < 0.4) && (dt > 0.05) &&
+    (abs(mx - dbl_click_x) < 8) && (abs(my - dbl_click_y) < 8) ? (
       dbl_click_fired = 1;
-      dbl_click_cx    = mx;
-      dbl_click_cy    = my;
+      dbl_click_cx = mx; dbl_click_cy = my;
     ) : (
       dbl_click_fired = 0;
     );
     dbl_click_time = now;
-    dbl_click_x    = mx;
-    dbl_click_y    = my;
+    dbl_click_x = mx; dbl_click_y = my;
   ) : (
     dbl_click_fired = 0;
   );
 );
 
-// Returns 1 if a double-click occurred inside the given rect
 function dbl_click_in_rect(rx, ry, rw, rh)
 (
   dbl_click_fired &&
@@ -428,83 +415,89 @@ function dbl_click_in_rect(rx, ry, rw, rh)
   (dbl_click_cy >= ry) && (dbl_click_cy < ry + rh)
 );
 
-// ============================================================
-// PARAMETER UPDATE FUNCTION
-// Mirrors @slider logic — call from @gfx after any knob change
-// so DSP variables stay in sync without waiting for @slider.
-// ============================================================
-
 function update_parameters()
 (
-  attack            = slider1 * slider1;
-  volume            = slider2;
-  drive_mode        = slider3;
-  edge_mode         = slider4;
-  trim1             = slider5 * 0.5 + 0.75;
-  trim2             = slider6 * 0.5 + 0.75;
-  bias_shift1       = (slider5 - 0.5) * 0.2;
-  bias_shift2       = (slider6 - 0.5) * 0.15;
-  inductor_freq     = slider7;
-  inductor_q        = slider8;
-  inductor_sat      = slider9;
-  inductor_mix      = slider10;
-  octave_amount     = slider11;
-  octave_mode       = slider12;
+  attack             = slider1 * slider1;
+  volume             = slider2;
+  drive_mode         = slider3;
+  edge_mode          = slider4;
+  trim1              = slider5 * 0.5 + 0.75;
+  trim2              = slider6 * 0.5 + 0.75;
+  bias_shift1        = (slider5 - 0.5) * 0.2;
+  bias_shift2        = (slider6 - 0.5) * 0.15;
+  inductor_freq      = slider7;
+  inductor_q         = slider8;
+  inductor_sat       = slider9;
+  inductor_mix       = slider10;
+  octave_amount      = slider11;
+  octave_mode        = slider12;
   octave_filter_freq = slider13;
-  octave_dynamics   = slider14;
-  sag_amount        = slider15;
-  temp_drift_amount = slider16;
-  dc_filter_enable  = slider17;
-  edge_boost        = edge_mode ? 1.8 : 1.0;
-  drive_treble      = drive_mode ? 1.5 : 0.7;
-  npn_sat = 0.7;
-  pnp_sat = 0.55;
+  octave_dynamics    = slider14;
+  sag_amount         = slider15;
+  temp_drift_amount  = slider16;
+  dc_cutoff_mode     = slider17;
+  edge_boost         = edge_mode ? 1.8 : 1.0;
+  drive_treble       = drive_mode ? 1.5 : 0.7;
+  npn_sat = 0.7; pnp_sat = 0.55;
 );
 
-// Initialize double-click state
-dbl_click_time = 0;
-dbl_click_x = dbl_click_y = 0;
-dbl_click_fired = 0;
-dbl_click_cx = dbl_click_cy = 0;
+// ---- Initialize double-click state ----
+dbl_click_time = dbl_click_x = dbl_click_y = 0;
+dbl_click_fired = dbl_click_cx = dbl_click_cy = 0;
 mouse_cap_last = 0;
+dc_cutoff_mode = 0;
+dc_cutoff_mode_last = -1;  // Force init on first @slider
 
 
 @slider
-attack           = slider1 * slider1;
-volume           = slider2;
-drive_mode       = slider3;
-edge_mode        = slider4;
-trim1            = slider5 * 0.5 + 0.75;
-trim2            = slider6 * 0.5 + 0.75;
-bias_shift1      = (slider5 - 0.5) * 0.2;
-bias_shift2      = (slider6 - 0.5) * 0.15;
-inductor_freq    = slider7;
-inductor_q       = slider8;
-inductor_sat     = slider9;
-inductor_mix     = slider10;
-octave_amount    = slider11;
-octave_mode      = slider12;
+attack             = slider1 * slider1;
+volume             = slider2;
+drive_mode         = slider3;
+edge_mode          = slider4;
+trim1              = slider5 * 0.5 + 0.75;
+trim2              = slider6 * 0.5 + 0.75;
+bias_shift1        = (slider5 - 0.5) * 0.2;
+bias_shift2        = (slider6 - 0.5) * 0.15;
+inductor_freq      = slider7;
+inductor_q         = slider8;
+inductor_sat       = slider9;
+inductor_mix       = slider10;
+octave_amount      = slider11;
+octave_mode        = slider12;
 octave_filter_freq = slider13;
-octave_dynamics  = slider14;
-sag_amount       = slider15;
-temp_drift_amount = slider16;
-dc_filter_enable = slider17;
-edge_boost       = edge_mode ? 1.8 : 1.0;
-drive_treble     = drive_mode ? 1.5 : 0.7;
-npn_sat = 0.7;
-pnp_sat = 0.55;
+octave_dynamics    = slider14;
+sag_amount         = slider15;
+temp_drift_amount  = slider16;
+dc_cutoff_mode     = slider17;
+edge_boost         = edge_mode ? 1.8 : 1.0;
+drive_treble       = drive_mode ? 1.5 : 0.7;
+npn_sat = 0.7; pnp_sat = 0.55;
+
+// Reinitialize DC filter only when cutoff mode actually changes
+dc_cutoff_mode != dc_cutoff_mode_last ? (
+  dc_cutoff_mode == 0 ? dc_filter_init(40) : dc_filter_init(20);
+  // Reset filter states to avoid click when switching
+  dc_x1_1 = dc_x2_1 = dc_y1_1 = dc_y2_1 = 0;
+  dc_x1_2 = dc_x2_2 = dc_y1_2 = dc_y2_2 = 0;
+  dc_cutoff_mode_last = dc_cutoff_mode;
+);
+
+
+@play
+startup_ramp = 0;
+
 
 @sample
 input = spl0 + spl1 * 0.5;
 
 signal_level = abs(input) > signal_level ?
-               signal_level + 0.1 * (abs(input) - signal_level) :
-               signal_level + 0.01 * (abs(input) - signal_level);
+               signal_level + 0.1   * (abs(input) - signal_level) :
+               signal_level + 0.01  * (abs(input) - signal_level);
 
-supply_voltage  = power_supply_sag(signal_level, sag_amount);
-temp_gain_mod   = temperature_drift(signal_level, temp_drift_amount);
-sag_gain_mod    = sag_gain_reduction(supply_voltage);
-total_gain_mod  = temp_gain_mod * sag_gain_mod;
+supply_voltage = power_supply_sag(signal_level, sag_amount);
+temp_gain_mod  = temperature_drift(signal_level, temp_drift_amount);
+sag_gain_mod   = sag_gain_reduction(supply_voltage);
+total_gain_mod = temp_gain_mod * sag_gain_mod;
 
 stage1 = input * gain_stage1 * trim1 * total_gain_mod;
 stage1 = transistor_sat(stage1, 4.0, 0.8*supply_voltage, 0.7*supply_voltage, bias_shift1 + temp_bias_shift);
@@ -530,10 +523,10 @@ octave_mode == 0 ? (
   octave_raw = octave_enhance(octave_raw, 0.8);
 );
 
-octave_filtered      = octave_filter(octave_raw, octave_filter_freq);
-octave_sat           = tanh(octave_filtered * 2.0) * 0.7;
-stage2_with_octave   = octave_dynamic_mix(stage2, octave_sat, octave_dynamics, octave_amount);
-prev_sample          = stage2;
+octave_filtered    = octave_filter(octave_raw, octave_filter_freq);
+octave_sat         = tanh(octave_filtered * 2.0) * 0.7;
+stage2_with_octave = octave_dynamic_mix(stage2, octave_sat, octave_dynamics, octave_amount);
+prev_sample        = stage2;
 
 resonant     = multi_resonator(stage2_with_octave, inductor_freq, inductor_q);
 resonant_sat = inductor_saturate(resonant, inductor_sat);
@@ -548,13 +541,19 @@ stage4 = drive_mode ? stage4 : lp1;
 output = asymmetric_clip(stage4 * 0.4, 0.65*supply_voltage, 0.45*supply_voltage, 2.5);
 output = transistor_sat(output, 2.5, npn_sat*supply_voltage, pnp_sat*supply_voltage, bias_shift2 + temp_bias_shift);
 
-// Apply DC blocking filter if enabled
-dc_filter_enable ? (
-  output = dc_filter_process(output);
+// DC filter — always unconditional; bias modeling continuously generates
+// sub-audio content regardless of input signal level
+output = dc_filter_process(output);
+
+// 5ms ramp-in on play — suppresses insert click
+startup_ramp < startup_ramp_len ? (
+  output = output * (startup_ramp / startup_ramp_len);
+  startup_ramp += 1;
 );
 
 spl0 = output * volume;
 spl1 = output * volume;
+
 
 // ============================================================
 // GFX — Tron theme, citizenkeith-ui-lib
@@ -566,7 +565,6 @@ control_start("main", "tron");
 
 ui_screen() == "main" ? (
 
-// ---- Background ----
 gfx_r = 0.14; gfx_g = 0.14; gfx_b = 0.16; gfx_a = 1;
 gfx_rect(0, 0, gfx_w, gfx_h);
 
@@ -577,24 +575,20 @@ update_parameters();
 // LAYOUT CONSTANTS
 // ============================================================
 
-// Section row 1: y=96..276
 row1_y  = 96;
 row1_h  = 180;
-row1_cy = row1_y + 22 + 68;   // knob center y = 170
+row1_cy = row1_y + 22 + 68;
 
-// Section row 2: y=268..432
 row2_y  = row1_y + row1_h + 8;
 row2_h  = 164;
-row2_cy = row2_y + 22 + 68;   // knob center y = 358
+row2_cy = row2_y + 22 + 68;
 
-// Row 1 column extents
-fuzz_x = 8;   fuzz_w = 196;   // x=8..204
-bias_x = 212; bias_w = 132;   // x=212..344
-oct_x  = 352; oct_w  = 300;   // x=352..652
+fuzz_x = 8;   fuzz_w = 196;
+bias_x = 212; bias_w = 132;
+oct_x  = 352; oct_w  = 300;
 
-// Row 2 column extents
-ind_x  = 8;   ind_w  = 428;   // x=8..436
-age_x  = 444; age_w  = 208;   // x=444..652
+ind_x  = 8;   ind_w  = 428;
+age_x  = 444; age_w  = 208;
 
 // ============================================================
 // PLUGIN TITLE
@@ -605,22 +599,21 @@ gfx_x = 12; gfx_y = 8;
 gfx_drawstr("WATKINS FUZZ PEDAL");
 
 // ============================================================
-// SWITCH ROW  (Drive toggle, Edge toggle, Octave Mode 3-way)
+// SWITCH ROW
 // ============================================================
 
-sw_label_y  = 34;   // y for row header text ("DRIVE", etc.)
-sw_center_y = 62;   // vertical center of toggle switches (clear of labels above)
-sw_h        = 20;   // toggle height
-sw_state_y  = sw_center_y + 14; // state text below switch
+sw_label_y  = 34;
+sw_center_y = 62;
+sw_h        = 20;
+sw_state_y  = sw_center_y + 14;
 
-// --- DRIVE (slider3: Dark / Bright) ----
+// DRIVE
 drive_cx = 90;
 draw_switch_label(drive_cx, sw_label_y, "DRIVE");
 ui_push_rect(drive_cx - 26, sw_center_y - sw_h/2, 52, sw_h);
   slider3 = control_switch(slider3);
   slider_automate(slider3);
 ui_pop();
-// current mode text
 sw_lbl_str = slider3 ? "BRIGHT" : "DARK";
 slider3 ? (gfx_r=1.0; gfx_g=0.72; gfx_b=0.26;) : (gfx_r=1.0; gfx_g=1.0; gfx_b=1.0;);
 gfx_a = 1; gfx_setfont(1, "Arial", 10);
@@ -628,7 +621,7 @@ gfx_measurestr(sw_lbl_str, sw_lw, sw_lh);
 gfx_x = drive_cx - sw_lw/2; gfx_y = sw_state_y;
 gfx_drawstr(sw_lbl_str);
 
-// --- EDGE (slider4: Smooth / Edge) ----
+// EDGE
 edge_cx = 235;
 draw_switch_label(edge_cx, sw_label_y, "EDGE");
 ui_push_rect(edge_cx - 26, sw_center_y - sw_h/2, 52, sw_h);
@@ -642,7 +635,7 @@ gfx_measurestr(sw_lbl_str, sw_lw, sw_lh);
 gfx_x = edge_cx - sw_lw/2; gfx_y = sw_state_y;
 gfx_drawstr(sw_lbl_str);
 
-// --- OCTAVE MODE (slider12: 0=Subtle, 1=Moderate, 2=Aggressive) ----
+// OCTAVE MODE
 oct_sw_x0   = 290;
 oct_sw_y0   = sw_center_y - 12;
 oct_sw_totw = 330;
@@ -669,7 +662,7 @@ loop(3,
 // ROW 1 — FUZZ | BIAS | OCTAVE
 // ============================================================
 
-// ---- FUZZ SECTION ---- (red accent)
+// FUZZ
 draw_section_box(fuzz_x, row1_y, fuzz_w, row1_h, 0.82, 0.22, 0.14, "FUZZ");
 
 fuzz_att_cx = fuzz_x + 49;
@@ -690,7 +683,7 @@ dbl_click_in_rect(fuzz_vol_cx-22, row1_cy-22, 44, 44) ? (slider2 = 1.0; slider_a
 strcpy(#lbl, "VOLUME"); draw_label_at(fuzz_vol_cx, row1_cy - 36);
 sprintf(#val, "%.2f", slider2); draw_value_at(fuzz_vol_cx, row1_cy + 26);
 
-// ---- BIAS SECTION ---- (blue accent)
+// BIAS
 draw_section_box(bias_x, row1_y, bias_w, row1_h, 0.12, 0.62, 0.88, "BIAS");
 
 bias_t1_cx = bias_x + 33;
@@ -711,7 +704,7 @@ dbl_click_in_rect(bias_t2_cx-22, row1_cy-22, 44, 44) ? (slider6 = 0.0; slider_au
 strcpy(#lbl, "TRIM 2"); draw_label_at(bias_t2_cx, row1_cy - 36);
 sprintf(#val, "%.2f", slider6); draw_value_at(bias_t2_cx, row1_cy + 26);
 
-// ---- OCTAVE SECTION ---- (amber accent)
+// OCTAVE
 draw_section_box(oct_x, row1_y, oct_w, row1_h, 0.80, 0.58, 0.08, "OCTAVE");
 
 oct_amt_cx = oct_x + 51;
@@ -745,7 +738,7 @@ sprintf(#val, "%.0f Hz", slider13); draw_value_at(oct_frq_cx, row1_cy + 26);
 // ROW 2 — INDUCTOR | AGING
 // ============================================================
 
-// ---- INDUCTOR SECTION ---- (violet accent)
+// INDUCTOR
 draw_section_box(ind_x, row2_y, ind_w, row2_h, 0.52, 0.26, 0.82, "INDUCTOR");
 
 ind_frq_cx = ind_x + 55;
@@ -784,7 +777,7 @@ dbl_click_in_rect(ind_mix_cx-22, row2_cy-22, 44, 44) ? (slider10 = 0.3; slider_a
 strcpy(#lbl, "MIX"); draw_label_at(ind_mix_cx, row2_cy - 36);
 sprintf(#val, "%.2f", slider10); draw_value_at(ind_mix_cx, row2_cy + 26);
 
-// ---- AGING SECTION ---- (green accent)
+// AGING
 draw_section_box(age_x, row2_y, age_w, row2_h, 0.22, 0.72, 0.32, "AGING");
 
 age_sag_cx = age_x + 42;
@@ -805,7 +798,7 @@ dbl_click_in_rect(age_tmp_cx-22, row2_cy-22, 44, 44) ? (slider16 = 0.3; slider_a
 strcpy(#lbl, "TEMP"); draw_label_at(age_tmp_cx, row2_cy - 36);
 sprintf(#val, "%.2f", slider16); draw_value_at(age_tmp_cx, row2_cy + 26);
 
-// DC FILTER SWITCH (slider17: Off/On)
+// DC FILTER CUTOFF SWITCH (40Hz / 20Hz)
 age_dc_cx = age_x + 178;
 age_dc_switch_y = row2_cy - 10;
 draw_switch_label(age_dc_cx, row2_cy - 36, "DC FILTER");
@@ -813,8 +806,8 @@ ui_push_rect(age_dc_cx - 20, age_dc_switch_y, 40, 20);
   slider17 = control_switch(slider17);
   slider_automate(slider17);
 ui_pop();
-sw_lbl_str = slider17 ? "ON" : "OFF";
-slider17 ? (gfx_r=0.3; gfx_g=0.9; gfx_b=0.4;) : (gfx_r=0.7; gfx_g=0.7; gfx_b=0.75;);
+sw_lbl_str = slider17 ? "20Hz" : "40Hz";
+slider17 ? (gfx_r=1.0; gfx_g=0.82; gfx_b=0.44;) : (gfx_r=0.3; gfx_g=0.9; gfx_b=0.4;);
 gfx_a = 1; gfx_setfont(1, "Arial", 9);
 gfx_measurestr(sw_lbl_str, sw_lw, sw_lh);
 gfx_x = age_dc_cx - sw_lw/2; gfx_y = age_dc_switch_y + 26;
