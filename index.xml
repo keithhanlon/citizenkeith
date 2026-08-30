@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="f13435c2690fa174c7992d90ad1abbe6b44f4105" name="citizenkeith">
+<index version="1" commit="a70da110770f5463cacad3355f304fc5452e5df4" name="citizenkeith">
   <category name="abandoned">
     <reapack name="Clavius Channel Strip (AI Code).jsfx" type="effect" desc="Channel strip with API 215L-style filters, EQ, Drive, and Compression">
       <version name="1.0" author="citizenkeith and Claude AI - Based on Airwindows open source (MIT) and Universal Audio API 215L" time="2026-03-09T04:11:19Z">
@@ -321,6 +321,37 @@ v1.0
   Soft limiter (x/1+|x|) output safety stage
   PDC reported to REAPER for phase alignment]]></changelog>
         <source>https://github.com/keithhanlon/citizenkeith/raw/4bccfd89fab02851d01ec959623f2860757a82ae/dynamics/FM%20Radio%20Compressor.jsfx</source>
+      </version>
+    </reapack>
+    <reapack name="SC4 Stereo Compressor.jsfx" type="effect" desc="SC4 Stereo Compressor">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 SC4 Stereo Compressor\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 A JSFX port of the SC4 LADSPA compressor by Steve Harris, originally part of the swh-plugins collection and for two decades the default compressor on nearly every Linux audio system. This is a faithful reimplementation of the original detector and gain-computer math rather than a plugin merely inspired by it.\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Controls\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab RMS / PEAK: Detector blend. 0 = pure RMS, 1 = pure peak.\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab ATTACK / RELEASE: Envelope follower timing.\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab THRESHOLD / RATIO: Standard downward compression.\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab KNEE: Soft-knee radius either side of the threshold.\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab MAKEUP: Output gain.\sa180\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 Features\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Blended RMS/peak envelope follower\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Block-averaged RMS detection (4-sample block, as in the original)\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Soft-knee gain computer with smoothed gain application\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Gain reduction meter, 0 to -24 dB\sa180\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel1 \b \fs32 License\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 Copyright (C) 2026 citizenkeith (Keith Hanlon). Based on SC4 by Steve Harris {\field{\*\fldinst{HYPERLINK "mailto:steve@plugin.org.uk"}}{\fldrslt{\ul
+steve@plugin.org.uk
+}}}
+, https://github.com/swh/ladspa Licensed under the GNU General Public License, version 2. Note: GPL v2, not v3 - the upstream SC4 grants no "or later" option. This program comes with ABSOLUTELY NO WARRANTY.\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="citizenkeith" time="2026-08-30T17:04:15Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/a70da110770f5463cacad3355f304fc5452e5df4/dynamics/SC4%20Stereo%20Compressor.jsfx</source>
       </version>
     </reapack>
     <reapack name="Transparent Bus Compressor (AI Code).jsfx" type="effect" desc="Transparent Bus Compressor">
