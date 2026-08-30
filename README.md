@@ -33,6 +33,7 @@ https://reaper.blog/2015/06/quick-tip-how-to-install-js-plugins/
 ### Dynamics
 - [Analog Warmth Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#analog-warmth-compressor)
 - [FM Radio Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#fm-radio-compressor)
+- [SC4 Stereo Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#sc4-stereo-compressor)
 - [Transparent Bus Compressor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#transparent-bus-compressor)
 - [Zion Vocal Processor](https://github.com/keithhanlon/citizenkeith/blob/main/README.md#zion-vocal-processor)
 ### MIDI
@@ -83,6 +84,9 @@ VintageWarmer-inspired compressor with optional 2x oversampling via a 63-tap hal
 ## FM Radio Compressor
 ![FM Radio Compressor Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/FMradio.png?raw=true)
 Upward compressor inspired by analog FM radio processing. Boosts quiet passages while leaving loud peaks untouched.
+
+## SC4 Stereo Compressor
+A faithful JSFX port of Steve Harris' SC4 LADSPA compressor — for two decades the default compressor on nearly every Linux audio system. Blended RMS/peak detection, soft-knee gain computer. Licensed GPL v2 (not v3) as a derivative of the original.
 
 ## Transparent Bus Compressor
 ![Transparent Bus Compressor Screenshot](https://github.com/keithhanlon/citizenkeith/blob/main/images/TBCv2.png?raw=true)
