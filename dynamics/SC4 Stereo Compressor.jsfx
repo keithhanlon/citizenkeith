@@ -1,6 +1,6 @@
 desc:SC4 Stereo Compressor
 tags: dynamics compressor stereo rms peak
-version: 1.0
+version: 1.1
 author: citizenkeith
 provides: SC4 Stereo Compressor.jsfx
 about:
@@ -33,6 +33,9 @@ about:
   This program comes with ABSOLUTELY NO WARRANTY.
 
 changelog:
+  1.1 - Restored the original's 64-block running RMS average (256 samples).
+        1.0 averaged over a single 4-sample block, which made the RMS end of
+        the detector blend far faster than Steve Harris' original.
   1.0 - Initial release. JSFX port of Steve Harris' SC4 LADSPA compressor.
         Blended RMS/peak detection, soft-knee gain computer, GR meter.
 
@@ -58,7 +61,7 @@ changelog:
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 // ReaPack metadata
-// @version 1.0
+// @version 1.1
 // @author citizenkeith
 // @license GPL v2
 // @provides SC4 Stereo Compressor.jsfx
@@ -70,6 +73,10 @@ changelog:
 //   soft-knee gain computer, gain reduction meter.
 //   GPL v2 - derivative of Steve Harris' GPL-2 SC4.
 // @changelog
+//   v1.1
+//     Restored the original's 64-block running RMS average (256 samples).
+//     1.0 averaged over a single 4-sample block, which made the RMS end of
+//     the detector blend far faster than Steve Harris' original.
 //   v1.0
 //     Initial release. JSFX port of Steve Harris' SC4 LADSPA compressor.
 //     Blended RMS/peak detection, soft-knee gain computer, GR meter.
@@ -107,6 +114,18 @@ env      = 0;
 env_rms  = 0;
 env_peak = 0;
 count    = 0;
+
+// Running RMS over the last 64 four-sample blocks (256 samples, ~5.3ms at 48k).
+// This mirrors rms_env_process() in the original SC4's util/rms.h, and is what
+// gives the RMS end of the detector blend its slow, musical character.
+// Buffer starts at 1024 to stay clear of address 0.
+RMS_BUF_SIZE  = 64;
+RMS_BUF_MASK  = RMS_BUF_SIZE - 1; // power-of-two wrap
+RMS_BUF_RECIP = 1 / RMS_BUF_SIZE;
+rms_buf = 1024;
+memset(rms_buf, 0, RMS_BUF_SIZE);
+rms_sum = 0;
+rms_pos = 0;
 
 @slider
 
@@ -152,11 +171,20 @@ sum += lev_in * lev_in;
   env_peak = env_peak * gr + lev_in * omr;
 );
 
-// gain computer only updates every 4th sample (cheap block-RMS + smoothing)
+// gain computer only updates every 4th sample (block RMS + smoothing)
 count += 1;
 (count & 3) == 3 ? (
-  amp = sqrt(sum * 0.25);
+  // mean square of this 4-sample block, pushed into the 64-block ring buffer
+  msq = sum * 0.25;
   sum = 0;
+
+  rms_sum -= rms_buf[rms_pos];
+  rms_sum += msq;
+  rms_sum < 0.000001 ? rms_sum = 0; // flush tiny residue, as the original does
+  rms_buf[rms_pos] = msq;
+  rms_pos = (rms_pos + 1) & RMS_BUF_MASK;
+
+  amp = sqrt(rms_sum * RMS_BUF_RECIP);
 
   env = env_rms + rms_peak * (env_peak - env_rms);
 
