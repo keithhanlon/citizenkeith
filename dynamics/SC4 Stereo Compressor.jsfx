@@ -1,0 +1,237 @@
+desc:SC4 Stereo Compressor
+tags: dynamics compressor stereo rms peak
+version: 1.0
+author: citizenkeith
+provides: SC4 Stereo Compressor.jsfx
+about:
+  # SC4 Stereo Compressor
+
+  A JSFX port of the SC4 LADSPA compressor by Steve Harris, originally part
+  of the swh-plugins collection and for two decades the default compressor
+  on nearly every Linux audio system. This is a faithful reimplementation
+  of the original detector and gain-computer math rather than a plugin
+  merely inspired by it.
+
+  ## Controls
+  - RMS / PEAK: Detector blend. 0 = pure RMS, 1 = pure peak.
+  - ATTACK / RELEASE: Envelope follower timing.
+  - THRESHOLD / RATIO: Standard downward compression.
+  - KNEE: Soft-knee radius either side of the threshold.
+  - MAKEUP: Output gain.
+
+  ## Features
+  - Blended RMS/peak envelope follower
+  - Block-averaged RMS detection (4-sample block, as in the original)
+  - Soft-knee gain computer with smoothed gain application
+  - Gain reduction meter, 0 to -24 dB
+
+  ## License
+  Copyright (C) 2026 citizenkeith (Keith Hanlon).
+  Based on SC4 by Steve Harris <steve@plugin.org.uk>, https://github.com/swh/ladspa
+  Licensed under the GNU General Public License, version 2.
+  Note: GPL v2, not v3 - the upstream SC4 grants no "or later" option.
+  This program comes with ABSOLUTELY NO WARRANTY.
+
+changelog:
+  1.0 - Initial release. JSFX port of Steve Harris' SC4 LADSPA compressor.
+        Blended RMS/peak detection, soft-knee gain computer, GR meter.
+
+// SC4 Stereo Compressor - a JSFX port of the SC4 LADSPA compressor.
+//
+// Copyright (C) 2026 citizenkeith (Keith Hanlon)
+//
+// Based on SC4 (sc4_1882) from the swh-plugins LADSPA collection,
+// Copyright (C) Steve Harris <steve@plugin.org.uk>
+// https://github.com/swh/ladspa
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; version 2 of the License.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+// ReaPack metadata
+// @version 1.0
+// @author citizenkeith
+// @license GPL v2
+// @provides SC4 Stereo Compressor.jsfx
+// @links
+//   Original SC4 https://github.com/swh/ladspa
+// @about
+//   JSFX port of the SC4 LADSPA compressor by Steve Harris (swh-plugins).
+//   Blended RMS/peak envelope follower, block-averaged RMS detection,
+//   soft-knee gain computer, gain reduction meter.
+//   GPL v2 - derivative of Steve Harris' GPL-2 SC4.
+// @changelog
+//   v1.0
+//     Initial release. JSFX port of Steve Harris' SC4 LADSPA compressor.
+//     Blended RMS/peak detection, soft-knee gain computer, GR meter.
+
+slider1:rms_peak=0<0,1,0.01>RMS / Peak blend
+slider2:attack_ms=20<1.5,400,0.1>Attack (ms)
+slider3:release_ms=200<2,800,1>Release (ms)
+slider4:threshold_db=-25<-30,0,0.1>Threshold (dB)
+slider5:ratio=4<1,20,0.05>Ratio (1:n)
+slider6:knee_db=6<1,10,0.1>Knee radius (dB)
+slider7:makeup_db=0<0,24,0.1>Makeup gain (dB)
+slider8:amp_db_out=-90<-90,12,0.1>-Amplitude (dB, meter)
+slider9:gr_db_out=0<-24,0,0.1>-Gain reduction (dB, meter)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+
+LN10_OVER_20 = 0.11512925464970229; // ln(10)/20, for dB <-> linear conversion
+
+function db2lin(db)
+  (exp(db * LN10_OVER_20));
+
+function lin2db(v)
+  (v > 0.000001 ? 20 * log10(v) : -120);
+
+sum      = 0;
+amp      = 0;
+gain     = 1;
+gain_t   = 1;
+env      = 0;
+env_rms  = 0;
+env_peak = 0;
+count    = 0;
+
+@slider
+
+// attack/release smoothing coefficients (recomputed only when a slider moves)
+ga = (attack_ms < 2) ? 0 : exp(-1 / (srate * attack_ms * 0.001));
+gr = exp(-1 / (srate * release_ms * 0.001));
+
+rs  = (ratio - 1) / ratio;
+mug = db2lin(makeup_db);
+
+knee_min = db2lin(threshold_db - knee_db);
+knee_max = db2lin(threshold_db + knee_db);
+
+// gain-smoothing filter uses a quarter of the attack coefficient, since
+// gain_t itself only updates once every 4 samples (see @sample below)
+ef_a  = ga * 0.25;
+ef_ai = 1 - ef_a;
+
+// precomputed complements, reused every sample in the envelope followers
+oma = 1 - ga;
+omr = 1 - gr;
+
+@sample
+
+la = abs(spl0);
+ra = abs(spl1);
+lev_in = max(la, ra);
+
+sum += lev_in * lev_in;
+
+// RMS-block envelope follower
+(amp > env_rms) ? (
+  env_rms = env_rms * ga + amp * oma;
+) : (
+  env_rms = env_rms * gr + amp * omr;
+);
+(env_rms != env_rms) ? env_rms = 0; // NaN guard
+
+// peak envelope follower
+(lev_in > env_peak) ? (
+  env_peak = env_peak * ga + lev_in * oma;
+) : (
+  env_peak = env_peak * gr + lev_in * omr;
+);
+
+// gain computer only updates every 4th sample (cheap block-RMS + smoothing)
+count += 1;
+(count & 3) == 3 ? (
+  amp = sqrt(sum * 0.25);
+  sum = 0;
+
+  env = env_rms + rms_peak * (env_peak - env_rms);
+
+  env <= knee_min ? (
+    gain_t = 1;
+  ) : env < knee_max ? (
+    kx = -(threshold_db - knee_db - lin2db(env)) / knee_db;
+    gain_t = db2lin(-knee_db * rs * kx * kx * 0.25);
+  ) : (
+    gain_t = db2lin((threshold_db - lin2db(env)) * rs);
+  );
+);
+
+gain = gain * ef_a + gain_t * ef_ai;
+
+spl0 = spl0 * gain * mug;
+spl1 = spl1 * gain * mug;
+
+// meter readouts only need to update at GUI-refresh rate, not sample rate,
+// so keep the log10() calls off the per-sample path
+(count & 3) == 3 ? (
+  amp_db_out = lin2db(env);
+  gr_db_out  = lin2db(gain);
+);
+
+@gfx 300 76
+
+gfx_setfont(1, "Arial", 14);
+
+// background
+gfx_r = 0.07; gfx_g = 0.07; gfx_b = 0.08; gfx_a = 1;
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+meter_x = 20;
+meter_y = 24;
+meter_w = gfx_w - 40;
+meter_h = 24;
+meter_range = 24; // dB span shown (0 down to -24)
+
+gr_disp = max(0, min(meter_range, -gr_db_out));
+
+// title
+gfx_r = gfx_g = gfx_b = 0.75; gfx_a = 1;
+gfx_x = meter_x; gfx_y = 4;
+gfx_drawstr("Gain Reduction");
+
+// numeric readout, same row as title, right-aligned
+gfx_r = gfx_g = gfx_b = 1; gfx_a = 1;
+sprintf(#buf, "%.1f dB", -gr_disp);
+gfx_measurestr(#buf, tw, th);
+gfx_x = meter_x + meter_w - tw; gfx_y = 4;
+gfx_drawstr(#buf);
+
+// meter background + border
+gfx_r = 0.16; gfx_g = 0.16; gfx_b = 0.18; gfx_a = 1;
+gfx_rect(meter_x, meter_y, meter_w, meter_h);
+gfx_r = 0.4; gfx_g = 0.4; gfx_b = 0.42; gfx_a = 1;
+gfx_rect(meter_x, meter_y, meter_w, meter_h, 0);
+
+// filled reduction bar (grows right from the left edge as GR increases)
+frac = gr_disp / meter_range;
+bar_w = meter_w * frac;
+gfx_r = 0.85; gfx_g = 0.55; gfx_b = 0.15; gfx_a = 1;
+gfx_rect(meter_x, meter_y, bar_w, meter_h);
+
+// scale ticks at 0/-6/-12/-18/-24 dB
+i = 0;
+loop(5,
+  tick_db = -i * 6;
+  tx = meter_x + meter_w * (i * 6 / meter_range);
+  gfx_r = 0.5; gfx_g = 0.5; gfx_b = 0.52; gfx_a = 1;
+  gfx_line(tx, meter_y + meter_h, tx, meter_y + meter_h + 4);
+  sprintf(#buf, "%d", tick_db);
+  gfx_measurestr(#buf, tw, th);
+  gfx_x = tx - tw * 0.5; gfx_y = meter_y + meter_h + 6;
+  gfx_drawstr(#buf);
+  i += 1;
+);
