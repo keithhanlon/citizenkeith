@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="a70da110770f5463cacad3355f304fc5452e5df4" name="citizenkeith">
+<index version="1" commit="f05d6d3e2e1d3007d8f64a627dff63d5cd7a2db1" name="citizenkeith">
   <category name="abandoned">
     <reapack name="Clavius Channel Strip (AI Code).jsfx" type="effect" desc="Channel strip with API 215L-style filters, EQ, Drive, and Compression">
       <version name="1.0" author="citizenkeith and Claude AI - Based on Airwindows open source (MIT) and Universal Audio API 215L" time="2026-03-09T04:11:19Z">
@@ -352,6 +352,9 @@ steve@plugin.org.uk
       </metadata>
       <version name="1.0" author="citizenkeith" time="2026-08-30T17:04:15Z">
         <source>https://github.com/keithhanlon/citizenkeith/raw/a70da110770f5463cacad3355f304fc5452e5df4/dynamics/SC4%20Stereo%20Compressor.jsfx</source>
+      </version>
+      <version name="1.1" author="citizenkeith" time="2026-08-30T17:58:36Z">
+        <source>https://github.com/keithhanlon/citizenkeith/raw/f05d6d3e2e1d3007d8f64a627dff63d5cd7a2db1/dynamics/SC4%20Stereo%20Compressor.jsfx</source>
       </version>
     </reapack>
     <reapack name="Transparent Bus Compressor (AI Code).jsfx" type="effect" desc="Transparent Bus Compressor">
